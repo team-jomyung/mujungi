@@ -4156,7 +4156,8 @@ public final class SessionExecutor {
         if (ProviderRequestFactory.nameNeedsReplacement(child.displayName())) {
             ctx.services().events().appError(EventLog.Component.SESSION_LIFECYCLE, REASON_CHILD_NAME_REPLACED, EventCode.Level.INFO);
         }
-        return ctx.services().connector().connect(session, child, listener, callback, policy, ctx.plan().conversationGuide());
+        return ctx.services().connector().connect(session, child, listener, callback, policy, ctx.plan().conversationGuide(),
+                ctx.plan().activityType() == ActivityType.PRACTICE);
     }
 
 }

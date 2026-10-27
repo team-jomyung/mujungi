@@ -643,9 +643,9 @@ class PracticeConversationTest {
         }
         List<Slot> coach = generated.stream().filter(slot -> slot.role().equals("COACH")).toList();
         assertThat(coach).isNotEmpty();
-        assertThat(coach.stream().filter(slot -> slot.text().contains("표현 예시를 하나만 들어도 된다")))
+        assertThat(coach.stream().filter(slot -> slot.text().contains("짧은 예시 하나를 알려줘")))
                 .as("코치는 아이가 도움에 동의한 뒤에만 표현 예시").isNotEmpty();
-        assertThat(coach.stream().filter(slot -> slot.text().contains("단서만 준다")))
+        assertThat(coach.stream().filter(slot -> slot.text().contains("표현 예시나 정답 문장은 아직 주지 마")))
                 .as("첫 코치 도움은 예시 없이 단서만").isNotEmpty().allSatisfy(slot -> assertThat(slot.text()).doesNotContain("파란 상자를 줘"));
         assertThat(h.recorder.rows.toString() + h.recorder.helps + h.ext).doesNotContain(marker);
         assertThat(JsonCodec.shared().write(h.ext.practiceRecord())).doesNotContain(marker);
@@ -1041,7 +1041,7 @@ class PracticeConversationTest {
         h.advance(Duration.ofSeconds(10));
         assertThat(h.out.slots).as("되묻기 단계 재안내").hasSize(slots + 1);
         assertThat(h.out.lastSlot().role()).isEqualTo("PEER");
-        assertThat(h.out.lastSlot().text()).contains("같은 말투로 한 번 더");
+        assertThat(h.out.lastSlot().text()).contains("같은 뜻으로 한 번 더");
         h.played();
         h.child("나");
         h.result("J3", "STILL_SHORT");
@@ -1049,7 +1049,7 @@ class PracticeConversationTest {
         slots = h.out.slots.size();
         h.advance(Duration.ofSeconds(10));
         assertThat(h.out.slots).as("도움 제안 단계 재안내").hasSize(slots + 1);
-        assertThat(h.out.lastSlot().text()).contains("같은 말로 한 번 더");
+        assertThat(h.out.lastSlot().text()).contains("같은 뜻으로 한 번만 더");
         h.played();
         h.child("다");
         h.result("J4", "ACCEPT");
@@ -1059,7 +1059,7 @@ class PracticeConversationTest {
         h.advance(Duration.ofSeconds(10));
         assertThat(h.out.slots).as("다시 해 보기 단계 재안내는 코치가 한다").hasSize(slots + 1);
         assertThat(h.out.lastSlot().role()).isEqualTo("COACH");
-        assertThat(h.out.lastSlot().text()).contains("자기 말로 다시 한 번 해 보자고");
+        assertThat(h.out.lastSlot().text()).contains("상대가 했던 말을 짧게 다시 들려주며");
         h.played();
         h.child("라");
         h.result("J5", "FULL");
@@ -1254,7 +1254,7 @@ class PracticeConversationTest {
         assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
         assertThat(reply.generated()).isTrue();
         assertThat(reply.role()).isEqualTo("PEER");
-        assertThat(reply.text()).contains("직접 답하며", "추가 답변을 요구하지 않는다");
+        assertThat(reply.text()).contains("직접 답하며", "추가 답변을 요구하지 마");
         assertThat(h.out.timers).doesNotContainKey("no-response");
         int judgments = h.out.judgments.size();
         h.child("응"); // Acknowledgement during the closing reply must not restart judgment.
@@ -1329,8 +1329,9 @@ class PracticeConversationTest {
                 List.of(), List.of(), "", "", "");
         String instruction = PracticeInstructions.peerCompletion(scene);
         assertThat(instruction.codePointCount(0, instruction.length())).isLessThanOrEqualTo(500);
-        assertThat(instruction).contains("추가 답변을 요구하지 않는다", "정답이나 모범 문장을 먼저 말하지 말고")
-                .endsWith("한두 문장으로 말한다.");
+        // 규칙이 장면 자료보다 앞에 있고, 가장 긴 필드여도 상한에 잘리지 않는다(자료까지 끝까지 들어간다)
+        assertThat(instruction).contains("추가 답변을 요구하지 마", "정답이나 모범 문장을 먼저 말하지 말고", "한두 문장으로 말해.")
+                .endsWith(field);
     }
 
     @Test
