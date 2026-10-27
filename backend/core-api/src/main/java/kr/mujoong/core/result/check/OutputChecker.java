@@ -15,11 +15,17 @@ public class OutputChecker {
         public Draft(String id,String text,List<String> verifiedQuotes,String fallback){this(id,text,verifiedQuotes,fallback,TextUse.OBSERVED_EVIDENCE);}
         public Draft {Objects.requireNonNull(textUse);}
     }
-    public boolean firstPass(Draft draft){
-        if(draft.text()==null||draft.text().isBlank())return false;
-        if(draft.textUse()==TextUse.PRACTICE_PROPOSAL)
-            return NumberGuard.allowedLiteral(draft.text())&&dictionary.allowedLiteral(draft.text());
-        return QuoteMatcher.allVerified(draft.text(),draft.verifiedQuotes())&&NumberGuard.allowed(draft.text())&&dictionary.allowed(draft.text());
+    public boolean firstPass(Draft draft){return firstPassFailure(draft).isEmpty();}
+    /** 1차 검사에서 처음 걸린 단계(EMPTY · QUOTE · NUMBER · DICTIONARY). 진단 코드용이며 원문은 돌려주지 않는다. */
+    public Optional<String> firstPassFailure(Draft draft){
+        if(draft.text()==null||draft.text().isBlank())return Optional.of("EMPTY");
+        if(draft.textUse()==TextUse.PRACTICE_PROPOSAL){
+            if(!NumberGuard.allowedLiteral(draft.text()))return Optional.of("NUMBER");
+            return dictionary.allowedLiteral(draft.text())?Optional.empty():Optional.of("DICTIONARY");
+        }
+        if(!QuoteMatcher.allVerified(draft.text(),draft.verifiedQuotes()))return Optional.of("QUOTE");
+        if(!NumberGuard.allowed(draft.text()))return Optional.of("NUMBER");
+        return dictionary.allowed(draft.text())?Optional.empty():Optional.of("DICTIONARY");
     }
     public Map<String,String> check(List<Draft> drafts,Instant deadline){
         return check(drafts,deadline,()->{});

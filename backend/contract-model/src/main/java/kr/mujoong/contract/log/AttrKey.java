@@ -151,7 +151,15 @@ public enum AttrKey {
     PROMPT_VERSION("promptVersion", ValueType.LABEL, null),
     SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
     LATENCY_MS("latencyMs", ValueType.NUMBER, null),
-    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF"));
+    LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF")),
+    // GOAL_CANDIDATE_DROPPED (FT-1027-g 후속). 후보 이름 · 인용 · 사유 글은 담지 않고 몇 번째 후보가 어느 검사의 어느 칸에서 빠졌는지만 남긴다
+    CANDIDATE_INDEX("candidateIndex", ValueType.NUMBER, null),
+    CANDIDATES_PROPOSED("candidatesProposed", ValueType.NUMBER, null),
+    DROP_REASON("dropReason", ValueType.ENUM, Set.of("LENGTH", "SKILL_REF_UNKNOWN", "NO_EVIDENCE", "QUOTE_MISMATCH",
+            "FORBIDDEN_DICTIONARY", "NUMBER_GUARD", "DUPLICATE", "OVER_LIMIT", "CHECK_EMPTY", "CHECK_QUOTE", "CHECK_NUMBER",
+            "CHECK_DICTIONARY", "CHECK_CLASSIFIER")),
+    DROP_FIELD("dropField", ValueType.ENUM, Set.of("DISPLAY_NAME", "DISPLAY_EVIDENCE", "TARGET_EXPRESSION", "REASON_TEXT",
+            "SKILL_REF", "SITUATION", "PARTNER", "INTENT", "EXPRESSION", "EVIDENCE", "NONE"));
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {

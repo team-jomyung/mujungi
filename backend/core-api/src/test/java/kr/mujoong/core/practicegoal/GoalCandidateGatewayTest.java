@@ -12,8 +12,9 @@ import org.mockito.ArgumentCaptor;
 @Tag("goal-result")
 class GoalCandidateGatewayTest {
     CoreLunaClient luna=mock(CoreLunaClient.class);ChildKnowledgeService knowledge=mock(ChildKnowledgeService.class);OutputChecker checker=mock(OutputChecker.class);
+    kr.mujoong.core.support.TestEvents events=new kr.mujoong.core.support.TestEvents(new kr.mujoong.testsupport.time.MutableClock(Instant.parse("2030-01-01T00:00:00Z")));
     GoalCandidateGateway gateway;UUID guardian=UUID.randomUUID(),child=UUID.randomUUID();Instant deadline=Instant.parse("2030-01-01T00:00:00Z");
-    @BeforeEach void setup(){gateway=new GoalCandidateGateway(Optional.of(luna),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),checker);when(knowledge.seedSummaries(guardian,child)).thenReturn(List.of());when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult("{\"candidates\":[]}","fake","goal-candidates.v1",Duration.ZERO,1,false));when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> result=new LinkedHashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))result.put(d.id(),d.text());return result;});}
+    @BeforeEach void setup(){gateway=new GoalCandidateGateway(Optional.of(luna),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),checker,events.logger());when(knowledge.seedSummaries(guardian,child)).thenReturn(List.of());when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult("{\"candidates\":[]}","fake","goal-candidates.v1",Duration.ZERO,1,false));when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> result=new LinkedHashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))result.put(d.id(),d.text());return result;});}
     List<GoalCandidateRepository.Draft> run(Map<String,Object> input){return gateway.generate(guardian,child,input,Map.of("합성이름","아이"),deadline,()->{});}
     @Test void emptyCandidatesAreValid(){assertThat(run(Map.of("transcript",List.of()))).isEmpty();}
     @Test void secondClassifierChecksAllPublicCandidateTextAndCanDropWholeCandidate(){
@@ -32,7 +33,7 @@ class GoalCandidateGatewayTest {
     @Test void rejectsInvalidRoot(){when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult("{}","fake","goal-candidates.v1",Duration.ZERO,1,false));assertThatThrownBy(()->run(Map.of())).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);}
     @Test void accessDeniedNeverCallsProvider(){assertThatThrownBy(()->gateway.generate(guardian,child,Map.of(),Map.of(),deadline,()->{throw new IllegalStateException("WITHDRAWN");})).isInstanceOf(IllegalStateException.class);verifyNoInteractions(luna);}
     @Test void providerFailureHasNoInnerRetry(){when(luna.call(any(LunaRequest.class))).thenThrow(new LunaException(LunaFailureReason.TIMEOUT,1));assertThatThrownBy(()->run(Map.of())).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);verify(luna,times(1)).call(any(LunaRequest.class));}
-    @Test void absenceOfCoreClientIsExplicitlyUnavailable(){assertThat(new GoalCandidateGateway(Optional.empty(),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),checker).available()).isFalse();}
+    @Test void absenceOfCoreClientIsExplicitlyUnavailable(){assertThat(new GoalCandidateGateway(Optional.empty(),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),checker,events.logger()).available()).isFalse();}
     @Test void practiceStoredIdentifiersBecomeConsistentPerCallReferencesAtEveryDepth(){
         UUID goal=UUID.randomUUID(),scene=UUID.randomUUID(),utterance=UUID.randomUUID();var input=Map.<String,Object>of("scenes",List.of(Map.of("goalSelectionId",goal,"sceneNo",3,"sceneChip","DONE_IMMEDIATE","chipText","바로 전달","nested",Map.of("goalRef",goal.toString(),"sceneRunId",scene.toString(),"utterances",List.of(Map.of("id",utterance))))));
         run(input);run(input);var capture=ArgumentCaptor.forClass(LunaRequest.class);verify(luna,times(2)).call(capture.capture());
@@ -63,7 +64,7 @@ class GoalCandidateGatewayTest {
             return Map.of("results",rows.stream().map(r->Map.of("id",r.get("id"),"violation",false)).toList());
         });
         var realChecker=new OutputChecker(new ForbiddenDictionary(),classifier);
-        var subject=new GoalCandidateGateway(Optional.of(luna),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),realChecker);
+        var subject=new GoalCandidateGateway(Optional.of(luna),knowledge,new GoalCandidateValidator(new ForbiddenDictionary()),realChecker,events.logger());
         when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v1",Duration.ZERO,1,false));
         var result=subject.generate(guardian,child,Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))),Map.of(),deadline,()->{});
         assertThat(result).singleElement().satisfies(c->{assertThat(c.targetExpression()).contains("함께 해도 돼?");assertThat(c.evidence()).singleElement().extracting(GoalCandidateRepository.Evidence::quote).isEqualTo("같이 할래");});
@@ -72,4 +73,26 @@ class GoalCandidateGatewayTest {
         assertThat(subject.generate(guardian,child,Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))),Map.of(),deadline,()->{})).isEmpty();
         verify(classifier,times(1)).call(eq("classify"),anyMap(),anyMap(),eq(deadline),any(Runnable.class));
     }
+    /** 서버가 버린 후보는 GOAL_CANDIDATE_DROPPED에 사유 코드만 남는다(후보 글 · 인용은 로그에 없다, R-F14). */
+    @Test void numberInReasonIsDroppedWithCodeOnlyDiagnostic(){
+        var numbered=new GoalCandidateValidatorTest().draft();numbered.put("reasonText","합성 장면 41번 발화에서 대답했어요.");
+        var clean=new GoalCandidateValidatorTest().draft();clean.put("displayName","다른 이름");
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(numbered,clean))),"fake","goal-candidates.v2",Duration.ZERO,1,false));
+        when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> all=new LinkedHashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))all.put(d.id(),d.text());return all;});
+        assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).singleElement().extracting(GoalCandidateRepository.Draft::displayName).isEqualTo("다른 이름");
+        var lines=events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED);
+        assertThat(lines).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs).isEqualTo(Map.of("promptVersion","goal-candidates.v2","candidateIndex",0,"candidatesProposed",2,"dropReason","NUMBER_GUARD","dropField","REASON_TEXT"));
+        assertThat(events.capture().lines()).noneMatch(line->line.contains("41번")||line.contains("같이 할래"));
+    }
+    @Test void secondClassifierDropKeepsOriginalIndexAndFirstFailingField(){
+        var first=new GoalCandidateValidatorTest().draft();first.put("fourElements",Map.of("situation","놀이"));
+        var second=new GoalCandidateValidatorTest().draft();
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(first,second))),"fake","goal-candidates.v2",Duration.ZERO,1,false));
+        when(checker.firstPassFailure(any())).thenReturn(Optional.empty());
+        when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> all=new HashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))all.put(d.id(),d.id().startsWith("goal-display")?null:d.text());return all;});
+        assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).isEmpty();
+        assertThat(events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED)).extracting(line->kr.mujoong.testsupport.log.LogCapture.attrs(line).get("dropReason")+"/"+kr.mujoong.testsupport.log.LogCapture.attrs(line).get("dropField")+"/"+kr.mujoong.testsupport.log.LogCapture.attrs(line).get("candidateIndex"))
+                .containsExactly("LENGTH/PARTNER/0","CHECK_CLASSIFIER/DISPLAY_EVIDENCE/1");
+    }
+    @Test void modelReturningNoCandidatesLeavesNoDropLine(){assertThat(run(Map.of("transcript",List.of()))).isEmpty();assertThat(events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED)).isEmpty();}
 }

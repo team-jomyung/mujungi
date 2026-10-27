@@ -258,6 +258,17 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 - 근거 발화는 evidence의 utteranceSeq로만 잇고, reasonText · displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다(시점은 말로). 서버 숫자 검사(`NumberGuard`)가 숫자 섞인 후보를 버리기 때문이다(2026-10-27 진돗개 자유대화 측정에서 유일한 후보가 사유 칸의 seq 번호로 버려짐).
 - 이전 판 `goal-candidates.v1.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 두 판의 결과를 구분한다.
 
+**후보 탈락 진단 로그(`GOAL_CANDIDATE_DROPPED`, 2026-10-27).** 모델이 낸 후보가 서버 검사에서 빠지면 core-api `Maintenance` 컴포넌트가 후보마다 INFO 한 줄을 남긴다(병합 없음, `ownerHash`는 보호자). 모델이 0개를 냈으면 줄이 없으므로, 후보가 없는 결과가 모델 판단인지 서버 탈락인지를 가를 수 있다. 후보 이름 · 인용 · 사유 글 · 전사는 담지 않는다(R-F14). 정본은 `EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다.
+
+| 속성 | 형식 | 값 |
+|---|---|---|
+| `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v2`) |
+| `candidateIndex` · `candidatesProposed` | NUMBER | 모델 출력에서 몇 번째(0부터) 후보인지, 모델이 낸 후보 수 |
+| `dropReason` | ENUM | `GoalCandidateValidator`: `LENGTH` · `SKILL_REF_UNKNOWN` · `NO_EVIDENCE` · `QUOTE_MISMATCH` · `FORBIDDEN_DICTIONARY` · `NUMBER_GUARD` · `DUPLICATE` · `OVER_LIMIT`(남길 수 있는 3개를 넘음). `OutputChecker`: 1차 `CHECK_EMPTY` · `CHECK_QUOTE` · `CHECK_NUMBER` · `CHECK_DICTIONARY`, 2차 분류 위반 `CHECK_CLASSIFIER` |
+| `dropField` | ENUM | 처음 걸린 칸: `DISPLAY_NAME` · `DISPLAY_EVIDENCE` · `TARGET_EXPRESSION` · `REASON_TEXT` · `SKILL_REF` · `SITUATION` · `PARTNER` · `INTENT` · `EXPRESSION` · `EVIDENCE` · `NONE` |
+
+검사 기준 · 순서 · 남기는 후보는 바꾸지 않았다. 진단 줄은 검사가 끝난 뒤 쓰기만 한다.
+
 ### 6.9 U6 호출 예산과 생활 팁
 
 결과 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 레거시 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, 생성 후보를 임의 behaviorKey로 바꾸지 않는다. title · condition · content · limitation에 1차 금지 사전을 적용한다.
