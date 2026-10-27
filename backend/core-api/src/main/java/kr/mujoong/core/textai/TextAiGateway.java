@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.RejectedExecutionException;
 import kr.mujoong.contract.time.MujoongClock;
+import kr.mujoong.core.usage.AiUsageScope;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -68,7 +69,8 @@ public class TextAiGateway {
 
     private GeneratedScenario call(ScenarioPrompt prompt, Duration limit) {
         Future<GeneratedScenario> future;
-        try { future = executor.submit(() -> provider.generateScenario(prompt, limit)); }
+        // 사용량 연결은 실행기 스레드로 옮겨야 Luna 호출부가 읽는다(JIRA-277)
+        try { future = executor.submit(AiUsageScope.propagate(() -> provider.generateScenario(prompt, limit))); }
         catch (RejectedExecutionException rejected) { throw new TextAiException(TextAiException.Reason.UNAVAILABLE); }
         try {
             return future.get(limit.toNanos(), TimeUnit.NANOSECONDS);

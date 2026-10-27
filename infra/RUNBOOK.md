@@ -904,3 +904,30 @@ Set-Location .\backend
 이 시험의 단일 연결/호출 지연 차이는 네트워크·모델 변동도 포함하므로 **전체 대화 성능 합격 판정을 대신하지 않는다**. 최종 비교는 대화 큐 변경이 반영된 동일 커밋·장비·설정에서 같은 합성 음성/연습을 재생해 수집 끔/켬을 번갈아 반복한다. 자유대화·연습을 따로 보고 첫 음성 지연, 오디오 중계 지연, 기존 전사 큐 폐기·녹음기 저하, DB 풀 대기, 사용량 큐 거절/만료를 비교한다. 비교 전에 허용 지연 차이·표본 수를 정하고 중앙값·p95·실패 수를 함께 기록한다. 준비·리포트·Jev 비용은 이번 수집 범위에 없으므로 전체 API 비용으로 표시하지 않는다.
 
 DB 지연·불가, 사용량 큐 가득 참, 비정상 연결 종료, 애플리케이션 종료, 계정 삭제 중 지연 콜백도 개발/시험 환경에서 확인한다. 사용량 저장 장애가 기존 대화의 AI 출력 폐기 사유가 되어서는 안 된다. 끄기는 `MUJOONG_AI_USAGE_ENABLED=false`로 Realtime을 재기동한다. 미저장 메모리 큐의 강제 종료 유실은 허용된 한계이며 이미 저장된 행은 자동 삭제하지 않는다.
+
+## 19. JIRA-277 Core 사용량 수집 수동 검증
+
+기존 회원 · 활동 표 변경 없이 Core Flyway V12가 `core.core_ai_usage`를 만든다. 수집은 기본 꺼짐(`MUJOONG_CORE_AI_USAGE_ENABLED=false`)이며 Realtime 스위치(`MUJOONG_AI_USAGE_ENABLED`)와 따로 켠다. 대상 호출은 Core가 부르는 Luna뿐이다(연습 장면 생성 · 검수, 종료 후 결과 작업 · 목표 추천 · 재판정, 시드 생성). 이 문서 추가 자체가 설정 활성화나 배포를 뜻하지 않는다.
+
+- **로컬 실키 스택**(`scripts/live/up.sh`, 127.0.0.1:9443): `compose.live.yml`이 키 파일(`MUJOONG_LIVE_ENV_FILE`)을 core-api에도 넘긴다. 그 파일에 `MUJOONG_CORE_AI_USAGE_ENABLED=true` 한 줄을 넣고 스택을 다시 올린다. 값은 비밀이 아니지만 키 파일 다른 값은 출력하지 않는다.
+- **호스트 `render-env`**: 같은 이름의 선택 SSM 파라미터를 읽고, 없으면 `false`로 `core-api.env`에만 쓴다. `true`·`false` 밖의 값은 거절한다.
+- **ECS demo**: `infra/terraform/ecs_services.tf`의 core-api `environment`에 기본 `false`로 둔다. 켜고 끄는 순서와 실행 중 태스크 확인은 18절과 같고, 서비스 이름 `mujoong-core-api` · 컨테이너 이름 `core-api` · 키 `MUJOONG_CORE_AI_USAGE_ENABLED`로 바꿔 조회한다.
+
+실호출 없이(가짜 공급자) 수집 · 큐 · 저장 · 삭제 · 경계를 확인하려면 `backend`에서:
+
+```powershell
+.\gradlew.bat :core-api:test --tests '*ResponsesUsageTest' --tests '*AiUsageScopeTest' --tests '*AiUsageRecorderTest' --tests '*CoreLunaUsageTest' --tests '*AiUsageRepositoryIT' --tests '*ConfigKeyContractTest' --tests '*CoreSchemaIT' --tests '*LunaArchTest' '-Pmujoong.test.db=docker' --console=plain
+```
+
+실제 공급자로 확인할 때는(실제 OpenAI 사용료가 발생한다) 로컬 실키 스택에서 수집을 켜고 자유대화 · 연습을 한 번씩 끝까지 진행한 뒤, 결과 화면이 나온 다음 행을 본다. 원문은 이 표에 없으므로 아래 조회는 목적 · 연결 · 토큰 수만 보여 준다.
+
+```bash
+docker compose -p mujoong-live exec postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -h "$(hostname -i | cut -d" " -f1)" -U postgres -d mujoong -c "select purpose, session_id, attempt_no, outcome, capture_status, input_tokens, output_tokens, observed_at from core.core_ai_usage order by observed_at desc limit 30"'
+```
+
+- 연습: `SCENARIO_GENERATION` · `SCENARIO_REVIEW` 행의 `session_id`가 그 연습 활동 ID와 같아야 한다. 시작에 실패한 연습은 같은 준비 ID로 행만 남고 활동 행이 없다.
+- 종료 후: `RESULT_TEXT`(구조화 · 결과 문장 · 2차 분류 등) · `GOAL_CANDIDATES` · `REJUDGMENT` 행의 `session_id`가 끝낸 활동 ID와 같아야 한다. 자유대화는 `REJUDGMENT`가 없고, 결과가 짧아 AI 없이 끝나면 행도 없다.
+- `guardian_id` · `session_id`가 빈 행은 연결 미확인 호출이다. 생기면 어느 경로인지 목적으로 찾아 연결 경로를 보완한다.
+- 결과는 `REAL_API`(실호출 · 실제 대화)로 기록하고 가짜 공급자 시험 결과와 나눠 남긴다(R-M11). 미확인 값(`NULL`)을 임의로 채우지 않는다.
+
+끄기는 `MUJOONG_CORE_AI_USAGE_ENABLED=false`로 Core를 다시 띄운다. 저장 전 메모리 큐의 강제 종료 유실은 허용한 한계이고, 이미 저장된 행은 자동으로 지우지 않는다(계정 삭제 때는 지운다).
