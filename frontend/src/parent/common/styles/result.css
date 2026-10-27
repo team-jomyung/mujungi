@@ -28,3 +28,8 @@
 .mj-parent button.mj-report-activity:disabled { cursor: default; opacity: 0.55; }
 .mj-parent button.mj-report-activity:focus-visible, .mj-activity-filter select:focus-visible { outline: 2px solid var(--color-brand-primary); outline-offset: 3px; }
 .mj-scene-chip { display: inline-block; padding: 6px 10px; border: 1px solid var(--color-border-selected); border-radius: 999px; margin: 4px; background: var(--color-fixed-expression); color: var(--color-brand-primary); font-size: 0.875rem; }
+.mj-record-unstarted { margin-block: 12px; min-width: 0; }
+.mj-record-unstarted__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.mj-record-unstarted__heading h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.mj-record-unstarted__status { padding: 4px 8px; border: 1px solid var(--color-border-default); border-radius: 999px; font-size: 0.875rem; line-height: 1.5; }
+.mj-record-unstarted__time { margin: 10px 0 0; font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }

@@ -35,6 +35,12 @@ export const savedReportPeriod = (from: string, to: string) => `${from} ~ ${to}`
 export const savedReportSummary = (count: number, date: string) => `활동 ${count}개 · 저장일 ${date}`;
 export const savedReportPage = (page: number) => `${page}페이지`;
 
+export const UNSTARTED_RECORD_COPY = {
+  status: "시작하지 못함",
+  timeLabel: "시작 시각",
+  timeUnknown: "시작 시각을 확인할 수 없어요",
+} as const;
+
 export const ACTIVITY_SELECTION_COPY = {
   filter: "대화 종류", all: "전체", freeTalk: "자유대화", practice: "연습대화",
   emptyFilter: "선택한 종류의 대화가 없어요.",
