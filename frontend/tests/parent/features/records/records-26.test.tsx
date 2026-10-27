@@ -7,6 +7,26 @@ beforeEach(() => { clock(); resetRouter(); }); afterEach(() => vi.useRealTimers(
 const item = (extra = {}) => ({ sessionId: SESSION_ID, activityType: "FREE_TALK", startedAt: "2026-10-15T01:00:00Z", endedAt: "2026-10-15T01:03:00Z", finalStatus: "ENDED", linkable: true, goalCount: 0, interrupted: false, ...extra });
 function render(items = [item()], days = [{ date: "2026-10-15", count: 1 }]) { return renderParent(<RecordsScreen />, { handler: path => jsonResponse(200, path.includes("month=") ? { days } : { items }) }); }
 it("자유대화 시간과 분을 표시하고 상세로 간다", async () => { render(); const row = await screen.findByTestId(`records-item-${SESSION_ID}`); expect(row).toHaveTextContent("10:00 자유대화 · 3분"); fireEvent.click(row); expect(router.push).toHaveBeenCalledWith(`/parent/records/${SESSION_ID}`); });
+it("콤보박스로 전체·자유대화·연습대화를 구분하고 필터가 비면 안내한다", async () => {
+  const practiceId = "00000000-0000-4000-8000-000000000088";
+  render([item(), item({ sessionId: practiceId, activityType: "PRACTICE" })]);
+  await screen.findByTestId(`records-item-${SESSION_ID}`);
+  const filter = screen.getByRole("combobox", { name: "대화 종류" });
+  fireEvent.change(filter, { target: { value: "FREE_TALK" } });
+  expect(screen.getByTestId(`records-item-${SESSION_ID}`)).toBeInTheDocument();
+  expect(screen.queryByTestId(`records-item-${practiceId}`)).toBeNull();
+  fireEvent.change(filter, { target: { value: "PRACTICE" } });
+  expect(screen.queryByTestId(`records-item-${SESSION_ID}`)).toBeNull();
+  expect(screen.getByTestId(`records-item-${practiceId}`)).toBeInTheDocument();
+  fireEvent.change(filter, { target: { value: "ALL" } });
+  expect(screen.getByTestId(`records-item-${SESSION_ID}`)).toBeInTheDocument();
+});
+it("대화 유형이 없는 경우 빈 날짜와 구분해 표시한다", async () => {
+  render(); await screen.findByTestId(`records-item-${SESSION_ID}`);
+  fireEvent.change(screen.getByRole("combobox", { name: "대화 종류" }), { target: { value: "PRACTICE" } });
+  expect(screen.getByText("선택한 종류의 대화가 없어요.")).toBeInTheDocument();
+  expect(screen.queryByTestId("records-empty-day")).toBeNull();
+});
 it("연습 목표 수와 중단을 표시한다", async () => { render([item({ activityType: "PRACTICE", goalCount: 2, interrupted: true })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("연습 · 목표 2개 · 3분 · 중간에 끊김"); });
 it("재시작 FAILED는 중간에 끊김이다", async () => { render([item({ finalStatus: "FAILED" })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("중간에 끊김"); });
 it("DECLINED 줄은 누를 수 없다", async () => { render([item({ finalStatus: "DECLINED", linkable: false })]); const row = await screen.findByTestId(`records-item-declined-${SESSION_ID}`); expect(row).toHaveAttribute("aria-disabled", "true"); fireEvent.click(row); expect(router.push).not.toHaveBeenCalled(); });
