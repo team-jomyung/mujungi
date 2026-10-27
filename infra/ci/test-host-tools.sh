@@ -525,8 +525,8 @@ print("\n".join(sorted(rows)))
 PY
   bash "$LHC" --print-allowlist >"$work/allow.script"
   # Add only the closed practice diagnostics; compare every key with the Java source of truth.
-  if [ "$(wc -l <"$work/allow.java")" -eq 21 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
-    ok "log-hygiene-allowlist-matches-java(21종)"
+  if [ "$(wc -l <"$work/allow.java")" -eq 22 ] && diff -q "$work/allow.java" "$work/allow.script" >/dev/null; then
+    ok "log-hygiene-allowlist-matches-java(22종)"
   else
     not_ok "log-hygiene-allowlist-matches-java" "$(diff "$work/allow.java" "$work/allow.script" | head -n 4 | paste -sd' ' -)"
   fi
