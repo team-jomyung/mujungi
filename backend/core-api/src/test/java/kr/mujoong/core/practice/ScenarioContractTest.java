@@ -28,7 +28,7 @@ class ScenarioContractTest {
         var value = new Scenario(UUID.randomUUID(), "ORIGINAL", "PEER", "기회", "상황", "역할", "말",
                 new Scenario.Validation(true,true,false), "scenario-script.v1", List.of(scene().withPartnerRole("역할")),
                 new Scenario.Review("APPROVE", "fake", "scenario-review.v1"),
-                new Scenario.Generation("fake", "scenario-generation.v2", false, 2));
+                new Scenario.Generation("fake", "scenario-generation.v5", false, 2));
         assertThat(WebFixtures.schemaErrors("practice-scenario.schema.json",json.write(value))).isEmpty();
         assertThat(json.read(json.write(value), Scenario.class)).isEqualTo(value);
     }
@@ -41,6 +41,17 @@ class ScenarioContractTest {
     @Test void approvalWithReasonIsRejectedByModelAndSchema() {
         assertThatThrownBy(()->new ScenarioReview("APPROVE", List.of("PRESSURE"))).isInstanceOf(IllegalArgumentException.class);
         assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"APPROVE\",\"reasons\":[\"PRESSURE\"]}")).isNotEmpty();
+    }
+    /** FT-1028-c: 검토 진단 findings는 닫힌 점검 항목 · 필드만 받고 자유 설명을 받지 않는다. */
+    @Test void reviewFindingsAreClosedCodesOnly() {
+        String finding="{\"reason\":\"GOAL_MISMATCH\",\"check\":\"OPPORTUNITY\",\"field\":\"opportunitySentence\"}";
+        assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"REJECT\",\"reasons\":[\"GOAL_MISMATCH\"],\"findings\":["+finding+"]}")).isEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"REJECT\",\"reasons\":[\"GOAL_MISMATCH\"],\"findings\":[{\"reason\":\"GOAL_MISMATCH\",\"check\":\"OPPORTUNITY\",\"field\":\"opportunitySentence\",\"note\":\"자유 설명\"}]}")).isNotEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"REJECT\",\"reasons\":[\"GOAL_MISMATCH\"],\"findings\":[{\"reason\":\"GOAL_MISMATCH\",\"check\":\"아무거나\",\"field\":\"scene\"}]}")).isNotEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"REJECT\",\"reasons\":[\"GOAL_MISMATCH\"]}")).as("findings 필수").isNotEmpty();
+        assertThat(WebFixtures.schemaErrors("ai-scenario-review-output.schema.json", "{\"verdict\":\"APPROVE\",\"reasons\":[],\"findings\":["+finding+"]}")).as("승인에는 findings 없음").isNotEmpty();
+        assertThatThrownBy(()->new ScenarioReview.Finding("GOAL_MISMATCH","FREE_TEXT","scene")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new ScenarioReview("REJECT", List.of("GOAL_MISMATCH"), null).findings()).isEmpty();
     }
     @Test void closedReasonsExcludeUnknownFreeReasonAndDuplicates() {
         for(var reasons:List.of(List.of("OTHER_APPROVED_REASON"), List.of("PRESSURE","PRESSURE")))

@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/ai-scenario-review-output.schema.json",
   "title": "연습 장면 대본 자체 검토 출력(Luna 구조화 출력, J7)",
-  "description": "생성과 분리한 별도 요청의 응답(계약 요약 C-DS5 · FR2.1 · FR2.2). APPROVE만 승인이고 REJECT · UNCERTAIN · 누락 · 시간 초과는 승인이 아니다. APPROVE여도 서버 검사 실패면 막는다. 승인 사유 목록의 최종 값은 U10이 더한다. 재시도는 REQUEST_BOUNDED(ai-io.md 10절). [U8 편차 (U8-a)]",
+  "description": "생성과 분리한 별도 요청의 응답(계약 요약 C-DS5 · FR2.1 · FR2.2). APPROVE만 승인이고 REJECT · UNCERTAIN · 누락 · 시간 초과는 승인이 아니다. APPROVE여도 서버 검사 실패면 막는다. 승인 사유 목록의 최종 값은 U10이 더한다. 재시도는 REQUEST_BOUNDED(ai-io.md 10절). findings는 거절 사유마다 걸린 점검 항목과 필드를 닫힌 값으로만 돌려주는 진단 자료이며 대본 원문 · 자유 설명을 담지 않는다(편차 FT-1028-c). [U8 편차 (U8-a)]",
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdict", "reasons"],
+  "required": ["verdict", "reasons", "findings"],
   "properties": {
     "verdict": { "enum": ["APPROVE", "REJECT", "UNCERTAIN"] },
     "reasons": {
@@ -27,14 +27,43 @@
           "UNCHANGED_VARIANT"
         ]
       }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "check", "field"],
+        "properties": {
+          "reason": {
+            "enum": [
+              "ANSWER_INCLUDED",
+              "EARLY_CUE",
+              "PRESSURE",
+              "AGE_MISMATCH",
+              "GOAL_MISMATCH",
+              "REPETITION",
+              "FORBIDDEN_CONTENT",
+              "INCOMPLETE_SCENE",
+              "INVARIANT_MISMATCH",
+              "SKILL_MISMATCH",
+              "TRANSFER_MISMATCH",
+              "UNCHANGED_VARIANT"
+            ]
+          },
+          "check": { "enum": ["INTRODUCTION", "OPENING_LINK", "OPPORTUNITY", "GOAL_SPECIFIC", "COACH_MATERIAL", "STRUCTURE", "HISTORY", "SAFETY"] },
+          "field": { "enum": ["sceneDescription", "spokenIntroduction", "openingLine", "opportunitySentence", "reexplanation", "focusPoints", "expressionExamples", "preservation", "scene"] }
+        }
+      }
     }
   },
   "anyOf": [
-    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["APPROVE"]},"reasons":{"type":"array","maxItems":0,"items":{"type":"string"}}}},
-    {"type":"object","additionalProperties":false,"required":["verdict","reasons"],"properties":{"verdict":{"enum":["REJECT","UNCERTAIN"]},"reasons":{"type":"array","items":{"type":"string"}}}}
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons","findings"],"properties":{"verdict":{"enum":["APPROVE"]},"reasons":{"type":"array","maxItems":0,"items":{"type":"string"}},"findings":{"type":"array","maxItems":0}}},
+    {"type":"object","additionalProperties":false,"required":["verdict","reasons","findings"],"properties":{"verdict":{"enum":["REJECT","UNCERTAIN"]},"reasons":{"type":"array","items":{"type":"string"}},"findings":{"type":"array"}}}
   ],
   "examples": [
-    { "verdict": "APPROVE", "reasons": [] },
-    { "verdict": "REJECT", "reasons": ["ANSWER_INCLUDED", "EARLY_CUE"] }
+    { "verdict": "APPROVE", "reasons": [], "findings": [] },
+    { "verdict": "REJECT", "reasons": ["ANSWER_INCLUDED", "EARLY_CUE"], "findings": [{ "reason": "ANSWER_INCLUDED", "check": "INTRODUCTION", "field": "spokenIntroduction" }, { "reason": "EARLY_CUE", "check": "COACH_MATERIAL", "field": "reexplanation" }] }
   ]
 }

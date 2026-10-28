@@ -59,6 +59,15 @@ class ScenarioServiceTest {
             db.close();
         }
     }
+    @Test void legacyGenerationAlsoExcludesProfileInterestsAndKeepsAge() {
+        db.jdbc().update("update core.core_child set age=11, interests_json=cast(:interests as jsonb) where id=:child",
+                new MapSqlParameterSource("child",child).addValue("interests",JsonCodec.shared().write(List.of("공룡"))));
+        service.generate(original());
+        var call=org.mockito.ArgumentCaptor.forClass(ScenarioPrompt.class);
+        verify(ai).generateScenario(call.capture(),any());
+        assertThat(call.getValue().age()).isEqualTo(11);
+        assertThat(call.getValue().interests()).isEmpty();
+    }
     ScenarioService.Request original() { return new ScenarioService.Request(session,goal,"ORIGINAL",null); }
     GeneratedScenario output(String material) {
         return new GeneratedScenario(material+" 놀이 중이야. "+opportunity+" 이제 그만할래.",

@@ -39,7 +39,7 @@ public final class StructuredScenarioFlow {
         var continuity=deadline.call(executor,historyTimeout,()->repository.continuity(session.guardianId(),session.childId(),
                 goal.goalSelectionId(),started,deadline.limit(historyTimeout)));
         Map<String,Object> payload=new LinkedHashMap<>();
-        payload.put("ageYears",account.ageYears());payload.put("interests",account.interests());
+        payload.put("ageYears",account.ageYears());
         var cleanGoal=original.mapContent(text->(String)sanitizer.sanitize(Map.of("text",text),aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload().get("text"));
         Map<String,Object> semanticGoal=new LinkedHashMap<>();
         semanticGoal.put("kind",cleanGoal.kind());semanticGoal.put("skillRef",cleanGoal.skillRef());

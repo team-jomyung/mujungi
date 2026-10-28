@@ -56,9 +56,17 @@ public final class ScenarioScriptGenerator {
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
         Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;Approved approvedBeforeVariant=null;
+        Duration lastRoundCost=null,lastReviewCost=null;
         for(int correction=0;correction<=2;correction++){
             if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
                     reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH").contains(reason))))break;
+            // 직전 라운드(생성 + 검토)만큼 시간이 남지 않으면 검토까지 끝낼 수 없다. 마감 직전 생성 호출을 쓰고
+            // 검토가 시간 초과로 끝나던 것을 막는다(2026-10-28 실키, FT-1028-c)
+            if(lastRoundCost!=null&&deadline.remaining().compareTo(lastRoundCost)<=0){
+                diagnose("ScenarioBudgetInsufficient");
+                if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
+                break;
+            }
             final Input current=active;
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
@@ -88,6 +96,7 @@ public final class ScenarioScriptGenerator {
                 var reviewStartedWith=deadline.remaining();
                 var reviewed=review(script,reviewedInput,budget,deadline);
                 var reviewCost=reviewStartedWith.minus(deadline.remaining());
+                lastReviewCost=reviewCost;lastRoundCost=generationCost.plus(reviewCost);
                 var inspection=validation.inspectDetailed(script,current.rules());
                 var result=inspection.result();
                 if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioRule_"+inspection.reason().name());
@@ -98,10 +107,7 @@ public final class ScenarioScriptGenerator {
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&graph.fallbackRequired()){
                     diagnose(graph.planMissingOnly()?"ScenarioGraphFallback_PLAN_EMPTY":"ScenarioGraphFallback_READ_FAILED");
                     // 대체로 다시 만들면 아래 거절 진단까지 가지 않으므로 첫 라운드 검토 결과를 여기서 남긴다
-                    if(!reviewed.review().approved()){
-                        diagnose("ScenarioReview_"+reviewed.review().verdict());
-                        reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
-                    }
+                    if(!reviewed.review().approved())diagnoseReview(reviewed.review());
                     // 그래프는 정상이고 변형 계획만 없을 때, 첫 라운드 대본이 통째로 승인 · 서버 검사를 통과했으면 다시 만들지 않고 그대로 발급한다(JIRA-283).
                     // 다시 만들면 호출 2번(약 12초)이 더 들어 30초 마감을 넘기기 쉽다. 그래프 읽기 실패면 지금처럼 그래프 없이 새로 만든다
                     if(correction==0&&graph.planMissingOnly()&&result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved()){
@@ -109,6 +115,10 @@ public final class ScenarioScriptGenerator {
                         return approved(script,model,reviewed.model(),current,budget,deadline);
                     }
                     if(correction==1)throw ScenarioDeadline.failed();
+                    // 다음 생성은 이 대본을 고쳐 만드므로 거절 이유를 함께 넘긴다. 빠지면 이유 없이 같은 대본을 다시 고쳐
+                    // 같은 사유로 또 거절됐다(2026-10-28 실키, FT-1028-c). 변형 판정은 BASE만 만드는 다음 생성과 무관해 넘기지 않는다
+                    correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                    if(result==ScenarioScriptValidation.Result.INVALID_BASE)correctionReasons.add(result.name());
                     active=withoutGraph(current);preserved=null;continue;
                 }
                 if(correction==0&&reviewedInput.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE){
@@ -130,10 +140,7 @@ public final class ScenarioScriptGenerator {
                     return approved(script,model,reviewed.model(),current,budget,deadline);
                 correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
                 if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioValidation_"+result.name());
-                if(!reviewed.review().approved()){
-                    diagnose("ScenarioReview_"+reviewed.review().verdict());
-                    reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
-                }
+                if(!reviewed.review().approved())diagnoseReview(reviewed.review());
                 if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
                 if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
                 if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
@@ -160,7 +167,7 @@ public final class ScenarioScriptGenerator {
                 return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
             }
         }
-        if(preserved!=null&&model!=null){
+        if(preserved!=null&&model!=null&&(lastReviewCost==null||deadline.remaining().compareTo(lastReviewCost)>0)){
             try {
                 var reduced=new ScenarioScript(List.of(preserved));var review=review(reduced,active,budget,deadline);
                 if(review.review().approved()&&validation.inspect(reduced,active.rules())==ScenarioScriptValidation.Result.VALID)
@@ -170,6 +177,12 @@ public final class ScenarioScriptGenerator {
             }
         }
         throw new ContentExhausted();
+    }
+    /** 거절 판정 · 사유와, 사유마다 걸린 점검 항목 · 필드를 고정 코드로만 남긴다(대본 원문 없음, R-F14). */
+    private void diagnoseReview(kr.mujoong.core.textai.ScenarioReview review){
+        diagnose("ScenarioReview_"+review.verdict());
+        review.reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
+        review.findings().forEach(f->diagnose("ScenarioReviewFinding_"+f.reason()+"_"+f.check()+"_"+f.field()));
     }
     private Result issueApprovedBeforeVariant(Approved approved,Budget budget,ScenarioDeadline deadline){
         diagnose("ScenarioVariantFailedApprovedIssued");
@@ -250,10 +263,10 @@ public final class ScenarioScriptGenerator {
     }
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
-        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v4");
+        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v5");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v3"),new Scenario.Generation(model,"scenario-generation.v4",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v4"),new Scenario.Generation(model,"scenario-generation.v5",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

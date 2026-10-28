@@ -103,7 +103,7 @@ class LunaSchemasTest {
         var pair=schemas.pair(LunaPurpose.SCENARIO_REVIEW).orElseThrow();
         assertThat(pair.requestSchema()).containsEntry("type","object").doesNotContainKey("anyOf");
         assertThat(pair.strict()).isTrue();
-        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"APPROVE\",\"reasons\":[]}")).isTrue();
+        assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"APPROVE\",\"reasons\":[],\"findings\":[]}")).isTrue();
         assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"APPROVE\",\"reasons\":[\"PRESSURE\"]}")).isFalse();
         assertThat(schemas.isValidOutput(LunaPurpose.SCENARIO_REVIEW,"{\"verdict\":\"REJECT\",\"reasons\":[\"UNKNOWN\"]}")).isFalse();
     }

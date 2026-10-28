@@ -42,6 +42,14 @@ import org.mockito.ArgumentCaptor;
         var result=run();
         assertThat(result.details().generation().graphContextUsed()).isFalse();
         assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.");}
+    /** FT-1028-c: 그래프 없이 고쳐 만들 때도 첫 검토의 거절 이유를 넘긴다(2026-10-28 실키에서 이유 없이 고쳐 같은 사유로 다시 거절됨). */
+    @Test void theFallbackRepairReceivesTheFirstRejectionReasons(){
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        when(provider.review(any())).thenReturn(ScenarioGenerationTest.reject("GOAL_MISMATCH"),ScenarioGenerationTest.approve());
+        run();
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("GOAL_MISMATCH")).containsEntry("baseOnly",true);
+    }
     @Test void successfulSkillThenEmptyPlanRegeneratesWithoutGraph(){assertFreshFallback();}
     @Test void successfulSkillThenPlanFailureRegeneratesWithoutGraph(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenThrow(new IllegalStateException("synthetic unavailable"));assertFreshFallback();}
     @Test void successfulSkillThenLatePlanRegeneratesWithoutGraph(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenAnswer(c->{f.clock.advance(Duration.ofSeconds(2));return Optional.of(plan);});assertFreshFallback();}

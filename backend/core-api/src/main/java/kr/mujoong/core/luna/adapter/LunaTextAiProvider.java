@@ -30,7 +30,7 @@ import org.springframework.core.io.ClassPathResource;
  * {@code promptVersion} = 보낸 판이다. 실패는 BR8.1 결정표로 {@link TextAiException}에 바꾼다.
  *
  * <p>입력에 아이 관심사({@code interests})는 넣지 않는다: Luna 호출부의 금지 키(BR2.1 — 기존 ResultTextGateway PRIVATE_KEYS)라 넣어도
- * 지워진다. 새 상황 스키마로 바꾸는 U10이 관심사 전달 여부를 다시 정한다.
+ * 지워진다. 구조화 상황 생성 · 검토도 관심사를 보내지 않는다.
  */
 public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.textai.ScenarioScriptProvider {
 
@@ -52,20 +52,20 @@ public final class LunaTextAiProvider implements TextAiProvider,kr.mujoong.core.
         this.json = Objects.requireNonNull(json, "json");
         try {
             this.instructions = new ClassPathResource(INSTRUCTIONS).getContentAsString(StandardCharsets.UTF_8);
-            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v4.txt").getContentAsString(StandardCharsets.UTF_8);
-            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v3.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.scriptInstructions = new ClassPathResource("prompts/scenario/generation.v5.txt").getContentAsString(StandardCharsets.UTF_8);
+            this.reviewInstructions = new ClassPathResource("prompts/scenario/review.v4.txt").getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new IllegalStateException("상황 생성 지시 자원이 없다: " + INSTRUCTIONS, e);
         }
     }
 
     @Override public Generated generate(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v4",scriptInstructions);
+        var result=structured(request,LunaPurpose.SCENARIO_GENERATION,"scenario-generation.v5",scriptInstructions);
         try { return new Generated(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioScript.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }
     @Override public Reviewed review(Call request) {
-        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v3",reviewInstructions);
+        var result=structured(request,LunaPurpose.SCENARIO_REVIEW,"scenario-review.v4",reviewInstructions);
         try { return new Reviewed(json.read(result.outputJson(),kr.mujoong.core.textai.ScenarioReview.class),result.responseModel()); }
         catch(RuntimeException invalid){throw new Failure(Failure.Kind.CONTENT,java.util.Optional.empty());}
     }

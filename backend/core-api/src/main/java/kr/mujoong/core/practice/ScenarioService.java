@@ -186,7 +186,7 @@ public class ScenarioService {
                 return saved;
             }
             ScenarioPrompt prompt=new ScenarioPrompt(definition.displayName(),definition.behaviorDefinitionText(),opportunity,
-                    definition.scenarioCondition(),relation,account.ageYears(),account.interests(),
+                    definition.scenarioCondition(),relation,account.ageYears(),List.of(),
                     previous==null ? null : previous.scenario().scenarioText());
             for (int attempt=0; attempt<2; attempt++) {
                 if (!clock.now().isBefore(deadline)) throw CoreApiException.of(ErrorCode.SERVICE_NOT_READY);
