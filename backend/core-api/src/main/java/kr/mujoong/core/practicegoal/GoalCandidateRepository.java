@@ -65,12 +65,16 @@ public class GoalCandidateRepository {
                 new kr.mujoong.core.knowledge.SeedObservation(r.getInt("observed"),r.getObject("last_observed",java.time.OffsetDateTime.class).toInstant())));
         return Map.copyOf(result);
     }
-    /** 보호자가 지금 담아 둔 목표들의 씨앗 태그. 장면 참고 씨앗은 이 안에서만 고른다. */
-    public Set<String> activeSavedSkillRefs(UUID child){
+    /**
+     * 지금 담겨 있고 보호자가 연습에 한 번이라도 고른(그 목표로 연습 장면을 만든 적 있는) 목표들의 씨앗 태그. 장면 참고 씨앗은 이 안에서만 고른다.
+     * 자유대화 목표가 자동으로 담겨도, 담기기만 하고 보호자가 고른 적 없는 주제는 참고로 섞지 않는다.
+     */
+    public Set<String> practicedSkillRefs(UUID child){
         return Set.copyOf(jdbc.queryForList("""
             select distinct v.skill_ref from core.core_saved_goal s
               join core.core_goal_candidate_version v on v.id=s.candidate_version_id and v.candidate_id=s.candidate_id and v.child_id=s.child_id
              where s.child_id=:child and s.status='ACTIVE' and v.skill_ref like 'seed:%'
+               and exists(select 1 from core.core_scenario sc where sc.child_id=s.child_id and sc.goal_selection_id=s.id)
             """,Map.of("child",child),String.class));
     }
     public void invalidatePrevious(UUID child,UUID session,UUID result){jdbc.update("update core.core_goal_candidate set status='INVALIDATED' where child_id=:child and source_session_id=:session and source_key not like :prefix",Map.of("child",child,"session",session,"prefix",result+":%"));}

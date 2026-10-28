@@ -194,8 +194,8 @@ public class ChildKnowledgeService implements AutoCloseable {
     }
 
     /**
-     * 담은 목표의 씨앗 가운데 장면 참고로 쓸 씨앗 하나를 고른다. 연습 목표 자신의 씨앗, 관찰이 적은 씨앗, 쉬는 기간 안의 씨앗은 빼고
-     * 관찰 횟수가 많은 순으로 고른다. 담은 목표의 씨앗은 권한을 확인한 뒤에 읽는다. 고를 씨앗이 없거나 조회가 예산을 넘기면 빈 값이다
+     * 후보 목표(보호자가 연습에 고른 적 있는 목표)의 씨앗 가운데 장면 참고로 쓸 씨앗 하나를 고른다. 연습 목표 자신의 씨앗, 관찰이 적은 씨앗,
+     * 쉬는 기간 안의 씨앗은 빼고 관찰 횟수가 많은 순으로 고른다. 후보 목표의 씨앗은 권한을 확인한 뒤에 읽는다. 고를 씨앗이 없거나 조회가 예산을 넘기면 빈 값이다
      * (참고 없이 장면을 만든다).
      */
     public Optional<ReferenceSeed> referenceSeed(UUID guardian, UUID child, String goalSeedId,

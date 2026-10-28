@@ -57,12 +57,22 @@ class CandidateSeedReplayIT {
         db.jdbc().update("update core.core_activity_record set activity_type='PRACTICE' where session_id=:s",Map.of("s",session));
         assertThat(goals.freeTalkSkillObservations(child)).isEmpty();
     }
-    @Test void savedSkillRefsFollowTheSavedVersionAndActiveSelectionsOnly(){
+    void practiced(UUID saved){db.jdbc().update("""
+            insert into core.core_scenario(id,guardian_id,child_id,session_id,goal_selection_id,behavior_key,behavior_version,
+            kind,relation_type,opportunity_condition,scenario_text,partner_role_text,trigger_script,validation_json,
+            content_fingerprint,status,model_version,prompt_version,created_at)
+            values(:id,:g,:c,:id,:goal,'ACCEPT_STOP',1,'ORIGINAL','PEER','기회','상황','역할','말','{}',cast(:id as text),'ISSUED','fake','fake',now())
+            """,Map.of("id",UUID.randomUUID(),"g",guardian,"c",child,"goal",saved));}
+    @Test void referenceSkillRefsNeedAnActiveSavedGoalThatWasPracticed(){
         var seeded=goals.register(child,session,result+":tagged",tagged("seed:S2"),clock.now());var none=goals.register(child,session,result+":none",tagged("NONE"),clock.now());
-        UUID saved=db.inTx(t->goals.select(guardian,seeded,clock.now()));db.inTx(t->goals.select(guardian,none,clock.now()));
-        assertThat(goals.activeSavedSkillRefs(child)).containsExactly("seed:S2");
+        var onlySaved=goals.register(child,session,result+":auto",tagged("seed:S3"),clock.now());
+        UUID saved=db.inTx(t->goals.select(guardian,seeded,clock.now()));UUID savedNone=db.inTx(t->goals.select(guardian,none,clock.now()));db.inTx(t->goals.select(guardian,onlySaved,clock.now()));
+        // 담기기만 하고 연습에 고른 적 없는 목표(자동으로 담긴 목표 포함)는 참고 후보가 아니다.
+        assertThat(goals.practicedSkillRefs(child)).isEmpty();
+        practiced(saved);practiced(savedNone);
+        assertThat(goals.practicedSkillRefs(child)).containsExactly("seed:S2");
         db.jdbc().update("update core.core_saved_goal set status='DELETED',deleted_at=now(),restore_until=now()+interval '1 day' where id=:id",Map.of("id",saved));
-        assertThat(goals.activeSavedSkillRefs(child)).isEmpty();
+        assertThat(goals.practicedSkillRefs(child)).isEmpty();
     }
     @Test void successfulSeedPublishesOnceWithoutOverwritingPinnedVersion(){when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("seed:S1","REUSED"));deliver(result);var version=goals.candidates(child,session).getFirst();assertThat(version.version()).isEqualTo(2);deliver(result);assertThat(goals.candidates(child,session).getFirst().id()).isEqualTo(version.id());verify(seeds,times(1)).generateSeed(any());}
 }
