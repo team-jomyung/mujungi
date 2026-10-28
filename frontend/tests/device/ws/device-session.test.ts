@@ -196,3 +196,25 @@ describe("DeviceSession — 서버 명령", () => {
     expect(deps.send).not.toHaveBeenCalledWith("PLAYBACK_MARK", mark, SESSION_ID);
   });
 });
+
+describe("DeviceSession — 무중이 말 자막(OUTPUT_BEGIN.text)", () => {
+  it("지금 세션의 자막만 재생 번호별로 두고 한 번만 꺼낸다", async () => {
+    const { session } = setup();
+    session.handleMessage(start());
+    await flushPromises();
+    session.handleMessage({ type: "OUTPUT_BEGIN", sessionId: OTHER_SESSION_ID, playbackId: PLAYBACK_ID, text: "다른 세션 말" });
+    expect(session.takeSubtitle(PLAYBACK_ID)).toBeNull();
+    session.handleMessage({ type: "OUTPUT_BEGIN", sessionId: SESSION_ID, playbackId: PLAYBACK_ID, text: "같이 놀자고 말해 볼까?" });
+    expect(session.takeSubtitle(PLAYBACK_ID)).toBe("같이 놀자고 말해 볼까?");
+    expect(session.takeSubtitle(PLAYBACK_ID)).toBeNull();
+  });
+
+  it("text가 없는 OUTPUT_BEGIN은 자막을 두지 않는다", async () => {
+    const { session, player } = setup();
+    session.handleMessage(start());
+    await flushPromises();
+    session.handleMessage({ type: "OUTPUT_BEGIN", sessionId: SESSION_ID, playbackId: PLAYBACK_ID, text: null });
+    expect(player.beginStream).toHaveBeenCalledTimes(1);
+    expect(session.takeSubtitle(PLAYBACK_ID)).toBeNull();
+  });
+});

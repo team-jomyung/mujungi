@@ -134,7 +134,8 @@
       "required": ["playbackId", "source"],
       "properties": {
         "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
-        "source": { "type": "string", "enum": ["GPT_LIVE", "SCENARIO_SCRIPT"] }
+        "source": { "type": "string", "enum": ["GPT_LIVE", "SCENARIO_SCRIPT"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "게이트를 통과한 이 말의 확정 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다" }
       }
     },
     "OUTPUT_END": {

@@ -117,6 +117,25 @@ class ConnectionSenderTest {
         assertThat(sender.reservedBytes()).as("비운 묶음의 예약도 푼다").isZero();
     }
 
+    @Test
+    void outputBeginCarriesTheBundleSubtitleAndOmitsItWhenAbsent() throws Exception {
+        UUID session = UUID.randomUUID();
+        DeviceLink.AudioReservation first = sender.reserve(4_800).orElseThrow();
+        sender.enqueueOutput(new OutputBundle(session, UUID.randomUUID(), OutputBegin.Source.GPT_LIVE,
+                List.of(new byte[4_800]), 100, first, () -> true, at -> { }, frame -> { }, "  같이 놀자고 말해 볼까?  "));
+        sender.enqueueOutput(bundle(session));
+        Thread worker = startWorker();
+
+        transport.awaitTexts(4);
+
+        List<String> begins = transport.texts.stream().filter(text -> text.contains("OUTPUT_BEGIN")).toList();
+        assertThat(begins).hasSize(2);
+        assertThat(begins.get(0)).contains("\"text\":\"같이 놀자고 말해 볼까?\"");
+        assertThat(begins.get(1)).doesNotContain("\"text\"");
+        sender.close(CloseCode.DEVICE_OFF);
+        worker.join(WAIT.toMillis());
+    }
+
     private OutputBundle bundle(UUID session) {
         DeviceLink.AudioReservation reservation = sender.reserve(4_800).orElseThrow();
         return new OutputBundle(session, UUID.randomUUID(), OutputBegin.Source.GPT_LIVE, List.of(new byte[4_800]), 100,

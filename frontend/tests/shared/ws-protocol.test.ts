@@ -141,11 +141,22 @@ describe("messages — 서버 → 기기 읽기", () => {
     });
   });
 
+  it("OUTPUT_BEGIN.text(기기 자막)는 다듬어 싣고 비었거나 500자를 넘거나 문자열이 아니면 null이다", () => {
+    const begin = (text: unknown) =>
+      parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID, text }, { sessionId: SESSION_ID }));
+    expect(begin("  같이 놀자고 말해 볼까?  ")).toMatchObject({ type: "OUTPUT_BEGIN", text: "같이 놀자고 말해 볼까?" });
+    expect(begin("😀".repeat(500))).toMatchObject({ text: "😀".repeat(500) });
+    expect(begin("가".repeat(501))).toMatchObject({ text: null });
+    expect(begin("   ")).toMatchObject({ text: null });
+    expect(begin(42)).toMatchObject({ text: null });
+  });
+
   it("OUTPUT_BEGIN · OUTPUT_END · PLAY_APPROVED_CONTENT는 playbackId UUID가 있어야 한다", () => {
     expect(parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID }, { sessionId: SESSION_ID }))).toEqual({
       type: "OUTPUT_BEGIN",
       sessionId: SESSION_ID,
       playbackId: PLAYBACK_ID,
+      text: null,
     });
     expect(parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID }))).toBeNull();
     expect(parseServerMessage(envelope("OUTPUT_END", { playbackId: PLAYBACK_ID }))).toMatchObject({ type: "OUTPUT_END", sessionId: null });

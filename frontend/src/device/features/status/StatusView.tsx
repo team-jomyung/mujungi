@@ -1,4 +1,9 @@
-import { COPY } from "@/shared/copy/ko";
+import dynamic from "next/dynamic";
+import { useState } from "react";
+import { COPY, PROPOSED_COPY } from "@/shared/copy/ko";
+import { motionFor } from "../avatar/duckClips";
+import { SubtitleDialog, kindOf } from "./SubtitleDialog";
+import { useReduceMotionSetting } from "./useReduceMotionSetting";
 
 // T19 상태 화면 최소 (U1 3.5 Step 38 · 39 · 57)
 // 클릭 요소는 「켜기」 · 「끄기」뿐이고 화면에서 가장 큰 터치 영역(72px 이상)이며 「끄기」는 캐릭터와 떨어진 구석에 둔다.
@@ -25,26 +30,50 @@ export interface StatusViewProps {
   readonly label: string | null;
   /** 라벨 아래 보조 줄(U3: 재접속 주기의 "다시 연결하고 있어요", mockups 9-31). 없으면 그리지 않는다. */
   readonly subLabel?: string | null;
+  /** 무중이 말 자막(OUTPUT_BEGIN.text). 말하는 중에 대화창으로 보인다. */
+  readonly subtitle?: string | null;
   readonly onTurnOn: () => void;
   readonly onTurnOff: () => void;
 }
 
-function Character({ expression }: { readonly expression: StatusDisplay }) {
+// 3D 무중이는 three.js가 커서 첫 화면 번들에서 떼어 기기에서만 불러온다.
+const DuckAvatar = dynamic(() => import("../avatar/DuckAvatar").then((m) => m.DuckAvatar), { ssr: false });
+
+function Character({ expression, still }: { readonly expression: StatusDisplay; readonly still: boolean }) {
+  // 3D가 준비되기 전 · 실패하면 기본 도형 캐릭터가 그대로 보인다.
+  const [duck, setDuck] = useState<"loading" | "ready" | "error">("loading");
   return (
-    <div className="mj-character" data-expression={expression} aria-hidden="true">
-      <span className="mj-character__eye mj-character__eye--left" />
-      <span className="mj-character__eye mj-character__eye--right" />
-      <span className="mj-character__mouth" />
+    <div className="mj-character-stage" data-duck={duck}>
+      <div className="mj-character" data-expression={expression} aria-hidden="true">
+        <span className="mj-character__eye mj-character__eye--left" />
+        <span className="mj-character__eye mj-character__eye--right" />
+        <span className="mj-character__mouth" />
+      </div>
+      {duck !== "error" ? <DuckAvatar motion={motionFor(expression)} still={still} onStatus={setDuck} /> : null}
     </div>
   );
 }
 
-export function StatusView({ display, label, subLabel = null, onTurnOn, onTurnOff }: StatusViewProps) {
+export function StatusView({ display, label, subLabel = null, subtitle = null, onTurnOn, onTurnOff }: StatusViewProps) {
   const isOff = display === "off" || display === "mic-request" || display === "mic-denied";
+  // 대화창이 같은 뜻을 크게 보이는 상태에서는 라벨을 화면에서만 숨긴다(화면 읽기용으로는 남김)
+  const dialogShown = kindOf(display, subtitle) !== "none";
+  const motion = useReduceMotionSetting();
   return (
     <section className="mj-t19" data-testid="t19-view" data-state={display}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={motion.reduceMotion}
+        className="mj-t19__motion"
+        data-testid="t19-reduce-motion"
+        onClick={motion.toggle}
+      >
+        <span className="mj-t19__motion-track" aria-hidden="true" />
+        {PROPOSED_COPY.device.reduceMotion}
+      </button>
       <div className="mj-t19__stage">
-        <Character expression={display} />
+        <Character expression={display} still={motion.reduceMotion} />
         {display === "mic-denied" ? (
           <div className="mj-t19__mic-denied" role="alert">
             <p className="mj-t19__mic-title">{COPY.device.t19MicDeniedTitle}</p>
@@ -52,7 +81,12 @@ export function StatusView({ display, label, subLabel = null, onTurnOn, onTurnOf
           </div>
         ) : null}
         {!isOff ? (
-          <p className="mj-t19__label" role="status" aria-live="polite" data-testid="t19-label">
+          <p
+            className={dialogShown ? "mj-t19__label mj-t19__label--quiet" : "mj-t19__label"}
+            role="status"
+            aria-live="polite"
+            data-testid="t19-label"
+          >
             {label ?? ""}
           </p>
         ) : null}
@@ -62,6 +96,7 @@ export function StatusView({ display, label, subLabel = null, onTurnOn, onTurnOf
           </p>
         ) : null}
       </div>
+      {!isOff ? <SubtitleDialog display={display} subtitle={subtitle} /> : null}
       {isOff ? (
         <button
           type="button"

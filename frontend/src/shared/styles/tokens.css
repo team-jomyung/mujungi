@@ -13,29 +13,33 @@
 }
 
 :root {
-  --color-brand-primary: #2f5bea;
-  --color-text-primary: #1b1f2a;
-  /* 설계서 #6b7385보다 진하게: 밝은 회색 배경에서도 일반 본문 대비 유지. */
-  --color-text-secondary: #626b7d;
+  /* 토스 팔레트(TDS 공개 색, docs/ui/toss-design.md). 상태 색은 대비 4.5:1을 위해 한 단계 진한 값. */
+  --color-brand-primary: #3182f6;
+  --color-text-primary: #191f28;
+  --color-text-secondary: #4e5968;
+  --color-text-tertiary: #6b7684;
   --color-surface-base: #ffffff;
-  --color-surface-page: #f3f5f9;
+  --color-surface-page: #f2f4f6;
   --color-surface-card: #ffffff;
-  --color-border-default: #e3e7ef;
-  --color-border-input: #8792a8;
-  --color-border-selected: #c9d6ff;
-  --color-status-stable: #2f8f5b;
-  --color-status-unstable: #d99a1e;
-  --color-status-disconnected: #d9482b;
-  --color-status-unresponsive: #8a909c;
-  --color-action-danger: #c23030;
-  --color-fixed-expression: #e9f0ff;
-  --color-surface-success: #e8f6ee;
-  --color-surface-warning: #fff6e3;
-  --color-surface-danger: #fdeeea;
-  --color-surface-purple: #efeefc;
-  --color-star: #f2b01e;
+  --color-surface-muted: #f9fafb;
+  --color-border-default: #e5e8eb;
+  --color-border-input: #d1d6db;
+  --color-border-selected: #90c2ff;
+  --color-status-stable: #03b26c;
+  --color-status-unstable: #ffb331;
+  --color-status-disconnected: #f04452;
+  --color-status-unresponsive: #8b95a1;
+  --color-action-danger: #e42939;
+  --color-fixed-expression: #e8f3ff;
+  --color-surface-success: #f0faf6;
+  --color-surface-warning: #fff9e7;
+  --color-surface-danger: #ffeeee;
+  --color-surface-purple: #f9f0fc;
+  --color-star: #ffc342;
   --space-unit: 4px;
-  --radius-card: 12px;
+  --radius-card: 20px;
+  --radius-button: 16px;
+  --radius-input: 12px;
 
   /* 글자 크기: 본문 16 · 보조 14 · 머리 20 · 아이 기기 라벨 28 이상 */
   --font-size-body: 16px;

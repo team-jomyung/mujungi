@@ -72,8 +72,17 @@ export class DeviceSession {
   /** 끊김으로 멈춘 그 세션의 재생(이어가면 알린다). */
   private interrupted: readonly InterruptedPlayback[] = [];
   private readonly handledOpIds: string[] = [];
+  /** OUTPUT_BEGIN.text를 재생 번호별로 둔다. 실제 소리가 나는 STARTED 때 꺼내 자막으로 띄운다(소리와 맞추기). */
+  private readonly subtitles = new Map<string, string>();
 
   constructor(private readonly deps: DeviceSessionDependencies) {}
+
+  /** 그 재생의 자막을 한 번 꺼낸다(없으면 null). 끝난 재생의 자막은 남기지 않는다. */
+  takeSubtitle(playbackId: string): string | null {
+    const text = this.subtitles.get(playbackId) ?? null;
+    this.subtitles.delete(playbackId);
+    return text;
+  }
 
   get sessionId(): string | null {
     return this.current?.sessionId ?? null;
@@ -151,6 +160,7 @@ export class DeviceSession {
         return;
       case "OUTPUT_BEGIN":
         if (this.isCurrent(message.sessionId)) {
+          if (typeof message.text === "string") this.subtitles.set(message.playbackId, message.text);
           this.deps.player.beginStream(message.sessionId, message.playbackId);
         }
         return;

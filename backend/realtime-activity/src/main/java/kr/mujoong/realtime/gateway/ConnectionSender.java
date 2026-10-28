@@ -333,7 +333,7 @@ public final class ConnectionSender {
         OutputBundle bundle = current;
         int step = currentStep++;
         if (step == 0) {
-            return () -> writeControl(new ControlItem(new OutputBegin(bundle.playbackId(), bundle.source()), null,
+            return () -> writeControl(new ControlItem(new OutputBegin(bundle.playbackId(), bundle.source(), bundle.subtitle()), null,
                     bundle.sessionId()));
         }
         int frameIndex = step - 1;
