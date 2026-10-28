@@ -32,6 +32,7 @@ import org.springframework.boot.context.properties.bind.PropertySourcesPlacehold
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import kr.mujoong.core.admin.AdminPricingProperties;
 import kr.mujoong.core.knowledge.KnowledgeProperties;
 import kr.mujoong.core.knowledge.SeedGenerationProperties;
 import kr.mujoong.core.luna.LunaHosts;
@@ -155,6 +156,8 @@ class ConfigKeyContractTest {
         leaves.putAll(recordLeaves(AiUsageProperties.class, "mujoong.ai-usage"));
         leaves.putAll(recordLeaves(AiUsageProperties.Timing.class, "mujoong.timing.ai-usage"));
         leaves.putAll(recordLeaves(AiUsageProperties.Limits.class, "mujoong.limits.ai-usage"));
+        // JIRA-280: 관리자 비용 단가도 같은 방식의 레코드가 묶는다
+        leaves.putAll(recordLeaves(AdminPricingProperties.class, "mujoong.admin.pricing"));
 
         assertThat(keyMismatches(yml.keySet(), leaves.keySet(), RECORD_KEYS_WITHOUT_DEFAULT))
                 .as("yml 키 ↔ 설정 레코드 키").isEmpty();
@@ -172,6 +175,8 @@ class ConfigKeyContractTest {
                 "mujoong.timing.ai-usage"));
         boundValues.putAll(recordValues(bindRecord(AiUsageProperties.Limits.class, "mujoong.limits.ai-usage", base),
                 "mujoong.limits.ai-usage"));
+        boundValues.putAll(recordValues(bindRecord(AdminPricingProperties.class, "mujoong.admin.pricing", base),
+                "mujoong.admin.pricing"));
         assertThat(valueMismatches(yml, leaves, boundValues, placeholderResolver(base)))
                 .as("yml 값과 레코드에 묶인 값").isEmpty();
         assertThat(bound.timing().bootstrap().rateLimit().max()).isEqualTo(20);

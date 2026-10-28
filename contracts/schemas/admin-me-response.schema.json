@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-me-response.schema.json",
+  "title": "관리자 확인 응답(JIRA-280)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "displayName",
+    "role"
+  ],
+  "properties": {
+    "displayName": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "role": {
+      "enum": [
+        "ADMIN"
+      ]
+    }
+  }
+}

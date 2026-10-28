@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-guardian-page-response.schema.json",
+  "title": "관리자 보호자 목록 응답(JIRA-280)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "page",
+    "pageSize",
+    "total"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "activityCount",
+          "devices"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/Uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "activityCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "devices": {
+            "description": "지금 등록된 기기만",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "name",
+                "children"
+              ],
+              "properties": {
+                "id": {
+                  "$ref": "common.schema.json#/$defs/Uuid"
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "children": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "name",
+                      "activityCount"
+                    ],
+                    "properties": {
+                      "id": {
+                        "$ref": "common.schema.json#/$defs/Uuid"
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "activityCount": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pageSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

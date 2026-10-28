@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-admin-usage-request.schema.json",
+  "title": "관리자 조회 — Realtime AI 사용량 요청(JIRA-280). 세션 id 목록 또는 관측 시각 범위 [from, to) 둘 중 하나",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sessionIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "from": { "type": "string", "format": "date-time" },
+    "to": { "type": "string", "format": "date-time" }
+  },
+  "oneOf": [
+    { "required": ["sessionIds"], "not": { "anyOf": [{ "required": ["from"] }, { "required": ["to"] }] } },
+    { "required": ["from", "to"], "not": { "required": ["sessionIds"] } }
+  ]
+}

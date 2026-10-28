@@ -173,6 +173,79 @@ paths:
               schema: { $ref: "schemas/error-envelope.schema.json" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/sessions/admin-facts:
+    post:
+      operationId: getAdminPracticeFacts
+      summary: "[Realtime] 관리자 조회 — 세션별 연습 장면 실행 · 사실 · 도움 기록(JIRA-280)"
+      description: |
+        Core 관리자 API(/api/admin/activities/{sessionId} · /api/admin/quality)만 부른다. 읽기 전용이지만 세션 id 목록을
+        본문으로 받으려고 POST를 쓴다. 분류 코드 · 횟수 · 시각만 돌려주고 원문 · 개인정보는 없다(R-F14). 장면 실행이 없는
+        세션은 결과에 없다. Core 제한은 mujoong.internal-http.admin-facts-timeout(재시도 · 차단기 없음, 실패하면 그 관리자
+        요청이 503 REALTIME_UNAVAILABLE).
+      servers:
+        - url: http://realtime:8081
+      x-unit: JIRA-280
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-admin-facts-request.schema.json" }
+            example: { sessionIds: [00000000-0000-4000-8000-000000000020] }
+      responses:
+        "200":
+          description: 세션별 장면 실행(시작 순)
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-admin-facts-response.schema.json" }
+              example:
+                sessions:
+                  - sessionId: 00000000-0000-4000-8000-000000000020
+                    sceneRuns:
+                      - sceneRunId: 00000000-0000-4000-8000-000000000031
+                        sceneKind: BASE
+                        liveTiming: AFTER_HELP
+                        retryCount: 1
+                        reexplainCount: 0
+                        facts: [HELP_ACCEPTED, COACH_SWITCH, FOCUS_HELP]
+                        helps:
+                          - { helpId: 00000000-0000-4000-8000-000000000041, kind: ROLE_SWITCH, consentAnswer: ACCEPT, exampleGiven: false }
+                          - { helpId: 00000000-0000-4000-8000-000000000042, kind: FOCUS_HELP, consentAnswer: ACCEPT, exampleGiven: true }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /internal/sessions/admin-usage:
+    post:
+      operationId: getAdminRealtimeUsage
+      summary: "[Realtime] 관리자 조회 — 세션 · 출처 · 모델별 AI 사용량 합(JIRA-280)"
+      description: |
+        본문은 sessionIds(활동 상세, 관측 시각 제한 없음) 또는 from · to(비용 목록, 관측 시각 [from, to)) 둘 중 하나다. 둘 다
+        있거나 둘 다 없으면 400. 표시용 토큰 · 초 합은 필드마다 아는 값을 더하고, 금액 계산용 합(measured*)은 측정된 행만 더한다.
+        금액을 계산하지 못한 행은 calls − measuredCalls로 드러난다(0으로 채우지 않는다). cacheUnknownCalls는 측정된 LUNA 행 가운데 캐시 읽기
+        토큰이 없는 행 수다(JIRA-287, Core가 수집 상태를 PARTIAL로 표시). 음성은 VOICE(초), 진행 중 판정은 LUNA(Decisions 토큰)이고 캐시 쓰기 토큰은 표에 없다.
+      servers:
+        - url: http://realtime:8081
+      x-unit: JIRA-280
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "schemas/internal-admin-usage-request.schema.json" }
+            example: { from: "2026-10-26T15:00:00Z", to: "2026-10-27T15:00:00Z" }
+      responses:
+        "200":
+          description: 세션 · 출처 · 모델별 합
+          content:
+            application/json:
+              schema: { $ref: "schemas/internal-admin-usage-response.schema.json" }
+              example:
+                usage:
+                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: VOICE, model: gpt-live-1, calls: 1, measuredCalls: 1, knownCalls: 1, completeCalls: 0, cacheUnknownCalls: 0, voiceSeconds: 312.4, lastObservedAt: "2026-10-27T01:05:12Z" }
+                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: LUNA, model: gpt-6-luna, calls: 7, measuredCalls: 6, knownCalls: 7, completeCalls: 6, cacheUnknownCalls: 0, inputTokens: 5500, outputTokens: 60, cachedInputTokens: 1200, reasoningTokens: 0, measuredInputTokens: 5400, measuredOutputTokens: 60, measuredCachedInputTokens: 1200, lastObservedAt: "2026-10-27T01:04:40Z" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
   /internal/devices/verify-token:
     post:
       operationId: verifyDeviceToken

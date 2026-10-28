@@ -95,7 +95,8 @@ class StructuredLogFormatTest {
                 "SESSION_TRANSITION", "TIMEOUT_FIRED", "LATENCY_TURN", "SESSION_ITEMS_SERVED", "PLAYBACK_MARK_STOPPED",
                 "PRACTICE_AUDIO_STAGE", "OUTPUT_DISCARDED", "DEVICE_CONNECTION", "INTERNAL_HTTP", "EVENT_DELIVERY", "STARTUP_RECOVERY", "METRIC_SNAPSHOT",
                 "SECURITY_AUTH_FAILED", "SECURITY_RATE_LIMITED", "SECURITY_ORIGIN_DENIED", "SECURITY_DEV_LOGIN_BLOCKED",
-                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP", "GOAL_CANDIDATE_DROPPED");
+                "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP",
+                "GOAL_CANDIDATE_DROPPED", "ADMIN_RECORD_VIEWED");
         Set<String> keyNames = Arrays.stream(AttrKey.values()).map(AttrKey::key).collect(Collectors.toSet());
         assertThat(keyNames).doesNotContain(
                 "message", "text", "transcript", "audio", "token", "cookie", "code", "email", "password", "secret", "input",
@@ -127,6 +128,7 @@ class StructuredLogFormatTest {
         assertThat(table.get(EventCode.SECURITY_DEV_LOGIN_BLOCKED)).containsExactlyInAnyOrder("profile", "statusCode", "repeat");
         assertThat(table.get(EventCode.APP_ERROR)).containsExactlyInAnyOrder("errorKind", "repeat");
         assertThat(table.get(EventCode.QUEUE_PRESSURE)).containsExactlyInAnyOrder("queue", "dropped", "repeat");
+        assertThat(table.get(EventCode.ADMIN_RECORD_VIEWED)).containsExactly("viewerHash");
         assertThat(table.get(EventCode.LATENCY_TURN)).hasSize(17).contains("tSpeechEnd", "clockOffsetMs", "unobservedReason");
         assertThat(table.get(EventCode.METRIC_SNAPSHOT)).hasSize(18).contains("outboxPending", "breakerOpenSec");
         assertThat(Arrays.stream(EventCode.values()).filter(EventCode::isSecurityEvent)).hasSize(5);
