@@ -40,5 +40,29 @@ class CandidateSeedReplayIT {
     @Test void removedSourceCannotBeReplayed(){db.jdbc().update("delete from core.core_activity_record where session_id=:s",Map.of("s",session));assertThatThrownBy(()->deliver(result)).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(goals.candidates(child,session)).isEmpty();}
     @Test void withdrawnConsentCannotBeReplayed(){when(consent.check(guardian)).thenReturn(new ConsentPolicyService.GateResult(false,null,new ConsentPolicyService.Snapshot("v1",false,true,true,true)));assertThatThrownBy(()->deliver(result)).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(goals.candidates(child,session)).isEmpty();}
     @Test void seedFailurePreservesDoneResult(){when(seeds.generateSeed(any())).thenThrow(new IllegalStateException("TIMEOUT"));deliver(result);assertThat(db.jdbc().queryForObject("select job_status from core.core_session_result_state where session_id=:s",Map.of("s",session),String.class)).isEqualTo("DONE");assertThat(goals.candidates(child,session).getFirst().content().skillRef()).isEqualTo("NONE");}
+    GoalCandidateRepository.Draft tagged(String skillRef){var d=pending().candidates().getFirst();return new GoalCandidateRepository.Draft(d.displayName(),d.displayEvidence(),d.targetExpression(),d.fourElements(),skillRef,d.reasonText(),d.evidence(),null);}
+    @Test void freeTalkObservationsCountTheCurrentSeedTagOfActiveCandidates(){
+        when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("seed:S1","REUSED"));deliver(result);
+        goals.register(child,session,result+":tagged",tagged("seed:S1"),clock.now());goals.register(child,session,result+":other",tagged("seed:S2"),clock.now());
+        goals.register(child,session,result+":none",tagged("NONE"),clock.now());
+        var observed=goals.freeTalkSkillObservations(child);
+        assertThat(observed).containsOnlyKeys("seed:S1","seed:S2");
+        assertThat(observed.get("seed:S1").count()).isEqualTo(2);assertThat(observed.get("seed:S2").count()).isEqualTo(1);
+        // 새 결과가 이전 후보를 무효로 만들면 그 태그는 더 세지 않는다.
+        UUID latest=publish();goals.invalidatePrevious(child,session,latest);
+        assertThat(goals.freeTalkSkillObservations(child)).isEmpty();
+    }
+    @Test void practiceCandidatesAreNotObservations(){
+        goals.register(child,session,result+":tagged",tagged("seed:S1"),clock.now());
+        db.jdbc().update("update core.core_activity_record set activity_type='PRACTICE' where session_id=:s",Map.of("s",session));
+        assertThat(goals.freeTalkSkillObservations(child)).isEmpty();
+    }
+    @Test void savedSkillRefsFollowTheSavedVersionAndActiveSelectionsOnly(){
+        var seeded=goals.register(child,session,result+":tagged",tagged("seed:S2"),clock.now());var none=goals.register(child,session,result+":none",tagged("NONE"),clock.now());
+        UUID saved=db.inTx(t->goals.select(guardian,seeded,clock.now()));db.inTx(t->goals.select(guardian,none,clock.now()));
+        assertThat(goals.activeSavedSkillRefs(child)).containsExactly("seed:S2");
+        db.jdbc().update("update core.core_saved_goal set status='DELETED',deleted_at=now(),restore_until=now()+interval '1 day' where id=:id",Map.of("id",saved));
+        assertThat(goals.activeSavedSkillRefs(child)).isEmpty();
+    }
     @Test void successfulSeedPublishesOnceWithoutOverwritingPinnedVersion(){when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("seed:S1","REUSED"));deliver(result);var version=goals.candidates(child,session).getFirst();assertThat(version.version()).isEqualTo(2);deliver(result);assertThat(goals.candidates(child,session).getFirst().id()).isEqualTo(version.id());verify(seeds,times(1)).generateSeed(any());}
 }

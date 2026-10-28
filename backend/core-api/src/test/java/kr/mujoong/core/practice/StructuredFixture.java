@@ -19,6 +19,7 @@ final class StructuredFixture implements AutoCloseable {
     final ScenarioPrivacyContextPort privacy=mock(ScenarioPrivacyContextPort.class);
     final ChildKnowledgeService graph=mock(ChildKnowledgeService.class);
     final kr.mujoong.core.consent.ConsentPolicyService consent=mock(kr.mujoong.core.consent.ConsentPolicyService.class);
+    final kr.mujoong.core.practicegoal.GoalCandidateRepository goals=mock(kr.mujoong.core.practicegoal.GoalCandidateRepository.class);
     JdbcTestPracticeAccounts accounts;
     StructuredFixture(){
         legacy.setUp();
@@ -34,9 +35,10 @@ final class StructuredFixture implements AutoCloseable {
         when(privacy.require(legacy.guardian,legacy.child)).thenReturn(new ScenarioPrivacyContextPort.Context("합성아이"));
         var properties=mock(CoreProperties.class,RETURNS_DEEP_STUBS);
         when(properties.timing().knowledge().graphBudget()).thenReturn(Duration.ofSeconds(2));
+        when(properties.timing().knowledge().referenceCooldown()).thenReturn(Duration.ofDays(7));
         when(properties.timing().practice().scenarioHistoryTimeout()).thenReturn(Duration.ofMillis(500));
         legacy.service.connectStructured(transport,privacy,new LunaInputSanitizer(JsonCodec.shared()),graph,new ForbiddenExpressionPolicy(),
-                new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared());
+                new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared(),goals);
     }
     ScenarioScriptProvider.Generated generated(String material){
         var s=new ScenarioScript.Scene("base","BASE",material+" 놀이 중. "+legacy.opportunity+" 이제 그만할래.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),"PEER","교실","놀이",null,null);

@@ -55,12 +55,15 @@ public class ScenarioService {
             kr.mujoong.core.luna.LunaInputSanitizer sanitizer,kr.mujoong.core.knowledge.ChildKnowledgeService graph,
             kr.mujoong.core.textai.ForbiddenExpressionPolicy forbidden,kr.mujoong.core.textai.TextAiProperties timing,
             @org.springframework.beans.factory.annotation.Qualifier("textAiExecutor") java.util.concurrent.ExecutorService executor,
-            kr.mujoong.core.config.CoreProperties properties,JsonCodec json){
+            kr.mujoong.core.config.CoreProperties properties,JsonCodec json,kr.mujoong.core.practicegoal.GoalCandidateRepository goals){
         if(provider instanceof kr.mujoong.core.textai.ScenarioScriptProvider scripts){
+            var knowledgeTiming=properties.timing().knowledge();
             structured=new StructuredScenarioFlow(new ScenarioScriptGenerator(scripts,new ScenarioScriptValidation(forbidden),timing,executor,
                     kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep).diagnostics(this::diagnose),privacy,sanitizer,
-                    new ScenarioGraphContext(graph,executor,clock,properties.timing().knowledge().graphBudget()),repository,executor,
-                    properties.timing().practice().scenarioHistoryTimeout(),json);
+                    new ScenarioGraphContext(graph,executor,clock,knowledgeTiming.graphBudget()),repository,executor,
+                    properties.timing().practice().scenarioHistoryTimeout(),json)
+                    .references(new ReferenceSeedSelector(graph,goals::activeSavedSkillRefs,executor,
+                            knowledgeTiming.graphBudget(),knowledgeTiming.referenceCooldown()));
         }
     }
     public ScenarioService(ScenarioRepository repository, PracticeSessionContextPort sessions, ScenarioRecordPort records,
@@ -164,7 +167,8 @@ public class ScenarioService {
                 try{generated=structured.generate(context,goal,definition,previous,account,started,budget);}
                 catch(ScenarioScriptGenerator.ContentExhausted failure){validationFailed=!failure.retryableDuplicate;throw failure;}
                 budget.check();
-                try{return tx.execute(status->{
+                Scenario saved;
+                try{saved=tx.execute(status->{
                     repository.beginDeadline(budget);
                     authorize(context);
                     repository.limitSql(budget);
@@ -176,6 +180,8 @@ public class ScenarioService {
                     budget.check();return repository.save(request.key(),claim.claimId(),latest,goal,request,generated.legacy(),clock.now(),generated.details(),budget);
                 });}
                 catch(org.springframework.dao.DataAccessException database){throw ScenarioDeadline.failed();}
+                structured.referenceUsed(context.guardianId(),context.childId(),generated);
+                return saved;
             }
             ScenarioPrompt prompt=new ScenarioPrompt(definition.displayName(),definition.behaviorDefinitionText(),opportunity,
                     definition.scenarioCondition(),relation,account.ageYears(),account.interests(),

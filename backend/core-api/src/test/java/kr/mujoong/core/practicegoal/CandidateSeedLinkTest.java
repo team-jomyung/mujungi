@@ -33,6 +33,24 @@ class CandidateSeedLinkTest {
     }
     void deliver(){delivery.deliver(guardian,child,session,result,CandidateSeedDelivery.Pending.of(List.of(version.content())));}
     @Test void successPublishesNewVersion(){deliver();verify(repository).linkSeed(eq(version),eq("seed:S1"),any());}
+    @Test void freeTalkObservationsAreWrittenAfterTheNewSeedIsLinked(){
+        var knowledge=mock(ChildKnowledgeService.class);delivery.connectKnowledge(knowledge);
+        var observed=Map.of("seed:S1",new SeedObservation(2,java.time.Instant.parse("2030-01-01T00:00:00Z")));
+        when(repository.freeTalkSkillObservations(child)).thenReturn(observed);
+        deliver();
+        @SuppressWarnings("unchecked") var counted=org.mockito.ArgumentCaptor.forClass(java.util.function.Supplier.class);
+        var order=inOrder(repository,knowledge);
+        order.verify(repository).linkSeed(eq(version),eq("seed:S1"),any());order.verify(knowledge).recordObservations(eq(guardian),eq(child),counted.capture());
+        // 횟수는 그래프 서비스가 권한을 확인한 뒤 공급자를 부를 때 센다.
+        verify(repository,never()).freeTalkSkillObservations(any());
+        assertThat(counted.getValue().get()).isEqualTo(observed);
+    }
+    @Test void observationFailureDoesNotFailCompletedResult(){
+        var knowledge=mock(ChildKnowledgeService.class);delivery.connectKnowledge(knowledge);
+        when(knowledge.recordObservations(any(),any(),any())).thenThrow(new IllegalStateException("graph unavailable"));
+        assertThatCode(this::deliver).doesNotThrowAnyException();
+        verify(repository).linkSeed(eq(version),eq("seed:S1"),any());verify(events).appError(any(),eq("SkillObservationSyncFailed"));
+    }
     @Test void disabledSeedDoesNotChangeCandidate(){when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("NONE","DISABLED"));deliver();verify(repository,never()).linkSeed(any(),anyString(),any());}
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings={"TIMEOUT","RAW_SOURCE_REJECTED","PERSON_NAME_REJECTED"})

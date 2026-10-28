@@ -613,6 +613,14 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 **아직 연결하지 않은 것.** 묶음의 판정 계약 `practice-assessment.v1.txt`(대화 관련성 · 목표 근거 · 지원 · 참여를 따로 돌려주는 JSON)는 지금 진행 중 판정이 쓰는 Decisions API의 선택지 하나 고르기 형식과 맞지 않아, 판정 방식 결정 뒤 따로 적용한다. 출력 검토 `practice-output-review.v1.txt`는 묶음 스스로 제브 대체 배포본이 아니라고 적었다. 낭독 중 아이 질문이 들어올 때의 출력 중지 · 발화 보존, 도움 뒤 `expectsReply` 메타데이터, 기록 단계 구분도 아직 서버 동작이 없다. `dialogue-examples.txt` · `regression-cases.jsonl`은 수동 회귀 검수 자료로 둔다.
 
+### 10.19 연습 장면 참고 씨앗 [편차 KG-1028-a]
+
+상황 생성(`scenario-generation.v4`) 입력에 선택 필드 `referenceContext`를 더한다. 처음 만드는 장면(`ORIGINAL`)에서 참고 씨앗을 골랐을 때만 넣고(생성 중 그래프 없는 대체 경로로 바뀌면 뺀다), 내용은 `{"invariantSentence": "<씨앗의 불변 문장>"}` 하나다. 씨앗 ID · 보존 조건 · 구조 서명 · 횟수 · 아이 기록은 넣지 않는다. 고르는 규칙은 `knowledge-graph.md`의 "관찰 횟수와 참고 씨앗"이다.
+
+- 생성 지시: 소재 · 분위기 · 상대 사정을 고를 때만 참고하고, 목표 · 기회 조건 · `structureContext` · `preservation`은 바꾸지 않는다. 문장을 장면에 옮기거나 해설로 읽어 주지 않고, 두 번째 목표나 정답을 만들지 않는다.
+- 검토 지시(`scenario-review.v3`): 반영 여부로 거절하지 않는다. 참고 때문에 목표 기회가 흐려지거나 두 번째 목표 · 정답 해설이 생기면 기존 사유(`GOAL_MISMATCH` · `ANSWER_INCLUDED` · `EARLY_CUE`)로 거절한다. 새 사유 코드는 없다.
+- 두 지시 파일은 판 이름을 올리지 않고 문단만 더했다(`goal-candidates.v1`과 같은 관례). 출력 스키마 · 저장 대본 · 시작 패키지 모양은 바뀌지 않는다.
+
 ## 자유대화 전 보호자 입력 참고
 
 보호자의 입력 원문을 Live 지시문에 넣지 않는다. Core가 고정 키워드와 상황 구분에서 추출한 `conversationGuide.topics`(열거형 1~3개)와 `sourceType`(SEEN, HEARD_FROM_CHILD, UNSPECIFIED)만 자유대화 시작 내부 요청에 선택적으로 포함한다. 이름·연락처·사건 주장·임의 지시문을 담을 문자열 필드는 없다. 아이 기본 정보의 기존 childContext(이름·나이·관심사)는 유지한다.
