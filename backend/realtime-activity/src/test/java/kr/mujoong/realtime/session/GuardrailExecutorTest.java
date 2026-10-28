@@ -82,7 +82,10 @@ class GuardrailExecutorTest {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL);
             assertThat(row.text()).isEmpty();
         });
-        // 응답이 끝나면(조용 시간) 통과한 전사가 한 행으로 한꺼번에 나온다
+        // 응답이 끝나면(조용 시간) 늦은 조각을 이어 붙일 수 있게 한 번 더 조용 시간만큼 두었다가, 통과한 전사를 한 행으로 한꺼번에 낸다(FT-1027-j)
+        h.advance(Duration.ofMillis(800));
+        assertThat(aiRows()).singleElement().satisfies(row ->
+                assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL));
         h.advance(Duration.ofMillis(800));
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
@@ -118,12 +121,36 @@ class GuardrailExecutorTest {
         h.advance(Duration.ofMillis(800));
         assertThat(aiRows()).singleElement().satisfies(row ->
                 assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.PARTIAL));
-        // 늦게 온 허용이 앞 응답의 행을 완성한다
+        // 늦게 온 허용이 앞 응답의 행을 완성한다(이어 붙일 수 있는 시간이 지난 뒤 닫힌다, FT-1027-j)
         guard.allow(); h.drain();
+        h.advance(Duration.ofMillis(800));
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
             assertThat(row.approvedForDisplay()).isTrue();
             assertThat(row.text()).isEqualTo("앞 응답의 말 ");
+        });
+    }
+
+    @Test
+    void aLateChunkAfterTheQuietEndJoinsThePreviousRowInsteadOfANewOne() {
+        h.activate(); childSpeaks();
+        timedText("자라서 엄마 아빠가 된", 0, 100);
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        guard.allow(); h.drain();
+        // 조용 시간이 지나 응답이 끝났다고 본 뒤, 같은 응답의 마지막 조각이 늦게 왔다(2026-10-27 실키 자유대화 10 · 11번)
+        h.advance(Duration.ofMillis(800));
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta("거야 ", 100 + h.settings.newSpeechMargin().toMillis(),
+                200 + h.settings.newSpeechMargin().toMillis()));
+        h.provider.last().emit(new ProviderEvent.OutputAudioDelta(AUDIO));
+        h.drain();
+        guard.allow(); h.drain();
+        h.advance(Duration.ofMillis(800));
+        h.advance(Duration.ofMillis(800));
+        assertThat(aiRows()).singleElement().satisfies(row -> {
+            assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
+            assertThat(row.approvedForDisplay()).isTrue();
+            assertThat(row.text()).isEqualTo("자라서 엄마 아빠가 된 거야 ");
         });
     }
 

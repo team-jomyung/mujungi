@@ -61,7 +61,6 @@ export function LoginScreen({ failed = false, deleting = false, navigate = assig
         >
           {busy ? ACCOUNT_TEMP_COPY.authenticating : ACCOUNT_COPY.login.google}
         </button>
-        <p className="mj-login__notice">{ACCOUNT_COPY.login.aiNotice}</p>
       </main>
     </div>
   );

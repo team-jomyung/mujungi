@@ -83,7 +83,16 @@ describe("ko — 자리를 채우는 문구", () => {
     expect(COPY.device.t19MicDeniedTitle).toBe("마이크를 허용해 주세요");
     expect(COPY.device.t19MicDeniedBody).toBe("브라우저 설정에서 마이크와 소리를 켠 뒤 다시 「켜기」를 눌러요.");
     expect(COPY.device.t19Disconnected).toBe("연결 끊김");
-    expect(PROPOSED_COPY.device).toEqual({ d0Checking: "연결을 확인하는 중", t19Reconnecting: "다시 연결하고 있어요" });
+    // 기기 게임식 대화창 문구 4개를 더했다(docs/ui/device-subtitle.md). 그 밖의 글은 여전히 늘지 않는다
+    expect(PROPOSED_COPY.device).toEqual({
+      d0Checking: "연결을 확인하는 중",
+      t19Reconnecting: "다시 연결하고 있어요",
+      dialogSpeaker: "무중이",
+      dialogTurnTag: "내 차례",
+      dialogTurnBody: "말해 볼까?",
+      dialogThinking: "음… 생각하고 있어",
+      reduceMotion: "동작 줄이기",
+    });
   });
 });
 

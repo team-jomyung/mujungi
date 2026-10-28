@@ -40,6 +40,9 @@ final class SessionClocks {
 
         void onResponseStallExpired();
 
+        /** 조용함으로 끝난 응답 행을 이어 붙일 수 있는 시간이 지났다. */
+        default void onStreamResumeExpired() {}
+
         void onInputTranscriptQuiet();
 
         void onJudgmentTimer(JudgmentTurn.TimerKind kind);
@@ -97,6 +100,7 @@ final class SessionClocks {
             case PRACTICE_COLLECT_MAX -> env.onPracticeCollectMax();
             case JOIN_SELF_START -> env.onJoinSelfStartExpired();
             case RESPONSE_STALL -> env.onResponseStallExpired();
+            case STREAM_RESUME -> env.onStreamResumeExpired();
             case INPUT_TRANSCRIPT_QUIET -> env.onInputTranscriptQuiet();
             case JUDGMENT_LIVE -> env.onJudgmentTimer(JudgmentTurn.TimerKind.LIVE);
             case JUDGMENT_READY -> env.onJudgmentTimer(JudgmentTurn.TimerKind.READY);

@@ -16,6 +16,12 @@ export const ALLOWED_ORIGIN_ENV = "MUJOONG_SECURITY_ALLOWED_ORIGIN";
  */
 export const STRICT_DYNAMIC_EXCLUDED_PATH_PREFIXES: readonly string[] = [];
 
+/**
+ * script-src에 'wasm-unsafe-eval'을 더하는 경로 접두. /device의 3D 무중이(three.js Meshopt 디코더)가 WebAssembly를 컴파일한다
+ * (docs/ui/device-subtitle.md). 'wasm-unsafe-eval'은 WebAssembly 컴파일만 허용하고 JS eval은 계속 막는다. 보호자 웹에는 더하지 않는다.
+ */
+export const WASM_ALLOWED_PATH_PREFIXES: readonly string[] = ["/device"];
+
 const LOOPBACK_HOSTS: readonly string[] = ["localhost", "127.0.0.1", "[::1]"];
 const NONCE_BYTES = 16;
 
@@ -28,6 +34,8 @@ export interface CspOptions {
   readonly isDevelopment: boolean;
   /** 'strict-dynamic'을 쓸지. 기본 true. */
   readonly strictDynamic?: boolean;
+  /** 'wasm-unsafe-eval'을 더할지(WASM_ALLOWED_PATH_PREFIXES 경로). 기본 false. */
+  readonly allowWasm?: boolean;
 }
 
 /**
@@ -60,6 +68,11 @@ export function websocketOriginFromAllowedOrigin(allowedOrigin: string | undefin
   return null;
 }
 
+/** 요청 경로에 'wasm-unsafe-eval'을 더할지. */
+export function allowsWasm(pathname: string): boolean {
+  return WASM_ALLOWED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 /** 요청 경로에 'strict-dynamic'을 쓸지. */
 export function usesStrictDynamic(pathname: string): boolean {
   return !STRICT_DYNAMIC_EXCLUDED_PATH_PREFIXES.some(
@@ -72,6 +85,9 @@ export function buildContentSecurityPolicy(options: CspOptions): string {
   const scriptSources = ["'self'", `'nonce-${options.nonce}'`];
   if (options.strictDynamic ?? true) {
     scriptSources.push("'strict-dynamic'");
+  }
+  if (options.allowWasm ?? false) {
+    scriptSources.push("'wasm-unsafe-eval'");
   }
   if (options.isDevelopment) {
     scriptSources.push("'unsafe-eval'");

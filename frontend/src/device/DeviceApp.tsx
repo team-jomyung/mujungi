@@ -5,6 +5,7 @@ import { createDeviceApi, type DeviceApi } from "./api/deviceApi";
 import { createAudioContextInGesture } from "./audio/audioContext";
 import { DebugLog } from "./features/debug/DebugLog";
 import { FirstBootView, type FirstBootDisplay } from "./features/first-boot/FirstBootView";
+import { useDeviceSubtitle } from "./features/status/useDeviceSubtitle";
 import { StatusView, type StatusDisplay } from "./features/status/StatusView";
 import {
   deviceReducer,
@@ -132,6 +133,9 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   const timing = useTiming();
   const [state, dispatch] = useReducer(deviceReducer, undefined, initialDeviceState);
   const [api] = useState<DeviceApi>(() => injectedApi ?? createDeviceApi());
+  // 무중이 말 자막(OUTPUT_BEGIN.text). 화면에만 두고 상태 기계 · 기록에는 넣지 않는다
+  const subtitles = useDeviceSubtitle();
+  const { show: showSubtitle, speakingChanged, clear: clearSubtitle } = subtitles;
   const runtimeRef = useRef<DeviceRuntime | null>(null);
   const connectStepRef = useRef(0);
   const turnOnBusyRef = useRef(false);
@@ -220,9 +224,16 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
           nowMs: () => Date.now(),
           events: {
             onReady: () => dispatch({ type: "WS_READY", stepId: connectStepRef.current }),
-            onClosed: (code, closedByDevice) => dispatch({ type: "WS_CLOSED", code, closedByDevice }),
+            onClosed: (code, closedByDevice) => {
+              clearSubtitle();
+              dispatch({ type: "WS_CLOSED", code, closedByDevice });
+            },
             onView: (view) => dispatch({ type: "SESSION_VIEW", view }),
-            onSpeaking: (speaking) => dispatch({ type: "SPEAKING", speaking }),
+            onSpeaking: (speaking) => {
+              speakingChanged(speaking);
+              dispatch({ type: "SPEAKING", speaking });
+            },
+            onSubtitle: showSubtitle,
           },
         });
         releaseRuntime(runtimeRef, false);
@@ -235,12 +246,13 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
         turnOnBusyRef.current = false;
       }
     })();
-  }, [timing]);
+  }, [timing, speakingChanged, showSubtitle, clearSubtitle]);
 
   const handleTurnOff = useCallback(() => {
+    clearSubtitle();
     releaseRuntime(runtimeRef, true);
     dispatch({ type: "TURN_OFF" });
-  }, []);
+  }, [clearSubtitle]);
 
   return (
     <main className="mj-device" data-testid="device-app">
@@ -251,6 +263,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
           display={display as StatusDisplay}
           label={t19Label(state)}
           subLabel={display === "reconnecting" ? PROPOSED_COPY.device.t19Reconnecting : null}
+          subtitle={subtitles.subtitle}
           onTurnOn={handleTurnOn}
           onTurnOff={handleTurnOff}
         />

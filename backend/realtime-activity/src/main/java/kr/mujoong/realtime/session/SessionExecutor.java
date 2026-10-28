@@ -527,6 +527,7 @@ public final class SessionExecutor {
     private final java.util.IdentityHashMap<SegmentBuffer.Sealed, Long> textUnitEnds = new java.util.IdentityHashMap<>();
     /** 통과한 단위들의 끝 위치 중 가장 먼 곳(음성은 여기까지만 낸다). */
     private long approvedEndByte;
+    private final StringBuilder progressiveSubtitle = new StringBuilder();
     /** 이 응답의 첫 음성 묶음을 이미 보냈는가(지연 기록은 응답의 첫 묶음만 쥔다). */
     private boolean progressiveSoundStarted;
     /** 시간 정보가 있는 출력 전사를 이 세션에서 한 번이라도 받았는가(공급자가 시간 정보를 주는지 알아보는 표지). */
@@ -1805,6 +1806,11 @@ public final class SessionExecutor {
         }
 
         @Override
+        public void onStreamResumeExpired() {
+            ctx.transcripts().closeResumable();
+        }
+
+        @Override
         public void onResponseStallExpired() {
             SessionExecutor.this.onResponseStallExpired();
         }
@@ -3003,8 +3009,11 @@ public final class SessionExecutor {
                     }
                     streamedPracticeEnded = true;
                     finishStreamedPractice();
-                    // 응답이 끝났다: 모아 둔 AI 전사를 한 행으로 닫는다(검사 중인 단위가 남았으면 마지막 단위가 정리될 때 닫힌다)
-                    ctx.transcripts().endStream(now);
+                    // 응답이 조용함으로 끝났다: 모아 둔 AI 전사를 한 행으로 닫되, 같은 응답의 늦은 조각이 조용 시간 한 번 안에 오면
+                    // 같은 행에 이어 붙이도록 잠깐 열어 둔다(만기 · 아이 입력 · 서버 지시 · 세대 올림 때 닫는다. 검사 중인 단위가 남았으면
+                    // 마지막 단위가 정리될 때 닫힌다)
+                    ctx.transcripts().pauseStream(now);
+                    ctx.timers().arm(Kind.STREAM_RESUME, ctx.services().settings().segmentQuiet());
                     ctx.relay().setHolding(false);
                     onResponseEnded();
                 }
@@ -3121,6 +3130,8 @@ public final class SessionExecutor {
         timedOutput.reset();
         resetProgressive();
         ctx.transcripts().aiFinal("", false, now);
+        // 지시한 새 말은 앞 응답의 이어짐이 아니다
+        ctx.transcripts().closeResumable();
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().arm(Kind.PRACTICE_SEND_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = deferred.job().onFailure;
@@ -3226,6 +3237,8 @@ public final class SessionExecutor {
         timedOutput.reset();
         resetProgressive();
         ctx.transcripts().aiFinal("", false, now);
+        // 지시한 새 말은 앞 응답의 이어짐이 아니다
+        ctx.transcripts().closeResumable();
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = onFailure;
@@ -3492,6 +3505,7 @@ public final class SessionExecutor {
         Instant passAt = ctx.services().clock().now();
         correctionsInARow = 0;
         approvedEndByte = Math.max(approvedEndByte, end);
+        appendProgressiveSubtitle(sealed.transcript());
         if (held != null) {
             ctx.transcripts().aiFinal(held, sealed.transcript(), true, passAt);
         } else {
@@ -3535,6 +3549,17 @@ public final class SessionExecutor {
         if (lastChildInputAt != null && audioLastAt != null && audioLastAt.isBefore(lastChildInputAt)) {
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "OutputBundleAfterChildInput", EventCode.Level.INFO);
         }
+    }
+
+    /** 나눠 보내기에서 게이트를 통과했지만 아직 묶음에 싣지 않은 글. 다음 묶음의 OUTPUT_BEGIN.text로 한 번 나간다. */
+    private void appendProgressiveSubtitle(String transcript) {
+        if (transcript == null || transcript.isBlank()) {
+            return;
+        }
+        if (!progressiveSubtitle.isEmpty()) {
+            progressiveSubtitle.append(' ');
+        }
+        progressiveSubtitle.append(transcript.strip());
     }
 
     private void pumpApprovedAudio() {
@@ -3584,7 +3609,8 @@ public final class SessionExecutor {
                         ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt);
                     }
                 },
-                aiRecording == null ? frame -> { } : aiRecording::ai);
+                aiRecording == null ? frame -> { } : aiRecording::ai, progressiveSubtitle.toString());
+        progressiveSubtitle.setLength(0);
         if (!target.sendOutput(bundle)) {
             greetingHandoff.failed(playbackId);
             ctx.services().metrics().gateDiscard(GateDecision.DiscardReason.OUTBOUND_FULL.name());
@@ -3602,6 +3628,7 @@ public final class SessionExecutor {
     private void resetProgressive() {
         textUnitEnds.clear();
         approvedEndByte = 0;
+        progressiveSubtitle.setLength(0);
         progressiveSoundStarted = false;
         firstUnitLogged = false;
         timedOutputResetPending = false;
@@ -3863,7 +3890,7 @@ public final class SessionExecutor {
                     greetingHandoff.frameSent(playbackId);
                     ctx.services().latency().firstFrameSent(ctx.plan().sessionId(), playbackId, firstFrameAt);
                 },
-                aiRecording == null ? frame -> { } : aiRecording::ai);
+                aiRecording == null ? frame -> { } : aiRecording::ai, sealed.transcript());
         if (!target.sendOutput(bundle)) {
             logOutputDiscard(sealed, held, GateDecision.DiscardReason.OUTBOUND_FULL,
                     DiscardDetail.AUDIO_SEND_FAILED, speech);

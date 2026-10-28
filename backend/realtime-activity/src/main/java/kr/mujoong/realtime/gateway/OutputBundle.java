@@ -21,6 +21,7 @@ import kr.mujoong.contract.ws.message.OutputBegin;
  * @param stillCurrent 출력 세대 확인(송신기 스레드에서 불린다)
  * @param onFirstFrameSent 첫 프레임 직후 시각 수신자(송신기 스레드)
  * @param onFrameSent 프레임 하나를 소켓에 쓴 직후 그 본문 수신자(송신기 스레드, 기다리지 않아야 한다)
+ * @param subtitle 게이트를 통과한 이 묶음의 글(OUTPUT_BEGIN.text, 기기 자막). 없으면 null. 로그 · 문자열 표현에 넣지 않는다(R-F14)
  */
 public record OutputBundle(
         UUID sessionId,
@@ -31,7 +32,8 @@ public record OutputBundle(
         DeviceLink.AudioReservation reservation,
         BooleanSupplier stillCurrent,
         Consumer<Instant> onFirstFrameSent,
-        Consumer<byte[]> onFrameSent) {
+        Consumer<byte[]> onFrameSent,
+        String subtitle) {
 
     /** 0x02 프레임 본문 크기(100ms × PCM16 24kHz 모노). 마지막 프레임은 짧을 수 있다. */
     public static final int FRAME_PAYLOAD_BYTES = 4_800;
@@ -45,15 +47,23 @@ public record OutputBundle(
         Objects.requireNonNull(stillCurrent, "stillCurrent");
         Objects.requireNonNull(onFirstFrameSent, "onFirstFrameSent");
         Objects.requireNonNull(onFrameSent, "onFrameSent");
+        subtitle = OutputBegin.subtitle(subtitle);
         if (frames.isEmpty()) {
             throw new IllegalArgumentException("출력 묶음에 프레임이 없다");
         }
     }
 
+    /** 자막 없는 묶음. */
+    public OutputBundle(UUID sessionId, UUID playbackId, OutputBegin.Source source, List<byte[]> frames, long totalMs,
+            DeviceLink.AudioReservation reservation, BooleanSupplier stillCurrent, Consumer<Instant> onFirstFrameSent,
+            Consumer<byte[]> onFrameSent) {
+        this(sessionId, playbackId, source, frames, totalMs, reservation, stillCurrent, onFirstFrameSent, onFrameSent, null);
+    }
+
     /** 보낸 프레임을 따로 받지 않는 묶음(원음 기록이 없는 세션). */
     public OutputBundle(UUID sessionId, UUID playbackId, OutputBegin.Source source, List<byte[]> frames, long totalMs,
             DeviceLink.AudioReservation reservation, BooleanSupplier stillCurrent, Consumer<Instant> onFirstFrameSent) {
-        this(sessionId, playbackId, source, frames, totalMs, reservation, stillCurrent, onFirstFrameSent, frame -> { });
+        this(sessionId, playbackId, source, frames, totalMs, reservation, stillCurrent, onFirstFrameSent, frame -> { }, null);
     }
 
     /**

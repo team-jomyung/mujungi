@@ -5,6 +5,7 @@ import {
   ALLOWED_ORIGIN_ENV,
   CSP_HEADER,
   STRICT_DYNAMIC_EXCLUDED_PATH_PREFIXES,
+  allowsWasm,
   buildContentSecurityPolicy,
   createNonce,
   usesStrictDynamic,
@@ -71,6 +72,18 @@ describe("proxy — 요청별 nonce · CSP", () => {
     expect(directive(production, "script-src")).toContain("'strict-dynamic'");
     vi.stubEnv("NODE_ENV", "development");
     expect(directive(callProxy("/device").headers.get(CSP_HEADER) ?? "", "script-src")).toContain("'unsafe-eval'");
+  });
+
+  it("/device 경로만 script-src에 'wasm-unsafe-eval'(3D 디코더)을 더하고 'unsafe-eval'은 운영에서 여전히 없다", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const devicePolicy = callProxy("/device").headers.get(CSP_HEADER) ?? "";
+    expect(directive(devicePolicy, "script-src")).toContain("'wasm-unsafe-eval'");
+    expect(directive(devicePolicy, "script-src")).not.toContain("'unsafe-eval'");
+    for (const pathname of ["/parent", "/parent/login", "/devices", "/"]) {
+      expect(directive(callProxy(pathname).headers.get(CSP_HEADER) ?? "", "script-src")).not.toContain("'wasm-unsafe-eval'");
+    }
+    expect(allowsWasm("/device/x")).toBe(true);
+    expect(allowsWasm("/device-other")).toBe(false);
   });
 
   it("정적 파일 · 헬스 확인은 proxy 대상이 아니다", () => {

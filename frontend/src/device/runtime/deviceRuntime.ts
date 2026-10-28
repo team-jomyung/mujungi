@@ -23,6 +23,8 @@ export interface DeviceRuntimeEvents {
   readonly onClosed: (code: number, closedByDevice: boolean) => void;
   readonly onView: (view: SessionView) => void;
   readonly onSpeaking: (speaking: boolean) => void;
+  /** 무중이 말 자막(OUTPUT_BEGIN.text). 소리가 시작될 때 글, 끊기면 null. 없는 재생은 앞 자막을 둔다. */
+  readonly onSubtitle?: (text: string | null) => void;
 }
 
 export interface DeviceRuntimeOptions {
@@ -105,6 +107,13 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
         reporter.update({ player: "ERROR" });
       } else if (mark.status === "STARTED") {
         reporter.update({ player: "OK" });
+      }
+      if (mark.status === "STARTED") {
+        const text = session.takeSubtitle(mark.playbackId);
+        if (text !== null) events.onSubtitle?.(text);
+      } else if (mark.status !== "PROGRESS") {
+        session.takeSubtitle(mark.playbackId);
+        if (mark.status === "STOPPED") events.onSubtitle?.(null);
       }
       session.sendPlaybackMark(sessionId, mark);
     },
