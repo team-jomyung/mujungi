@@ -1,0 +1,297 @@
+{
+  "transcript": [
+    {
+      "seq": 1,
+      "speaker": "AI",
+      "text": "안녕, 무중이야. 나는 사람이 아니라 AI야. 오늘은 나랑 자유롭게 이야기하는 시간이야. 그만하고 싶으면 \"무중아 그만할래\"라고 말해 줘. 오늘 나랑 이야기할래?",
+      "uncertain": false
+    },
+    {
+      "seq": 2,
+      "speaker": "CHILD",
+      "text": "응",
+      "uncertain": false
+    },
+    {
+      "seq": 3,
+      "speaker": "AI",
+      "text": "오늘은 무슨 이야기를 하고 싶어?",
+      "uncertain": false
+    },
+    {
+      "seq": 4,
+      "speaker": "CHILD",
+      "text": "몰라",
+      "uncertain": false
+    },
+    {
+      "seq": 5,
+      "speaker": "AI",
+      "text": "그럼 오늘 학교에서 뭐 했어?",
+      "uncertain": false
+    },
+    {
+      "seq": 6,
+      "speaker": "CHILD",
+      "text": "그냥 수업",
+      "uncertain": false
+    },
+    {
+      "seq": 7,
+      "speaker": "AI",
+      "text": "무슨 수업이 제일 기억나?",
+      "uncertain": false
+    },
+    {
+      "seq": 8,
+      "speaker": "CHILD",
+      "text": "체육",
+      "uncertain": false
+    },
+    {
+      "seq": 9,
+      "speaker": "AI",
+      "text": "체육 시간에 뭐 했어?",
+      "uncertain": false
+    },
+    {
+      "seq": 10,
+      "speaker": "CHILD",
+      "text": "피구",
+      "uncertain": false
+    },
+    {
+      "seq": 11,
+      "speaker": "AI",
+      "text": "피구 했구나. 재미있었어?",
+      "uncertain": false
+    },
+    {
+      "seq": 12,
+      "speaker": "CHILD",
+      "text": "응",
+      "uncertain": false
+    },
+    {
+      "seq": 13,
+      "speaker": "AI",
+      "text": "공 많이 맞혔어?",
+      "uncertain": false
+    },
+    {
+      "seq": 14,
+      "speaker": "CHILD",
+      "text": "몰라",
+      "uncertain": false
+    },
+    {
+      "seq": 15,
+      "speaker": "AI",
+      "text": "괜찮아. 다른 이야기 하고 싶은 거 있어?",
+      "uncertain": false
+    },
+    {
+      "seq": 16,
+      "speaker": "CHILD",
+      "text": "아니",
+      "uncertain": false
+    },
+    {
+      "seq": 17,
+      "speaker": "CHILD",
+      "text": "무중아 그만할래",
+      "uncertain": false
+    },
+    {
+      "seq": 18,
+      "speaker": "AI",
+      "text": "응, 오늘 이야기 즐거웠어. 다음에 또 만나!",
+      "uncertain": false
+    }
+  ],
+  "structured": null,
+  "endReason": "CHILD_STOP",
+  "scenes": [],
+  "seedSummaries": [
+    {
+      "seedId": "seed:S1",
+      "label": "완화된 거절",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "말하지 않은 부분을 맥락으로 채우기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 껄끄러운 말을 돌려서 했다"
+    },
+    {
+      "seedId": "seed:S2",
+      "label": "상태 진술 요청",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "진술에서 행동 요구를 읽기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "불편을 말했지만 원한 건 행동이었다"
+    },
+    {
+      "seedId": "seed:S3",
+      "label": "무반응 신호",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "부재를 신호로 읽기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "NO",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "대답이 없는 것 자체가 대답이었다"
+    },
+    {
+      "seedId": "seed:S4",
+      "label": "청자 지식 과소",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "상대가 무엇을 아는지 짐작하기",
+        "perspectiveStructure": "상대의 지식 상태 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 모르는 걸 안다고 치고 말했다"
+    },
+    {
+      "seedId": "seed:S5",
+      "label": "청자 지식 과다",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "상대가 무엇을 아는지 짐작하기",
+        "perspectiveStructure": "상대의 지식 상태 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 이미 아는 걸 길게 설명했다"
+    },
+    {
+      "seedId": "seed:S6",
+      "label": "명료화 필요",
+      "signature": {
+        "targetSkill": "REPAIR",
+        "requiredInference": "내가 한 말이 어떻게 들렸는지 되짚기",
+        "perspectiveStructure": "상대가 나를 어떻게 봤을지 2층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 내 말을 다르게 알아들었다"
+    },
+    {
+      "seedId": "seed:S7",
+      "label": "중의적 제안",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "두 해석 중 단서로 고르기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "도와주겠다는 건지 불만인지 몰랐다"
+    },
+    {
+      "seedId": "seed:S8",
+      "label": "화제 전환 신호",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "말하지 않은 부분을 맥락으로 채우기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 화제를 옮기고 싶어 했다"
+    },
+    {
+      "seedId": "seed:S9",
+      "label": "말과 신호 충돌",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "말과 다른 신호 중 어느 쪽을 믿을지 정하기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "NO",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "말은 괜찮다는데 다른 게 아니라고 했다"
+    },
+    {
+      "seedId": "seed:S10",
+      "label": "완화 표지 산출",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "부담의 크기를 가늠해 표현 수위 정하기",
+        "perspectiveStructure": "상대가 나를 어떻게 봤을지 2층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "NO"
+      },
+      "invariantSentence": "부담 주지 않으면서 부탁해야 했다"
+    },
+    {
+      "seedId": "seed:X1",
+      "label": "화제 끊고 넘어가기",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "상대 화제가 끝났는지 가늠하기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대 이야기가 끝나기 전에 내 이야기로 넘어갔다"
+    },
+    {
+      "seedId": "seed:X2",
+      "label": "명료화 요청 못함",
+      "signature": {
+        "targetSkill": "REPAIR",
+        "requiredInference": "무엇을 모르는지 짚어 물을 말 고르기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "NO",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "무슨 뜻인지 몰랐는데 묻지 못하고 넘어갔다"
+    },
+    {
+      "seedId": "seed:X3",
+      "label": "못 따라오는 신호",
+      "signature": {
+        "targetSkill": "RECOGNIZE",
+        "requiredInference": "상대가 무엇을 아는지 짐작하기",
+        "perspectiveStructure": "상대의 지식 상태 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 내 말을 못 따라오는 걸 알아채지 못했다"
+    },
+    {
+      "seedId": "seed:X4",
+      "label": "요청에 대답 없이 내 얘기",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "상대 말 속에 요구가 있는지 알아채기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "상대가 부탁을 했는데 대답 없이 내 이야기만 했다"
+    },
+    {
+      "seedId": "seed:G0001",
+      "label": "대화 마무리 알림",
+      "signature": {
+        "targetSkill": "PRODUCE",
+        "requiredInference": "대화를 더 이어갈 내용이 없을 때 종료 의사를 상대에게 전달하기",
+        "perspectiveStructure": "상대의 의도 1층",
+        "decidableByEvidence": "YES",
+        "directCheckAllowed": "YES"
+      },
+      "invariantSentence": "더 이어갈 말이 없을 때 대화를 마치려는 뜻을 알린다."
+    }
+  ]
+}

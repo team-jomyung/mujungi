@@ -32,6 +32,8 @@ public final class SessionTimers {
         DISCONNECT(false),
         /** BR7.3 구간 조용 시간 800ms. */
         SEGMENT_QUIET(true),
+        /** 조용함으로 끝난 응답 행을 늦은 조각에 이어 붙일 수 있게 두는 시간(구간 조용 시간과 같은 값). 만기면 그 행을 닫는다. */
+        STREAM_RESUME(true),
         /** 재생 중 승인 문구 표시 만료(R3-19, output-queue-max 20초). */
         PLAYBACK_EXPIRY(false),
         /** 전이 트랜잭션이 DB 장애로 실패한 시한의 재전달(session.timer-tick). */
