@@ -31,8 +31,48 @@ export function usePracticeGoals() {
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [needsRecovery, setNeedsRecovery] = useState(false);
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
-  const query = useQuery({ queryKey: goalSelectionQueryKey, queryFn: ({ signal }) => fetchGoalSelections(api, signal), staleTime: 0 });
+  const pendingRefresh = useRef(false);
+  const refreshing = useRef(false);
+  const query = useQuery({ queryKey: goalSelectionQueryKey, queryFn: ({ signal }) => fetchGoalSelections(api, signal), staleTime: 0,
+    refetchOnWindowFocus: false, refetchOnReconnect: false });
   const { refetch } = query;
+
+  // Preserve undo and in-flight edits. A signal arriving during a GET requires another read after it.
+  const refreshAutomatically = useCallback(() => {
+    pendingRefresh.current = true;
+    const blocked = () => {
+      const error = client.getQueryState(goalSelectionQueryKey)?.error;
+      return !mounted.current || document.visibilityState === "hidden" || locks.current.size > 0
+        || (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404));
+    };
+    if (refreshing.current || blocked()) return;
+    refreshing.current = true;
+    void (async () => {
+      try {
+        if (client.isFetching({ queryKey: goalSelectionQueryKey, exact: true })) await refetch({ cancelRefetch: false });
+        while (pendingRefresh.current && !blocked()) {
+          pendingRefresh.current = false;
+          await refetch({ cancelRefetch: false });
+        }
+      } finally { refreshing.current = false; }
+    })();
+  }, [client, refetch]);
+
+  useEffect(() => {
+    if (busyIds.size === 0 && !needsRecovery && pendingRefresh.current) refreshAutomatically();
+  }, [busyIds, needsRecovery, refreshAutomatically]);
+
+  useEffect(() => {
+    const reconcile = () => { if (document.visibilityState !== "hidden") refreshAutomatically(); };
+    const timer = window.setInterval(reconcile, timing.homeReconcileIntervalMs);
+    document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("online", reconcile);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("online", reconcile);
+    };
+  }, [refreshAutomatically, timing.homeReconcileIntervalMs]);
 
   const writeRows = useCallback((update: (rows: readonly GoalSelection[]) => GoalSelection[]) => {
     client.setQueryData<GoalSelection[]>(goalSelectionQueryKey, (rows) => sortGoals(update(rows ?? []).filter(row => !confirmedDeleted.current.has(row.goalSelectionId))));
@@ -262,5 +302,5 @@ export function usePracticeGoals() {
     }
   }, [api, authenticationFailed, busy, client, putRow, toast]);
 
-  return { items: query.data, busyIds, deletingIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, toggleFavorite, scheduleDelete, dismissUndo };
+  return { items: query.data, busyIds, deletingIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, refreshAutomatically, toggleFavorite, scheduleDelete, dismissUndo };
 }

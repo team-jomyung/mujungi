@@ -16,7 +16,7 @@ export function fetchHome(api: ApiClient, signal?: AbortSignal): Promise<HomeVie
 }
 
 /** 상태를 표시하거나 새 활동 진입을 제어하는 화면은 SSE로 최신 상태를 확인한다. */
-export function useHomeQuery(poll = false) {
+export function useHomeQuery(poll = false, onGoalsChanged?: () => void) {
   const api = useApiClient();
   const client = useQueryClient();
   const timing = useTiming();
@@ -40,9 +40,9 @@ export function useHomeQuery(poll = false) {
       if (client.isFetching({ queryKey: queryKeys.home, exact: true })) await refetch({ cancelRefetch: false });
       if (active && !isAccessError(client.getQueryState(queryKeys.home)?.error)) await refetch({ cancelRefetch: false });
     };
-    const unsubscribe = subscribeHomeEvents(() => { void refresh(); }, setConnected);
+    const unsubscribe = subscribeHomeEvents(() => { void refresh(); }, setConnected, onGoalsChanged);
     return () => { active = false; unsubscribe(); };
-  }, [allowed, refetch, client]);
+  }, [allowed, refetch, client, onGoalsChanged]);
   return query;
 }
 

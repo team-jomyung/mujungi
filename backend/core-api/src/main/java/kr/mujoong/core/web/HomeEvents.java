@@ -24,6 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Component
 public class HomeEvents implements SmartLifecycle {
     static final String CHANNEL = "mujoong_home_changed";
+    static final String GOALS_CHANNEL = "mujoong_goal_selections_changed";
     private final DataSource dataSource;
     private final HomeEventsTiming timing;
     private final MujoongClock clock;
@@ -60,6 +61,10 @@ public class HomeEvents implements SmartLifecycle {
         clients.stream().filter(c -> c.guardianId().equals(guardianId)).forEach(c -> send(c, "home-changed"));
     }
 
+    void goalsChanged(UUID guardianId) {
+        clients.stream().filter(c -> c.guardianId().equals(guardianId)).forEach(c -> send(c, "goal-selections-changed"));
+    }
+
     private void send(Client client, String event) {
         try {
             synchronized (client) {
@@ -84,7 +89,10 @@ public class HomeEvents implements SmartLifecycle {
             try (Connection connection = dataSource.getConnection()) {
                 listening = connection;
                 connection.setAutoCommit(true);
-                try (var statement = connection.createStatement()) { statement.execute("LISTEN " + CHANNEL); }
+                try (var statement = connection.createStatement()) {
+                    statement.execute("LISTEN " + CHANNEL);
+                    statement.execute("LISTEN " + GOALS_CHANNEL);
+                }
                 try {
                     PGConnection pg = connection.unwrap(PGConnection.class);
                     clients.forEach(c -> send(c, "ready"));
@@ -92,8 +100,11 @@ public class HomeEvents implements SmartLifecycle {
                     while (running) {
                         PGNotification[] notices = pg.getNotifications(Math.toIntExact(timing.notificationWait().toMillis()));
                         if (notices != null) for (PGNotification notice : notices) {
-                            if (!CHANNEL.equals(notice.getName())) continue;
-                            try { changed(UUID.fromString(notice.getParameter())); }
+                            if (!CHANNEL.equals(notice.getName()) && !GOALS_CHANNEL.equals(notice.getName())) continue;
+                            try {
+                                UUID guardian = UUID.fromString(notice.getParameter());
+                                if (GOALS_CHANNEL.equals(notice.getName())) goalsChanged(guardian); else changed(guardian);
+                            }
                             catch (IllegalArgumentException ignored) { /* Never route malformed identity hints. */ }
                         }
                         if (clock.elapsedSince(heartbeat).compareTo(timing.heartbeatInterval()) >= 0) {

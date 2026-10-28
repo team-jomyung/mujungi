@@ -26,9 +26,9 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const api = useApiClient();
   const toast = useToast();
   const timing = useTiming();
-  const entry = useActivityEntry();
   const port = useMemo(() => practiceStartPort(api, timing.practiceStartRequestTimeoutMs), [api, timing.practiceStartRequestTimeoutMs]);
   const goals = usePracticeGoals();
+  const entry = useActivityEntry(goals.refreshAutomatically);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startLocked, setStartLocked] = useState(false);
   const [showReturnedFailure, setShowReturnedFailure] = useState(returnedFailed);
