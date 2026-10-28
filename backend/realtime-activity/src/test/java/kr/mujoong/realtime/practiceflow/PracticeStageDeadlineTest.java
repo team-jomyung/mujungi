@@ -54,6 +54,20 @@ class PracticeStageDeadlineTest {
                 .containsSubsequence("DRAINING","REQUEST_QUEUED","REQUEST_SENT","COLLECTING","PLAYBACK_QUEUED","PLAYING","PLAYBACK_ENDED");
     }
 
+    /** 진단(JIRA-282 후속): 출력 대기가 끝난 단계에 기다린 시간과 가장 오래 막은 사유가 남는다(원문 없음). */
+    @Test void theDrainEndRecordsHowLongItWaitedAndWhatHeldIt() {
+        prepare();h.speak("previous speech",4800);h.join();
+        for(int i=0;i<80;i++){h.speak("old tail",4800);h.advanceAlive(Duration.ofMillis(100));}
+        h.advanceAlive(Duration.ofMillis(801));
+
+        var queued = h.logs.events(EventCode.PRACTICE_AUDIO_STAGE).stream().map(LogCapture::attrs)
+                .filter(a -> "REQUEST_QUEUED".equals(a.get("audioStage"))).findFirst().orElseThrow();
+        assertThat(queued.get("drainBlocker")).isEqualTo("OUTPUT_FLOWING");
+        assertThat(((Number) queued.get("durationMs")).longValue()).isBetween(8000L, 10000L);
+        assertThat(h.logs.events(EventCode.PRACTICE_AUDIO_STAGE).stream().map(LogCapture::attrs)
+                .filter(a -> "DRAINING".equals(a.get("audioStage")))).allSatisfy(a -> assertThat(a).doesNotContainKey("drainBlocker"));
+    }
+
     @Test void firstResponseDeadlineStartsAfterTheActualSendAndStopCancelsQueuedWork() {
         prepare();h.join();h.advanceAlive(Duration.ofSeconds(9));h.settleSend();
         h.advanceAlive(Duration.ofSeconds(9));

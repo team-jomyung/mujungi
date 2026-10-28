@@ -30,8 +30,9 @@ class JudgmentSettingsTest {
     void applicationYmlBindsTheJudgmentDefaults() {
         RealtimeProperties properties = ConfigKeyContractTest.bind(APPLICATION_YML);
 
-        assertThat(properties.judgment().minConfidence()).isEqualTo(0.6);
-        assertThat(properties.judgment().minMargin()).isEqualTo(0.15);
+        // FT-1027-c: 확신 부족 보류를 없앤 기본값(이전 0.6 · 0.15)
+        assertThat(properties.judgment().minConfidence()).isEqualTo(0.0);
+        assertThat(properties.judgment().minMargin()).isEqualTo(0.0);
     }
 
     @ParameterizedTest

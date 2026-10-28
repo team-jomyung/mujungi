@@ -46,16 +46,16 @@ class AdminCostServiceTest {
         service = new AdminCostService(activities, usage, realtime, pricing);
         when(usage.linkedBetween(any(), any())).thenReturn(List.of(
                 // 장면 생성: 2호출 중 1호출만 측정
-                new Aggregate(activityId, "SCENARIO_GENERATION", "gpt-6-luna", 2, 1, 2, 1, 10_300L, 2_000L, 0L, 0L, 500L, 10_000L, 2_000L, 0L,
+                new Aggregate(activityId, "SCENARIO_GENERATION", "gpt-6-luna", 2, 1, 2, 1, 0, 10_300L, 2_000L, 0L, 0L, 500L, 10_000L, 2_000L, 0L,
                         0L, AT),
-                new Aggregate(failedPrepId, "SCENARIO_REVIEW", "gpt-6-luna", 1, 1, 1, 1, 4_000L, 1_000L, 0L, 0L, 0L, 4_000L, 1_000L, 0L, 0L,
+                new Aggregate(failedPrepId, "SCENARIO_REVIEW", "gpt-6-luna", 1, 1, 1, 1, 0, 4_000L, 1_000L, 0L, 0L, 0L, 4_000L, 1_000L, 0L, 0L,
                         AT)));
         when(realtime.usageBetween(any(), any())).thenReturn(List.of(
-                new UsageAggregate(activityId, "VOICE", "gpt-live-1", 1, 1, 1, 1, 180.0, null, null, null, null, null, null, null,
+                new UsageAggregate(activityId, "VOICE", "gpt-live-1", 1, 1, 1, 1, 0, 180.0, null, null, null, null, null, null, null,
                         AT.plusMillis(5)),
-                new UsageAggregate(activityId, "LUNA", "gpt-6-luna", 3, 3, 3, 3, null, 5_400L, 60L, 1_200L, 0L, 5_400L, 60L, 1_200L, AT)));
+                new UsageAggregate(activityId, "LUNA", "gpt-6-luna", 3, 3, 3, 3, 0, null, 5_400L, 60L, 1_200L, 0L, 5_400L, 60L, 1_200L, AT)));
         when(usage.unlinkedBetween(any(), any())).thenReturn(List.of(
-                new Aggregate(unlinkedCall, "RESULT_TEXT", null, 1, 0, 0, 0, null, null, null, null, null, null, null, null, null, AT)));
+                new Aggregate(unlinkedCall, "RESULT_TEXT", null, 1, 0, 0, 0, 0, null, null, null, null, null, null, null, null, null, AT)));
         when(activities.findAll(any())).thenReturn(List.of(row(activityId, "PRACTICE")));
         when(usage.activitySessions(any())).thenReturn(Set.of(activityId));
     }
@@ -105,7 +105,7 @@ class AdminCostServiceTest {
         when(activities.find(activityId)).thenReturn(Optional.of(row(activityId, "PRACTICE")));
         when(usage.linkedOf(activityId)).thenReturn(List.of());
         when(realtime.usageOf(List.of(activityId))).thenReturn(List.of(
-                new UsageAggregate(activityId, "LUNA", "gpt-6-luna", 3, 3, 3, 3, null, 5_400L, 60L, 1_200L, 0L, 5_400L, 60L, 1_200L,
+                new UsageAggregate(activityId, "LUNA", "gpt-6-luna", 3, 3, 3, 3, 0, null, 5_400L, 60L, 1_200L, 0L, 5_400L, 60L, 1_200L,
                         AT)));
 
         CostDetail detail = service.detail(activityId);
@@ -173,6 +173,73 @@ class AdminCostServiceTest {
         assertThat(service.costs(other, 0, 8).activities().total()).isZero();
         assertThat(service.costs(same, 0, 8).activities().total()).isEqualTo(1);
         assertThat(service.costs(search, 0, 8).activities().total()).isEqualTo(1);
+    }
+
+    @Test
+    void measuredCallsWithUnknownCacheReadArePricedWithZeroCacheButMarkedPartial() {
+        when(activities.find(activityId)).thenReturn(Optional.of(row(activityId, "PRACTICE")));
+        when(usage.linkedOf(activityId)).thenReturn(List.of(
+                // 결과 문장 2호출 모두 입력 · 출력을 알지만 1호출은 캐시 읽기를 모름
+                new Aggregate(activityId, "RESULT_TEXT", "gpt-6-luna", 2, 2, 2, 2, 1, 3_000L, 400L, 1_000L, 0L, 0L, 3_000L, 400L,
+                        1_000L, 0L, AT),
+                new Aggregate(activityId, "SCENARIO_GENERATION", "gpt-6-luna", 1, 1, 1, 1, 0, 1_000L, 100L, 0L, 0L, 0L, 1_000L,
+                        100L, 0L, 0L, AT)));
+        when(realtime.usageOf(List.of(activityId))).thenReturn(List.of());
+
+        CostDetail detail = service.detail(activityId);
+
+        CostPhase preparation = detail.phases().get(0);
+        CostPhase post = detail.phases().get(1);
+        assertThat(preparation.status()).as("캐시 읽기를 알면 그대로 완결").isEqualTo("COMPLETE");
+        assertThat(post.phase()).isEqualTo("POST_PROCESSING");
+        assertThat(post.status()).isEqualTo("PARTIAL");
+        // (일반 입력 2,000 × 0.10 + 캐시 읽기 1,000 × 0.01 + 출력 400 × 0.50) ÷ 1,000,000: 모르는 캐시는 0으로 계산한 금액을 그대로 둔다
+        assertThat(post.estimatedUsd()).isEqualTo("0.00041");
+        assertThat(post.calculation()).contains("캐시 읽기를 모르는 호출 1건");
+        assertThat(preparation.calculation()).doesNotContain("캐시 읽기를 모르는");
+        assertThat(detail.status()).isEqualTo("PARTIAL");
+    }
+
+    @Test
+    void activitiesInRangeWithoutAnyStoredUsageAreListedAsNotCollectedWithoutChangingTotals() {
+        ActivityRow silent = row(UUID.randomUUID(), "FREE_TALK");
+        ActivityRow laterUsage = row(UUID.randomUUID(), "FREE_TALK");
+        ActivityRow realtimeOnly = row(UUID.randomUUID(), "FREE_TALK");
+        when(activities.all(any())).thenReturn(List.of(row(activityId, "PRACTICE"), silent, laterUsage, realtimeOnly));
+        when(usage.sessionsWithUsage(any())).thenReturn(Set.of(laterUsage.sessionId()));
+        when(realtime.usageOf(any())).thenReturn(List.of(new UsageAggregate(realtimeOnly.sessionId(), "VOICE", "gpt-live-1", 1, 1,
+                1, 1, 0, 60.0, null, null, null, null, null, null, null, AT.minusSeconds(86_400))));
+
+        Costs costs = service.costs(ALL, 0, 8);
+
+        assertThat(costs.activities().total()).as("사용량 있는 활동 1 + 미수집 1").isEqualTo(2);
+        var item = costs.activities().items().stream().filter(c -> c.id().equals(silent.sessionId().toString())).findFirst()
+                .orElseThrow();
+        assertThat(item.status()).isEqualTo("NOT_COLLECTED");
+        assertThat(item.estimatedUsd()).isNull();
+        assertThat(item.inputTokens()).isNull();
+        assertThat(item.voiceSeconds()).isNull();
+        assertThat(item.observedAt()).as("목록 시각은 활동 시각").isEqualTo("2026-10-27T00:30:00Z");
+        assertThat(costs.activities().items()).extracting(c -> c.id())
+                .as("기간 밖에서 관측된 사용량이 있는 활동은 미수집이 아니다")
+                .doesNotContain(laterUsage.sessionId().toString(), realtimeOnly.sessionId().toString());
+        assertThat(costs.totals().collectedUsd()).isEqualTo("0.153332");
+        assertThat(costs.totals().activityUsd()).isEqualTo("0.152432");
+        assertThat(costs.totals().unknownCount()).isEqualTo(2);
+    }
+
+    @Test
+    void aPeriodWithOnlyNotCollectedActivitiesStillHasUnknownTotals() {
+        when(usage.linkedBetween(any(), any())).thenReturn(List.of());
+        when(realtime.usageBetween(any(), any())).thenReturn(List.of());
+        when(usage.unlinkedBetween(any(), any())).thenReturn(List.of());
+        when(activities.all(any())).thenReturn(List.of(row(activityId, "FREE_TALK")));
+
+        Costs costs = service.costs(ALL, 0, 8);
+
+        assertThat(costs.activities().items()).singleElement().satisfies(c -> assertThat(c.status()).isEqualTo("NOT_COLLECTED"));
+        assertThat(costs.totals().collectedUsd()).isNull();
+        assertThat(costs.totals().activityUsd()).isNull();
     }
 
     private static ActivityRow row(UUID id, String type) {

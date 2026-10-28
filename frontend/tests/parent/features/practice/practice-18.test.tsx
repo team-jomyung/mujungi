@@ -32,16 +32,20 @@ beforeEach(() => { vi.useFakeTimers(); resetRouter(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("18 — list, selection and scope", () => {
-  it("keeps saved goals but caps each session at three and allows replacement", async () => {
+  // FT-1027-a: 한 번에 목표 1개(이전 3개). 다른 목표를 고르면 앞 선택을 바꾸고, 2개 이상 담기지 않는다.
+  it("keeps saved goals but caps each session at one and replaces the selection", async () => {
     const fourth=goal({goalSelectionId:"10000000-0000-4000-8000-000000000004",displayName:"의견 묻기",sortOrder:4});
     const harness=setup(()=>jsonResponse(200,{items:[...GOALS,fourth]}));await advance();
-    expect(screen.getByText(/한 번에 최대 3개/)).toBeVisible();
-    fireEvent.click(check());fireEvent.click(check("차례 기다리기"));fireEvent.click(check("도움 요청하기"));
-    expect(check("의견 묻기")).toBeDisabled();expect(check()).toBeEnabled();
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 3개");
+    expect(screen.getByText(/한 번에 목표 1개/)).toBeVisible();
+    fireEvent.click(check());
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개");
+    fireEvent.click(check("차례 기다리기"));
+    expect(check("차례 기다리기")).toBeChecked();expect(check()).not.toBeChecked();
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개");
     expect(screen.getAllByRole("checkbox")).toHaveLength(4);
-    fireEvent.click(check());expect(check("의견 묻기")).toBeEnabled();fireEvent.click(check("의견 묻기"));
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 3개");
+    expect(screen.getAllByRole("checkbox").filter((box) => (box as HTMLInputElement).checked)).toHaveLength(1);
+    fireEvent.click(check("차례 기다리기"));
+    expect(screen.getAllByRole("checkbox").filter((box) => (box as HTMLInputElement).checked)).toHaveLength(0);
     expect(harness.requests(/activities/)).toHaveLength(0);
   });
   it("connects the actual route, enables explicit U5b start and never starts on selection", async () => {
@@ -53,7 +57,7 @@ describe("18 — list, selection and scope", () => {
     expect(screen.getByTestId("practice-start")).toHaveTextContent("목표를 골라 주세요");
     fireEvent.click(check());
     fireEvent.click(check("차례 기다리기"));
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 2개로 연습 시작");
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개로 연습 시작");
     // U5b 통합 승인: 영구 비활성 자리 대신 선택 후 시작 가능, 선택만으로 전송하지 않음.
     expect(screen.getByTestId("practice-start")).toBeEnabled();
     expect(screen.queryByText("연습 시작 기능을 준비하고 있어요.")).toBeNull();

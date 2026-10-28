@@ -18,4 +18,11 @@ public interface JudgeClient {
      * @param turnId 결과를 돌려받을 판정 턴. 공급자로 보내지 않고 로그에도 쓰지 않는다(호출자 상관용)
      */
     CompletionStage<JudgeOutcome> judge(JudgeRequest request, UUID turnId);
+
+    /**
+     * 첫 판정 전에 공급자 연결 · 호출 경로를 미리 데운다. 판정 · 과금 · 데이터 전송이 없고, 기다리지 않으며 던지지 않는다. 공급자가 없으면 아무것도
+     * 하지 않는다.
+     */
+    default void warmUp() {
+    }
 }

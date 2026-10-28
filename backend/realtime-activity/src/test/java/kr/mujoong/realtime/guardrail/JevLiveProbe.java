@@ -212,7 +212,12 @@ final class JevLiveProbe {
         String policyVersion = LiveContentResources.loadDefault().guardrail().version();
         Inspector inspector = factory.create(properties, () -> env.apply(GuardrailStartupRules.API_KEY_ENV), budget, clock);
         List<Observation> observations = new ArrayList<>();
-        for (Sample sample : SAMPLES) {
+        // 진단 측정용(JEV_PROBE_SAMPLES, 줄바꿈으로 나눈 합성 문장): 고정 표본 대신 이 문장들을 보낸다. 보고서에는 순번 id와 판정만 남는다
+        String custom = env.apply("JEV_PROBE_SAMPLES");
+        List<Sample> samples = custom == null || custom.isBlank() ? SAMPLES
+                : java.util.stream.IntStream.range(0, custom.split("\n").length)
+                        .mapToObj(i -> new Sample("P" + (i + 1), Expect.ALLOW, custom.split("\n")[i])).toList();
+        for (Sample sample : samples) {
             GuardrailRequest request = GuardrailRequest.of(GuardrailRequest.Mode.FREE_TALK, sample.candidate(), policyVersion, CONTEXT);
             observations.add(new Observation(sample.id(), sample.expect(), call(inspector, request, budget)));
         }

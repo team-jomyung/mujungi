@@ -194,6 +194,12 @@ public interface PracticeSessionExtension {
         default boolean cancelSpeech(UUID correlationId) { return false; }
 
         /**
+         * 아이 말이 지금 들어오는 중인가(입력 전사 묶음이 열려 확정 전이다). 읽기만 하고 상태를 바꾸지 않는다. 무응답 시계가 아이가 말하는 도중에
+         * 만료돼 엉뚱한 재촉 발화를 내고 그 말을 늦게 판정하던 문제(2026-10-27 실키)를 막으려고 쓴다.
+         */
+        default boolean childSpeaking() { return false; }
+
+        /**
          * 아이 확정 전사 하나에 대한 진행 중 판정을 요청한다. 거절(ACTIVE 아님 · 열린 턴 있음 · 지점 밖 · 최근 전사 4개 밖 ·
          * 공급자 없음)이면 거짓이다. 결과는 JUDGMENT_RESULT · JUDGMENT_ABSTAINED 사건으로 온다.
          */

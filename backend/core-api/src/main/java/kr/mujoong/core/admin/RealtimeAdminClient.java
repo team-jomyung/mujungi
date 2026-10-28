@@ -64,9 +64,10 @@ public class RealtimeAdminClient {
      * @param source VOICE(음성 초) · LUNA(진행 중 판정 토큰)
      * @param measuredCalls 금액을 계산할 수 있는 호출 수(음성: 초 있음, 판정: 입력 · 출력 모두 있음)
      * @param knownCalls 값을 하나라도 아는 호출 수
+     * @param cacheUnknownCalls 금액을 계산한 판정 호출 가운데 캐시 읽기 토큰을 모르는 호출 수
      */
     public record UsageAggregate(UUID sessionId, String source, String model, int calls, int measuredCalls, int knownCalls,
-            int completeCalls, Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens,
+            int completeCalls, int cacheUnknownCalls, Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens,
             Long reasoningTokens, Long measuredInputTokens, Long measuredOutputTokens, Long measuredCachedInputTokens,
             Instant lastObservedAt) {
     }

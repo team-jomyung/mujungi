@@ -219,10 +219,11 @@ mujoong:
     log-merge-window: 10s
     # OD-6 '앱 안 5초 표본'(CPU · 메모리 · 풀 · 적체 · 연결 상태 게이지 갱신) 주기(3.6 수정 , Core와 같은 키 · 값)
     system-sample-interval: 5s
-  # U11 진행 중 판정 보류 기준(시간 값이 아니다): 1순위 확률 < min-confidence 또는 1 · 2순위 차이 < min-margin이면 판정 보류. 같은 값은 확정
+  # U11 진행 중 판정 보류 기준(시간 값이 아니다): 1순위 확률 < min-confidence 또는 1 · 2순위 차이 < min-margin이면 판정 보류. 같은 값은 확정.
+  # 2026-10-27 사람 결정(FT-1027-c): 확신 부족 보류를 없앤다 — 둘 다 0이라 1순위를 그대로 확정한다(이전 0.6 · 0.15). 응답 검증 · 기술 실패 보류는 그대로다
   judgment:
-    min-confidence: 0.6
-    min-margin: 0.15
+    min-confidence: 0
+    min-margin: 0
   # U12 새 연습 흐름 횟수 한도(contracts/ai-io.md 10.14). 시간 값이 아니다: 시간 한도는 timing.conversation.*(no-response-wait · focus-max · goal-active-limit)
   practice-flow:
     retry-max: 2

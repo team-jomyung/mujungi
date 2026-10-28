@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,6 +41,9 @@ import org.springframework.stereotype.Service;
  *       → VOICE(분당 단가), Realtime 진행 중 판정 → JUDGMENT(Decisions 단가, 출력 과금 없음).
  *   <li>측정된 호출(토큰 · 초가 있는 행)만 금액을 계산한다. 측정되지 않은 호출 수는 unknownCount로 따로 주고 0원으로 더하지 않는다. 수집 중
  *       빠져 저장되지 않은 호출은 알 수 없다.
+ *   <li>캐시 읽기 토큰을 모르는 측정 호출은 캐시 0으로 계산하되(실제보다 크게 잡힐 수 있다) 상태를 COMPLETE가 아니라 PARTIAL로 둔다(JIRA-287).
+ *   <li>기간 안 활동(활동 시각 기준) 가운데 저장된 사용량이 하나도 없는 활동은 NOT_COLLECTED 항목으로 목록에 넣는다. 금액 · 토큰은 null이라
+ *       합계는 바뀌지 않는다(JIRA-287).
  * </ul>
  */
 @Service
@@ -47,8 +51,9 @@ public class AdminCostService {
 
     static final String LIST_SCOPE = "수집된 사용량 가운데 금액을 계산할 수 있는 호출 기준의 예상 비용(USD, 현재 설정 단가)입니다. 실제 청구액이"
             + " 아닙니다. 호출 완료 시각이 기간 안인 사용량만 세고, 수집하지 못해 저장되지 않은 호출 · 일부만 수집된 기간의 빠진 대화는 들어 있지"
-            + " 않습니다. 저장된 사용량이 없는 합계는 0이 아니라 확인 불가(null)입니다. 단가를 바꾸면 지난 비용도 새 단가로 다시 계산되고, 요청당"
-            + " 입력 272K 토큰 초과 할증과 Realtime 판정의 캐시 쓰기 요금은 반영하지 않습니다.";
+            + " 않습니다. 저장된 사용량이 하나도 없는 활동은 활동 시각 기준으로 '미수집'(NOT_COLLECTED)으로 보이고, 캐시 읽기 토큰을 모르는"
+            + " 호출은 캐시 0으로 계산해 '일부 수집'(PARTIAL)으로 보입니다. 저장된 사용량이 없는 합계는 0이 아니라 확인 불가(null)입니다."
+            + " 단가를 바꾸면 지난 비용도 새 단가로 다시 계산되고, 요청당 입력 272K 토큰 초과 할증과 Realtime 판정의 캐시 쓰기 요금은 반영하지 않습니다.";
     static final String DETAIL_SCOPE = "이 항목의 전체 기간 사용량 기준입니다(목록의 기간 소계와 다를 수 있습니다). 현재 설정 단가(USD)로 계산한"
             + " 예상 비용이며 실제 청구액이 아닙니다.";
 
@@ -84,11 +89,12 @@ public class AdminCostService {
     /**
      * 사용량 출처 하나(Core 묶음 또는 Realtime 묶음)를 단계 계산 입력으로 바꾼 값. 표시용 합(voiceSeconds · inputTokens · …)은 아는 값을
      * 필드마다 더한 것이고, 금액은 측정된 호출(입력 · 출력이 모두 있음, 음성은 초 있음)의 합({@code measured*})으로만 계산한다.
+     * {@code cacheUnknownCalls}는 측정된 호출 가운데 캐시 읽기 토큰을 모르는 호출 수다.
      */
     record Usage(String phase, String model, String rate, int calls, int measuredCalls, int knownCalls, int completeCalls,
-            Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens, Long cacheWriteTokens,
-            Long reasoningTokens, Long measuredInputTokens, Long measuredOutputTokens, Long measuredCachedInputTokens,
-            Long measuredCacheWriteTokens, Instant lastObservedAt) {
+            int cacheUnknownCalls, Double voiceSeconds, Long inputTokens, Long outputTokens, Long cachedInputTokens,
+            Long cacheWriteTokens, Long reasoningTokens, Long measuredInputTokens, Long measuredOutputTokens,
+            Long measuredCachedInputTokens, Long measuredCacheWriteTokens, Instant lastObservedAt) {
     }
 
     /** 계산된 항목(요약과 단계, 측정 안 된 호출 수). */
@@ -124,6 +130,8 @@ public class AdminCostService {
                         null));
             }
         }
+        notCollected(filter, bySession.keySet()).forEach(row -> activityItems.add(item(row.sessionId().toString(), row,
+                "ACTIVITY", activityPurpose(row), List.of(), row.activityAt())));
         if (unfiltered) {
             Map<UUID, List<Usage>> byCall = new LinkedHashMap<>();
             Map<UUID, String> callPurpose = new HashMap<>();
@@ -149,6 +157,21 @@ public class AdminCostService {
                 .map(Item::summary).toList();
         return new Costs(totals, new Page<>(pageItems, page, pageSize, activityItems.size()),
                 otherItems.stream().map(Item::summary).toList(), LIST_SCOPE);
+    }
+
+    /**
+     * 기간 안(활동 시각 기준) 필터에 맞는 활동 가운데 Core · Realtime 어디에도 저장된 사용량이 없는 활동. 기간 밖에서 관측된 사용량만 있는 활동은
+     * 미수집이 아니라 이 기간 목록에 나오지 않는다.
+     */
+    private List<ActivityRow> notCollected(AdminFilter filter, Set<UUID> listed) {
+        List<ActivityRow> candidates = activities.all(filter).stream().filter(row -> !listed.contains(row.sessionId())).toList();
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = candidates.stream().map(ActivityRow::sessionId).toList();
+        Set<UUID> withUsage = new HashSet<>(usage.sessionsWithUsage(ids));
+        realtime.usageOf(ids).forEach(aggregate -> withUsage.add(aggregate.sessionId()));
+        return candidates.stream().filter(row -> !withUsage.contains(row.sessionId())).toList();
     }
 
     /** 항목 상세(전체 기간). id는 활동 · 준비 id 또는 연결 미확인 호출 id다. */
@@ -226,22 +249,23 @@ public class AdminCostService {
 
     private Usage core(Aggregate row) {
         return new Usage(PURPOSE_PHASE.getOrDefault(row.purpose(), "OTHER"), row.model(), "RESPONSES", row.calls(),
-                row.measuredCalls(), row.knownCalls(), row.completeCalls(), null, row.inputTokens(), row.outputTokens(),
-                row.cachedInputTokens(), row.cacheWriteTokens(), row.reasoningTokens(), row.measuredInputTokens(),
-                row.measuredOutputTokens(), row.measuredCachedInputTokens(), row.measuredCacheWriteTokens(), row.lastObservedAt());
+                row.measuredCalls(), row.knownCalls(), row.completeCalls(), row.cacheUnknownCalls(), null, row.inputTokens(),
+                row.outputTokens(), row.cachedInputTokens(), row.cacheWriteTokens(), row.reasoningTokens(),
+                row.measuredInputTokens(), row.measuredOutputTokens(), row.measuredCachedInputTokens(),
+                row.measuredCacheWriteTokens(), row.lastObservedAt());
     }
 
     private Usage realtime(UsageAggregate row) {
         if ("VOICE".equals(row.source())) {
             return new Usage("VOICE", row.model(), "VOICE", row.calls(), row.measuredCalls(), row.knownCalls(),
-                    row.completeCalls(), row.voiceSeconds(), null, null, null, null, null, null, null, null, null,
+                    row.completeCalls(), 0, row.voiceSeconds(), null, null, null, null, null, null, null, null, null,
                     row.lastObservedAt());
         }
         // Realtime 판정 표에는 캐시 쓰기 열이 없다
         return new Usage("JUDGMENT", row.model(), "DECISIONS", row.calls(), row.measuredCalls(), row.knownCalls(),
-                row.completeCalls(), null, row.inputTokens(), row.outputTokens(), row.cachedInputTokens(), null,
-                row.reasoningTokens(), row.measuredInputTokens(), row.measuredOutputTokens(), row.measuredCachedInputTokens(),
-                null, row.lastObservedAt());
+                row.completeCalls(), row.cacheUnknownCalls(), null, row.inputTokens(), row.outputTokens(),
+                row.cachedInputTokens(), null, row.reasoningTokens(), row.measuredInputTokens(), row.measuredOutputTokens(),
+                row.measuredCachedInputTokens(), null, row.lastObservedAt());
     }
 
     private static Usage merge(List<Usage> group) {
@@ -250,8 +274,9 @@ public class AdminCostService {
                 .orElse(null);
         return new Usage(first.phase(), first.model(), first.rate(), group.stream().mapToInt(Usage::calls).sum(),
                 group.stream().mapToInt(Usage::measuredCalls).sum(), group.stream().mapToInt(Usage::knownCalls).sum(),
-                group.stream().mapToInt(Usage::completeCalls).sum(), sumDouble(group, Usage::voiceSeconds),
-                sumLong(group, Usage::inputTokens), sumLong(group, Usage::outputTokens), sumLong(group, Usage::cachedInputTokens),
+                group.stream().mapToInt(Usage::completeCalls).sum(), group.stream().mapToInt(Usage::cacheUnknownCalls).sum(),
+                sumDouble(group, Usage::voiceSeconds), sumLong(group, Usage::inputTokens), sumLong(group, Usage::outputTokens),
+                sumLong(group, Usage::cachedInputTokens),
                 sumLong(group, Usage::cacheWriteTokens), sumLong(group, Usage::reasoningTokens),
                 sumLong(group, Usage::measuredInputTokens), sumLong(group, Usage::measuredOutputTokens),
                 sumLong(group, Usage::measuredCachedInputTokens), sumLong(group, Usage::measuredCacheWriteTokens), last);
@@ -294,6 +319,9 @@ public class AdminCostService {
         if ("DECISIONS".equals(usage.rate())) {
             text += " · Decisions 출력은 과금하지 않음, 캐시 쓰기 미수집";
         }
+        if (usage.cacheUnknownCalls() > 0) {
+            text += " · 캐시 읽기를 모르는 호출 " + usage.cacheUnknownCalls() + "건은 캐시 0으로 계산(실제보다 크게 잡힐 수 있음)";
+        }
         return text + measured;
     }
 
@@ -301,12 +329,16 @@ public class AdminCostService {
         return "DECISIONS".equals(usage.rate()) ? pricing.decisions() : pricing.responses();
     }
 
-    /** 아무 값도 모르면 UNKNOWN, 모든 호출이 측정 · 완결이면 COMPLETE, 그 밖(일부만 앎)은 PARTIAL. */
+    /**
+     * 아무 값도 모르면 UNKNOWN, 모든 호출이 측정 · 완결이고 캐시 읽기도 알면 COMPLETE, 그 밖(일부만 앎 · 캐시 읽기 모름)은 PARTIAL. 캐시 쓰기는
+     * Realtime 판정 표에 열이 없어 기준에 넣지 않는다.
+     */
     private static String status(Usage usage) {
         if (usage.knownCalls() == 0) {
             return "UNKNOWN";
         }
-        return usage.measuredCalls() == usage.calls() && usage.completeCalls() == usage.calls() ? "COMPLETE" : "PARTIAL";
+        return usage.measuredCalls() == usage.calls() && usage.completeCalls() == usage.calls() && usage.cacheUnknownCalls() == 0
+                ? "COMPLETE" : "PARTIAL";
     }
 
     private static boolean matches(ActivityRow row, AdminFilter filter) {
