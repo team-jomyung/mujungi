@@ -55,15 +55,17 @@ public class ScenarioService {
             kr.mujoong.core.luna.LunaInputSanitizer sanitizer,kr.mujoong.core.knowledge.ChildKnowledgeService graph,
             kr.mujoong.core.textai.ForbiddenExpressionPolicy forbidden,kr.mujoong.core.textai.TextAiProperties timing,
             @org.springframework.beans.factory.annotation.Qualifier("textAiExecutor") java.util.concurrent.ExecutorService executor,
-            kr.mujoong.core.config.CoreProperties properties,JsonCodec json,kr.mujoong.core.practicegoal.GoalCandidateRepository goals){
+            kr.mujoong.core.config.CoreProperties properties,JsonCodec json,
+            java.util.Optional<kr.mujoong.core.practicegoal.GoalCandidateRepository> goals){
         if(provider instanceof kr.mujoong.core.textai.ScenarioScriptProvider scripts){
             var knowledgeTiming=properties.timing().knowledge();
             structured=new StructuredScenarioFlow(new ScenarioScriptGenerator(scripts,new ScenarioScriptValidation(forbidden),timing,executor,
                     kr.mujoong.core.luna.CoreLunaClient.SYSTEM_SLEEPER::sleep).diagnostics(this::diagnose),privacy,sanitizer,
                     new ScenarioGraphContext(graph,executor,clock,knowledgeTiming.graphBudget()),repository,executor,
                     properties.timing().practice().scenarioHistoryTimeout(),json)
-                    .references(new ReferenceSeedSelector(graph,goals::activeSavedSkillRefs,executor,
-                            knowledgeTiming.graphBudget(),knowledgeTiming.referenceCooldown()));
+                    // 담은 목표 저장소가 없는 좁은 실행 환경에서는 참고 씨앗 없이 지금처럼 만든다.
+                    .references(goals.map(saved->new ReferenceSeedSelector(graph,saved::activeSavedSkillRefs,executor,
+                            knowledgeTiming.graphBudget(),knowledgeTiming.referenceCooldown())).orElse(null));
         }
     }
     public ScenarioService(ScenarioRepository repository, PracticeSessionContextPort sessions, ScenarioRecordPort records,

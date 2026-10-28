@@ -38,7 +38,7 @@ final class StructuredFixture implements AutoCloseable {
         when(properties.timing().knowledge().referenceCooldown()).thenReturn(Duration.ofDays(7));
         when(properties.timing().practice().scenarioHistoryTimeout()).thenReturn(Duration.ofMillis(500));
         legacy.service.connectStructured(transport,privacy,new LunaInputSanitizer(JsonCodec.shared()),graph,new ForbiddenExpressionPolicy(),
-                new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared(),goals);
+                new TextAiProperties(Duration.ofSeconds(3),new TextAiProperties.Retry(1,Duration.ofMillis(250))),executor,properties,JsonCodec.shared(),Optional.of(goals));
     }
     ScenarioScriptProvider.Generated generated(String material){
         var s=new ScenarioScript.Scene("base","BASE",material+" 놀이 중. "+legacy.opportunity+" 이제 그만할래.","이제 그만할래.","친구가 쉬려 해.",List.of(),List.of(),"PEER","교실","놀이",null,null);
