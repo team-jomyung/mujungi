@@ -22,7 +22,8 @@ resource "aws_ecs_task_definition" "web" {
       { name = "HOSTNAME", value = "0.0.0.0" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "GOOGLE_OAUTH_CLIENT_ID", value = local.google_oauth_client_id },
-      { name = "GOOGLE_OAUTH_REDIRECT_URI", value = local.google_oauth_redirect_uri }
+      { name = "GOOGLE_OAUTH_REDIRECT_URI", value = local.google_oauth_redirect_uri },
+      { name = "MUJOONG_ADMIN_API_ENABLED", value = "true" } # JIRA-292 관리자 화면 실제 API 연결
     ]
 
     logConfiguration = {
@@ -191,7 +192,7 @@ resource "aws_ecs_task_definition" "core_api" {
       { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url },
       { name = "SPRING_DATASOURCE_USERNAME", value = "core_app" },
-      { name = "MUJOONG_CORE_AI_USAGE_ENABLED", value = "false" },
+      { name = "MUJOONG_CORE_AI_USAGE_ENABLED", value = "true" }, # JIRA-292 관리자 비용 화면 집계
       { name = "MUJOONG_KNOWLEDGE_NEO4J_ENABLED", value = "true" },
       { name = "MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT", value = "http://172.17.0.1:7474" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
@@ -273,7 +274,7 @@ resource "aws_ecs_task_definition" "realtime" {
       { name = "SPRING_PROFILES_ACTIVE", value = "demo" },
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url_demo },
       { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
-      { name = "MUJOONG_AI_USAGE_ENABLED", value = "false" },
+      { name = "MUJOONG_AI_USAGE_ENABLED", value = "true" }, # JIRA-292 관리자 비용 화면 집계
       { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" },
