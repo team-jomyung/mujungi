@@ -184,6 +184,7 @@ export const TEMP_COPY = {
     REPORT_NOT_READY: "리포트가 아직 준비되지 않았어요.",
     SESSION_NOT_ACTIVE: "지금은 끝낼 수 있는 상태가 아니에요.",
     ALREADY_SELECTED: "이미 담은 목표예요.",
+    FAVORITE_LIMIT_REACHED: "즐겨찾기 한도를 초과했어요.",
     RESTORE_EXPIRED: "되돌릴 수 있는 시간이 지났어요.",
     SCENARIO_GEN_FAILED: "연습 상황을 준비하지 못했어요.",
     PUSH_SUBSCRIPTION_CONFLICT: "알림 구독을 다시 등록해 주세요.",

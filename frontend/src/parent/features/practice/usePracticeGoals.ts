@@ -8,6 +8,7 @@ import { useApiClient } from "../../common/api/queries";
 import { goToLogin } from "../../common/navigation";
 import { deleteGoal, fetchGoalSelections, goalSelectionQueryKey, restoreGoal, sortGoals, updateGoalFavorite, type GoalSelection } from "../../common/api/practice";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY } from "./copy";
+import { MAX_FAVORITE_GOALS } from "./goalList";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useTiming } from "@/shared/timing/TimingProvider";
@@ -26,11 +27,52 @@ export function usePracticeGoals() {
   const recovery = useRef(new Map<string, { goal: GoalSelection; undo: boolean }>());
   const recovering = useRef(new Set<string>());
   const favoriteEpoch = useRef(new Map<string, number>());
+  const favoriteReservations = useRef(new Set<string>());
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [needsRecovery, setNeedsRecovery] = useState(false);
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
-  const query = useQuery({ queryKey: goalSelectionQueryKey, queryFn: ({ signal }) => fetchGoalSelections(api, signal), staleTime: 0 });
+  const pendingRefresh = useRef(false);
+  const refreshing = useRef(false);
+  const query = useQuery({ queryKey: goalSelectionQueryKey, queryFn: ({ signal }) => fetchGoalSelections(api, signal), staleTime: 0,
+    refetchOnWindowFocus: false, refetchOnReconnect: false });
   const { refetch } = query;
+
+  // Preserve undo and in-flight edits. A signal arriving during a GET requires another read after it.
+  const refreshAutomatically = useCallback(() => {
+    pendingRefresh.current = true;
+    const blocked = () => {
+      const error = client.getQueryState(goalSelectionQueryKey)?.error;
+      return !mounted.current || document.visibilityState === "hidden" || locks.current.size > 0
+        || (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404));
+    };
+    if (refreshing.current || blocked()) return;
+    refreshing.current = true;
+    void (async () => {
+      try {
+        if (client.isFetching({ queryKey: goalSelectionQueryKey, exact: true })) await refetch({ cancelRefetch: false });
+        while (pendingRefresh.current && !blocked()) {
+          pendingRefresh.current = false;
+          await refetch({ cancelRefetch: false });
+        }
+      } finally { refreshing.current = false; }
+    })();
+  }, [client, refetch]);
+
+  useEffect(() => {
+    if (busyIds.size === 0 && !needsRecovery && pendingRefresh.current) refreshAutomatically();
+  }, [busyIds, needsRecovery, refreshAutomatically]);
+
+  useEffect(() => {
+    const reconcile = () => { if (document.visibilityState !== "hidden") refreshAutomatically(); };
+    const timer = window.setInterval(reconcile, timing.homeReconcileIntervalMs);
+    document.addEventListener("visibilitychange", reconcile);
+    window.addEventListener("online", reconcile);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", reconcile);
+      window.removeEventListener("online", reconcile);
+    };
+  }, [refreshAutomatically, timing.homeReconcileIntervalMs]);
 
   const writeRows = useCallback((update: (rows: readonly GoalSelection[]) => GoalSelection[]) => {
     client.setQueryData<GoalSelection[]>(goalSelectionQueryKey, (rows) => sortGoals(update(rows ?? []).filter(row => !confirmedDeleted.current.has(row.goalSelectionId))));
@@ -123,10 +165,14 @@ export function usePracticeGoals() {
           confirmedDeleted.current.delete(id);
           reconcileRows([...rows, restored], id);
         } catch (error) {
-          if (error instanceof ApiError && (error.status === 410 || error.status === 404)) {
+          if (error instanceof ApiError && (error.status === 410 || error.status === 404 || error.code === "FAVORITE_LIMIT_REACHED")) {
             reconcileRows(await fetchGoalSelections(api), id);
             busy(id, false);
-            if (mounted.current) toast.show({ message: PRACTICE_TEMP_COPY.restoreExpired, kind: "error" });
+            if (mounted.current) toast.show({
+              message: error.code === "FAVORITE_LIMIT_REACHED" ? PRACTICE_TEMP_COPY.favoriteLimitReached : PRACTICE_TEMP_COPY.restoreExpired,
+              kind: "error",
+              action: error.code === "FAVORITE_LIMIT_REACHED" ? { label: PROPOSED_COPY.retry, onPress: () => { void recover(goal, undo); } } : undefined,
+            });
             return;
           }
           throw error;
@@ -174,8 +220,9 @@ export function usePracticeGoals() {
       } else {
         busy(id, false);
         if (mounted.current) toast.show({
-          message: error.status === 410 || error.status === 404 ? PRACTICE_TEMP_COPY.restoreUnavailable : PRACTICE_TEMP_COPY.restoreFailed,
+          message: error.code === "FAVORITE_LIMIT_REACHED" ? PRACTICE_TEMP_COPY.favoriteLimitReached : error.status === 410 || error.status === 404 ? PRACTICE_TEMP_COPY.restoreUnavailable : PRACTICE_TEMP_COPY.restoreFailed,
           kind: "error",
+          action: error.code === "FAVORITE_LIMIT_REACHED" ? { label: PROPOSED_COPY.retry, onPress: () => { void undoDeletion(goal); } } : undefined,
         });
       }
     }
@@ -223,6 +270,14 @@ export function usePracticeGoals() {
   const toggleFavorite = useCallback(async (goal: GoalSelection) => {
     const id = goal.goalSelectionId;
     if (locks.current.has(id)) return;
+    const rows = client.getQueryData<GoalSelection[]>(goalSelectionQueryKey) ?? [];
+    const favoriteIds = new Set(rows.filter(row => row.isFavorite).map(row => row.goalSelectionId));
+    const reservedCount = [...favoriteReservations.current].filter(reserved => !favoriteIds.has(reserved)).length;
+    if (!goal.isFavorite && favoriteIds.size + reservedCount >= MAX_FAVORITE_GOALS) {
+      toast.show({ message: PRACTICE_TEMP_COPY.favoriteLimitReached, kind: "error" });
+      return;
+    }
+    if (!goal.isFavorite) favoriteReservations.current.add(id);
     const epoch = (favoriteEpoch.current.get(id) ?? 0) + 1;
     favoriteEpoch.current.set(id, epoch);
     busy(id, true);
@@ -235,16 +290,17 @@ export function usePracticeGoals() {
     } catch (error) {
       putRow(goal);
       if (!authenticationFailed(error) && mounted.current) toast.show({
-        message: PRACTICE_TEMP_COPY.favoriteFailed,
+        message: error instanceof ApiError && error.code === "FAVORITE_LIMIT_REACHED" ? PRACTICE_TEMP_COPY.favoriteLimitReached : PRACTICE_TEMP_COPY.favoriteFailed,
         kind: "error",
         action: { label: PROPOSED_COPY.retry, onPress: () => {
           if (mounted.current && favoriteEpoch.current.get(id) === epoch) void toggleFavorite(goal);
         } },
       });
     } finally {
+      favoriteReservations.current.delete(id);
       busy(id, false);
     }
   }, [api, authenticationFailed, busy, client, putRow, toast]);
 
-  return { items: query.data, busyIds, deletingIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, toggleFavorite, scheduleDelete, dismissUndo };
+  return { items: query.data, busyIds, deletingIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, refreshAutomatically, toggleFavorite, scheduleDelete, dismissUndo };
 }

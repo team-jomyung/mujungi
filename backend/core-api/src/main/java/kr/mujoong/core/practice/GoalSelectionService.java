@@ -61,6 +61,7 @@ public class GoalSelectionService {
             UUID id;
             if(existing!=null) {
                 if(existing.active()) throw CoreApiException.of(ErrorCode.ALREADY_SELECTED);
+                if(existing.isFavorite())goals.requireFavoriteCapacity(guardianId);
                 goals.reactivate(existing.id()); id=existing.id();
             } else id=goals.insertSelection(guardianId,account.childId(),candidate,definition.displayName(),clock.now());
             return view(owned(guardianId,id));
@@ -72,6 +73,7 @@ public class GoalSelectionService {
         return write(guardianId,account -> {
             GoalSelection current=owned(guardianId,id);
             if(!current.active())throw CoreApiException.of(ErrorCode.NOT_FOUND);
+            if(favorite&&!current.isFavorite())goals.requireFavoriteCapacity(guardianId);
             goals.favorite(id,favorite);return view(owned(guardianId,id));
         });
     }
@@ -95,6 +97,7 @@ public class GoalSelectionService {
             goals.recommendation(account.childId(),current.recommendationId()).filter(r->"ACTIVE".equals(r.status()))
                     .orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
             active(current.behaviorKey(),current.behaviorVersion());
+            if(current.isFavorite())goals.requireFavoriteCapacity(guardianId);
             goals.reactivate(id);return view(owned(guardianId,id));
         });
     }

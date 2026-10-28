@@ -28,6 +28,7 @@ class CandidateSeedLinkTest {
         var draft=new GoalCandidateRepository.Draft("합성목표","합성장면","전달",new FourElements("놀이","친구","참여","말하기"),"NONE","합성근거",List.of(new GoalCandidateRepository.Evidence(1,"같이 할래")),new StructureSignature("PRODUCE","참여 의도를 상대가 이해하도록 표현한다","상대의 의도 1층","YES","YES"));
         version=new GoalCandidateRepository.Version(UUID.randomUUID(),UUID.randomUUID(),child,session,1,draft);
         when(repository.register(eq(child),eq(session),anyString(),any(),any())).thenReturn(version);
+        when(repository.current(eq(child),any())).thenAnswer(i->Optional.of(version));
         when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("seed:S1","REUSED"));
         delivery=new CandidateSeedDelivery(repository,accounts,consent,seeds,jdbc,new MutableClock(),events,transactions);
     }

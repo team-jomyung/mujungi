@@ -44,7 +44,25 @@ public class CandidateSeedDelivery {
             return List.copyOf(versions);
         });
         for(var version:registered)generate(guardian,child,session,result,version);
+        saveGenerated(guardian,child,session,result,registered);
         recordObservations(guardian,child);
+    }
+    private void saveGenerated(UUID guardian,UUID child,UUID session,UUID result,List<GoalCandidateRepository.Version> registered){
+        try { tx.executeWithoutResult(t->{
+            requireCurrent(guardian,child,session,result,!registered.isEmpty());
+            boolean free=Boolean.TRUE.equals(jdbc.queryForObject("select activity_type='FREE_TALK' from core.core_activity_record where session_id=:s and child_id=:c",Map.of("s",session,"c",child),Boolean.class));
+            if(!free)return;
+            boolean changed=false;
+            for(var version:registered){
+                var current=repository.current(child,version.candidateId()).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
+                changed|=repository.selectGenerated(guardian,current,clock.now());
+            }
+            // PostgreSQL delivers NOTIFY only after commit; the event contains no goal content.
+            if(changed)jdbc.query("select pg_catalog.pg_notify('mujoong_goal_selections_changed',:g)",Map.of("g",guardian.toString()),rs->{});
+        }); } catch(CoreApiException changedDuringGeneration){
+            // A withdrawn consent or superseded/deleted source must not be auto-saved.
+            if(changedDuringGeneration.code()!=ErrorCode.CONSENT_MISSING&&changedDuringGeneration.code()!=ErrorCode.NOT_FOUND)throw changedDuringGeneration;
+        }
     }
     private kr.mujoong.core.knowledge.ChildKnowledgeService knowledge;
     @org.springframework.beans.factory.annotation.Autowired
