@@ -45,6 +45,20 @@ class JudgeOutcomeValidatorTest {
         assertThat(outcome.promptVersion()).isEqualTo("prompt-v1");
     }
 
+    /** FT-1027-c: 운영 기본값(하한 0 · 차이 0)에서는 확신이 낮거나 1 · 2순위가 같아도 보류 없이 1순위를 확정한다. 응답 검증은 그대로다. */
+    @Test
+    void withTheZeroDefaultsALowConfidenceRankingIsConfirmedButResponseChecksStillApply() {
+        JudgeOutcomeValidator zero = new JudgeOutcomeValidator(0.0, 0.0);
+        JudgeOutcome low = zero.validateRanked("PARTIAL", 0.35, "FULL", 0.3, OPTIONS, LATENCY, "luna-test", "prompt-v1");
+        assertThat(low.isConfirmed()).isTrue();
+        assertThat(low.firstOption()).isEqualTo("PARTIAL");
+        assertThat(zero.validateRanked("HELP", 0.25, "FULL", 0.25, OPTIONS, LATENCY, "luna-test", "prompt-v1").isConfirmed()).isTrue();
+        assertThat(zero.validateRanked("OTHER", 0.9, "FULL", 0.1, OPTIONS, LATENCY, "luna-test", "prompt-v1").abstainReason())
+                .isEqualTo(AbstainReason.OPTION_OUT_OF_SET);
+        assertThat(zero.validateRanked("FULL", 1.2, "HELP", 0.1, OPTIONS, LATENCY, "luna-test", "prompt-v1").abstainReason())
+                .isEqualTo(AbstainReason.PROBABILITY_OUT_OF_RANGE);
+    }
+
     @Test
     void aConfirmedOutcomeKeepsBothRankedOptionsAndTheirProbabilities() {
         JudgeOutcome outcome = validate("FULL", "0.7", "HELP", "0.2");

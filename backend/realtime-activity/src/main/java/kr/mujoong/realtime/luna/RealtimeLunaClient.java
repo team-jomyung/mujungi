@@ -47,6 +47,18 @@ public class RealtimeLunaClient {
     private final JsonCodec json;
     private AiUsageCollector usage = AiUsageCollector.NOOP;
 
+    /** 예열용 합성 판정 입력(보내지 않는다, 아동 데이터 없음). */
+    private static final Map<String, Object> WARM_UP_INPUT = Map.of(
+            "judgmentPoint", "J2",
+            "optionSetVersion", "warm-up",
+            "options", List.of("FULL", "PARTIAL"),
+            "childUtterance", "예열",
+            "recentTurns", List.of(),
+            "criteria", Map.of("coreFunction", "예열", "judgmentCriteria", "예열"));
+    private static final String WARM_UP_INSTRUCTIONS = "예열";
+    private static final LunaDecisionQuestion WARM_UP_QUESTION = new LunaDecisionQuestion("judgment",
+            List.of(new LunaDecisionQuestion.Choice("FULL", null), new LunaDecisionQuestion.Choice("PARTIAL", null)));
+
     /**
      * @param liveBudget 목적 시한 키 {@code mujoong.timing.judgment.live-budget}의 값
      */
@@ -75,6 +87,24 @@ public class RealtimeLunaClient {
      */
     public CompletionStage<LunaDecision> decide(LunaRequest request, LunaDecisionQuestion question) {
         return decide(request, question, null);
+    }
+
+    /**
+     * 판정 전에 호출 경로를 미리 데운다. 합성 판정 입력으로 정리 · 요청 스키마 검증 · 본문 조립을 한 번 돌리고(보내지 않음), 공급자 연결을 맺는다
+     * ({@link LunaTransport#warmUp}). 판정 · 과금 · 데이터 전송이 없고 실패하지 않으며, 연결 시한은 판정과 같은 live-budget이다. 앱 기동 뒤와
+     * 세션 준비 때 불러, 처음 도는 코드 · 새 연결 비용 때문에 세션 첫 판정이 시한을 넘지 않게 한다.
+     */
+    public CompletionStage<Void> warmUp() {
+        try {
+            SanitizedInput input = sanitizer.sanitize(WARM_UP_INPUT, Map.of());
+            String payload = json.write(input.payload());
+            if (schemas.isValidRequest(LunaPurpose.JUDGMENT_LIVE, payload)) {
+                json.write(new DecisionsRequest(properties.model(), WARM_UP_INSTRUCTIONS, input.payload(), WARM_UP_QUESTION).body());
+            }
+        } catch (RuntimeException ignored) {
+            // 예열은 최선 노력이다: 준비 경로가 실패하면 실제 판정이 같은 경로에서 같은 사유로 끝난다
+        }
+        return transport.warmUp(liveBudget);
     }
 
     /** turnId는 사용량 연결용 서버 내부 값이며 공급자 요청 본문에 넣지 않는다. */

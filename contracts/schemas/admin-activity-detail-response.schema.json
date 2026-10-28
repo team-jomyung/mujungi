@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-activity-detail-response.schema.json",
+  "title": "관리자 활동 상세 응답(JIRA-280). 대화 원문을 담고 부를 때마다 ADMIN_RECORD_VIEWED가 남는다",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "guardianId",
+    "guardianName",
+    "deviceId",
+    "childId",
+    "childName",
+    "type",
+    "status",
+    "endCategory",
+    "startedAt",
+    "endedAt",
+    "durationSeconds",
+    "childTurns",
+    "aiTurns",
+    "endReason",
+    "transcriptAvailable",
+    "transcript",
+    "scenes"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "guardianId": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "guardianName": {
+      "description": "보호자 이름은 저장하지 않아 id 앞 6자로 만든 표시 이름",
+      "type": "string",
+      "maxLength": 40
+    },
+    "deviceId": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "childId": {
+      "$ref": "common.schema.json#/$defs/Uuid"
+    },
+    "childName": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "type": {
+      "enum": [
+        "FREE_TALK",
+        "PRACTICE"
+      ]
+    },
+    "status": {
+      "$ref": "admin-common.schema.json#/$defs/ActivityStatus"
+    },
+    "endCategory": {
+      "$ref": "admin-common.schema.json#/$defs/EndCategory"
+    },
+    "startedAt": {
+      "description": "시작 시각(시작 전이면 요청 시각)",
+      "$ref": "common.schema.json#/$defs/DateTime"
+    },
+    "endedAt": {
+      "$ref": "common.schema.json#/$defs/NullableDateTime"
+    },
+    "durationSeconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "childTurns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "aiTurns": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "endReason": {
+      "description": "끝난 이유 표시 문구",
+      "type": "string",
+      "maxLength": 60
+    },
+    "transcriptAvailable": {
+      "type": "boolean"
+    },
+    "transcript": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "speaker",
+          "text",
+          "at"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "speaker": {
+            "enum": [
+              "CHILD",
+              "AI"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "at": {
+            "$ref": "common.schema.json#/$defs/DateTime"
+          }
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "$ref": "admin-common.schema.json#/$defs/SceneResult"
+      }
+    }
+  }
+}

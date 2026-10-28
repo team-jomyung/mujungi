@@ -5,14 +5,15 @@ import { PracticeStartCoordinator, ownedSelection, type StartResult } from "@/pa
 import { PracticeStartAction } from "@/parent/features/practice/PracticeStartAction";
 
 afterEach(cleanup);
-it("한 번에 3개는 허용하고 4개는 전송하지 않는다", async () => {
+// FT-1027-a: 한 번에 목표 1개(이전 3개).
+it("한 번에 1개는 허용하고 2개는 전송하지 않는다", async () => {
   const port=vi.fn().mockResolvedValue({kind:"accepted",sessionId:"session"});
-  const ids=["a","b","c","d"];
+  const ids=["a","b"];
   const coordinator=new PracticeStartCoordinator(port,()=>"key");
   expect(await coordinator.submit(ids,ids)).toEqual({kind:"rejected",code:"VALIDATION_FAILED"});
   expect(port).not.toHaveBeenCalled();
-  expect(await coordinator.submit(ids.slice(0,3),ids)).toEqual({kind:"accepted",sessionId:"session"});
-  expect(port.mock.calls[0][0].goalSelectionIds).toEqual(["a","b","c"]);
+  expect(await coordinator.submit(ids.slice(0,1),ids)).toEqual({kind:"accepted",sessionId:"session"});
+  expect(port.mock.calls[0][0].goalSelectionIds).toEqual(["a"]);
 });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { resolve, promise }; }
 
@@ -24,7 +25,7 @@ it("소유 목록과 교집합만 선택하고 빈 선택은 전송하지 않는
 it("동시 제출은 같은 키의 한 요청을 공유한다", async () => {
   const pending = deferred<StartResult>(); const port = vi.fn(() => pending.promise); const key = vi.fn(() => "key");
   const coordinator = new PracticeStartCoordinator(port, key);
-  const first = coordinator.submit(["b", "a"], ["a", "b"]); const second = coordinator.submit(["a"], ["a", "b"]);
+  const first = coordinator.submit(["a"], ["a", "b"]); const second = coordinator.submit(["b"], ["a", "b"]);
   expect(second).toBe(first); await Promise.resolve(); expect(port).toHaveBeenCalledTimes(1);
   pending.resolve({ kind: "accepted", sessionId: "session" }); await first; await coordinator.submit(["a"], ["a"]);
   expect(port).toHaveBeenCalledTimes(1); expect(key).toHaveBeenCalledTimes(1);
@@ -55,10 +56,10 @@ it("키보드 제출 중 비활성 상태를 알리고 수락 뒤 한 번 이동
   expect(accepted).toHaveBeenCalledExactlyOnceWith("session");
 });
 it("상황 준비 실패를 표시하고 선택 수를 유지한다", async () => {
-  render(<PracticeStartAction selected={["a", "b"]} owned={["a", "b"]} port={async () => ({ kind: "rejected", code: "SCENARIO_GEN_FAILED" })}
+  render(<PracticeStartAction selected={["a"]} owned={["a", "b"]} port={async () => ({ kind: "rejected", code: "SCENARIO_GEN_FAILED" })}
     newKey={() => "key"} onAccepted={vi.fn()} />);
   fireEvent.click(screen.getByRole("button")); expect(await screen.findByText(/연습 상황을 만들지 못했어요/)).toBeVisible();
-  expect(screen.getByRole("button")).toHaveTextContent("2개"); expect(screen.getByRole("button")).toBeEnabled();
+  expect(screen.getByRole("button")).toHaveTextContent("1개"); expect(screen.getByRole("button")).toBeEnabled();
 });
 it("통신 오류를 시작 실패나 성공으로 표시하지 않는다", async () => {
   const accepted = vi.fn(); render(<PracticeStartAction selected={["a"]} owned={["a"]} port={async () => { throw new TypeError(); }}

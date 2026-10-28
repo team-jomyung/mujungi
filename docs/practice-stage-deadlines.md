@@ -13,7 +13,7 @@
 
 수집이 끝나지 않은 음성이나 거절된 음성을 바로 재생하지 않는다. 수신 중단·절대 상한·전송 실패는 현재 슬롯에 상관된 제한적 복구로 전달한다. 서버 안전 검사, 승인 대본 대조, Jev 경로, 출력 세대 재확인, 종료·휴식 우선 처리와 전체 목표 시간 제한은 유지한다.
 
-`PRACTICE_AUDIO_STAGE` INFO 로그는 `audioStage`, `outputGeneration`, `practicePhase`, `practiceSub`만 사용한다. 요청 대기/실제 전송/첫 수집/재생 대기/재생/종료와 단계별 시간 초과를 구분하며 원문·음성·키는 담지 않는다. 기존 `OUTPUT_DISCARDED`에는 수집 상한의 세부 사유 `PROVIDER_COLLECTION_TIMEOUT`을 추가했다.
+`PRACTICE_AUDIO_STAGE` INFO 로그는 `audioStage`, `outputGeneration`, `practicePhase`, `practiceSub`만 사용한다. 다만 출력 대기가 끝나는 단계(`REQUEST_QUEUED` · `DRAIN_TIMEOUT`)에는 진단으로 `durationMs`(대기 시작부터 걸린 ms)와 `drainBlocker`(가장 오래 막은 사유: `OUTPUT_FLOWING` 공급자 출력이 이어짐 · `OUTPUT_PENDING` 보낼 출력 조각이 남음 · `CHILD_INPUT_OPEN` 아이 입력 묶음이 열림 · `NONE` 기다리지 않음)를 더한다(JIRA-282 후속, 2026-10-27). 요청 대기/실제 전송/첫 수집/재생 대기/재생/종료와 단계별 시간 초과를 구분하며 원문·음성·키는 담지 않는다. 기존 `OUTPUT_DISCARDED`에는 수집 상한의 세부 사유 `PROVIDER_COLLECTION_TIMEOUT`을 추가했다.
 
 ## 검증
 

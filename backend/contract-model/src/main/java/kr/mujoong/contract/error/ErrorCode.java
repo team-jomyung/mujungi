@@ -55,7 +55,9 @@ public enum ErrorCode {
     CHILD_NOT_REGISTERED("아이 정보가 아직 없어요.", EnumSet.of(Audience.GUARDIAN), null, 404),
     CHILD_EXISTS("이미 등록된 아이가 있어요.", EnumSet.of(Audience.GUARDIAN), null, 409),
     // ---- 2026-10-23 현장 시험 JIRA-266: 아이 이름이 공통 욕설 사전에 걸림(편차 FT-1023-b) ----
-    CHILD_NAME_NOT_ALLOWED("이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요.", EnumSet.of(Audience.GUARDIAN), "(FT-1023-b)", 400);
+    CHILD_NAME_NOT_ALLOWED("이 이름은 쓸 수 없어요. 다른 이름을 입력해 주세요.", EnumSet.of(Audience.GUARDIAN), "(FT-1023-b)", 400),
+    // ---- JIRA-280: 로그인한 보호자가 관리자 명단(core_admin_account)에 없음 ----
+    ADMIN_FORBIDDEN("관리자만 볼 수 있어요.", EnumSet.of(Audience.GUARDIAN), null, 403);
 
     /** 누가 받는 응답인가(errors.md '노출' 열). */
     public enum Audience {

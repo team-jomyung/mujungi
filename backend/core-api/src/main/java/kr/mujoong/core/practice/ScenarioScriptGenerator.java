@@ -40,6 +40,8 @@ public final class ScenarioScriptGenerator {
         this.provider=provider;this.validation=validation;this.timing=timing;this.executor=executor;this.sleeper=sleeper;
     }
     private static final class Budget{int calls;boolean technical;}
+    /** 변형 라운드 전에 통째로 독립 승인 · 서버 검사를 통과한 대본. 변형 라운드가 실패하면 고치지 않고 이것을 그대로 발급한다(JIRA-283). */
+    private record Approved(ScenarioScript script,String model,String reviewModel,Input input){}
     public static final class ContentExhausted extends kr.mujoong.core.common.error.CoreApiException {
         private static final long serialVersionUID=1L;
         boolean retryableDuplicate;
@@ -48,7 +50,7 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;
+        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;Approved approvedBeforeVariant=null;
         for(int correction=0;correction<=2;correction++){
             if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
                     reason->java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH").contains(reason))))break;
@@ -63,6 +65,8 @@ public final class ScenarioScriptGenerator {
                 var generationCost=generationStartedWith.minus(deadline.remaining());
                 if(generated==null||generated.script()==null||!metadata(generated.model()))throw content();
                 model=generated.model();var script=includeBasePartnerLine(generated.script());
+                var withCondition=includeOpportunityCondition(script,current.rules().opportunity());
+                if(withCondition!=script){diagnose("ScenarioConditionAppended");script=withCondition;}
                 var cleaned=validation.withoutInvalidSceneStart(script,current.rules());
                 if(cleaned!=script){diagnose("ScenarioSceneStartDropped");script=cleaned;}
                 scriptToRepair=script;
@@ -87,6 +91,18 @@ public final class ScenarioScriptGenerator {
                 if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(current.graphContextUsed()&&current.rules().variants() instanceof ScenarioGraphContext.Session graph&&graph.fallbackRequired()){
+                    diagnose(graph.planMissingOnly()?"ScenarioGraphFallback_PLAN_EMPTY":"ScenarioGraphFallback_READ_FAILED");
+                    // 대체로 다시 만들면 아래 거절 진단까지 가지 않으므로 첫 라운드 검토 결과를 여기서 남긴다
+                    if(!reviewed.review().approved()){
+                        diagnose("ScenarioReview_"+reviewed.review().verdict());
+                        reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
+                    }
+                    // 그래프는 정상이고 변형 계획만 없을 때, 첫 라운드 대본이 통째로 승인 · 서버 검사를 통과했으면 다시 만들지 않고 그대로 발급한다(JIRA-283).
+                    // 다시 만들면 호출 2번(약 12초)이 더 들어 30초 마감을 넘기기 쉽다. 그래프 읽기 실패면 지금처럼 그래프 없이 새로 만든다
+                    if(correction==0&&graph.planMissingOnly()&&result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved()){
+                        diagnose("ScenarioGraphFallbackApprovedIssued");
+                        return approved(script,model,reviewed.model(),current,budget,deadline);
+                    }
                     if(correction==1)throw ScenarioDeadline.failed();
                     active=withoutGraph(current);preserved=null;continue;
                 }
@@ -95,9 +111,11 @@ public final class ScenarioScriptGenerator {
                     // 실제 첫 호출 비용으로 남은 예산을 비교하고, 부족하면 검증 완료 BASE만 발급한다.
                     // 거절/불확실/서버 검사 실패인 BASE는 이 경로로 발급하지 않는다.
                     var estimatedVariantCost=generationCost.multipliedBy(2).plus(reviewCost);
-                    if(result==ScenarioScriptValidation.Result.VALID && reviewed.review().approved()
-                            && deadline.remaining().compareTo(estimatedVariantCost)<=0)
-                        return approved(script,model,reviewed.model(),current,budget,deadline);
+                    if(result==ScenarioScriptValidation.Result.VALID && reviewed.review().approved()){
+                        if(deadline.remaining().compareTo(estimatedVariantCost)<=0)
+                            return approved(script,model,reviewed.model(),current,budget,deadline);
+                        approvedBeforeVariant=new Approved(script,model,reviewed.model(),current);
+                    }
                     active=reviewedInput;
                     preserved=reviewed.review().approved()?script.scenes().getFirst():null;
                     continue;
@@ -111,6 +129,7 @@ public final class ScenarioScriptGenerator {
                     diagnose("ScenarioReview_"+reviewed.review().verdict());
                     reviewed.review().reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
                 }
+                if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
                 if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
                 if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
                     var base=script.scenes().getFirst();
@@ -127,8 +146,13 @@ public final class ScenarioScriptGenerator {
                         ?script.scenes().getFirst():null;
             }catch(ScenarioScriptProvider.Failure failure){
                 diagnose("ScenarioProvider_"+failure.kind().name());
+                if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
                 if(failure.kind()!=ScenarioScriptProvider.Failure.Kind.CONTENT)throw ScenarioDeadline.failed();
                 correctionReasons=List.of("INVALID_OUTPUT_FORMAT");
+            }catch(kr.mujoong.core.common.error.CoreApiException exhausted){
+                // 변형 라운드의 마감 · 호출 수 소진 · 그래프 대체 실패도 승인된 대본이 있으면 그것을 발급한다(마감이 지났으면 발급도 실패한다)
+                if(approvedBeforeVariant==null)throw exhausted;
+                return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
             }
         }
         if(preserved!=null&&model!=null){
@@ -141,6 +165,10 @@ public final class ScenarioScriptGenerator {
             }
         }
         throw new ContentExhausted();
+    }
+    private Result issueApprovedBeforeVariant(Approved approved,Budget budget,ScenarioDeadline deadline){
+        diagnose("ScenarioVariantFailedApprovedIssued");
+        return approved(approved.script(),approved.model(),approved.reviewModel(),approved.input(),budget,deadline);
     }
     private Input withoutGraph(Input input){
         var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
@@ -156,6 +184,23 @@ public final class ScenarioScriptGenerator {
                 || ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(base.opportunitySentence())))return script;
         // These are already generated scene facts, never an inferred child answer or new event.
         String description=base.sceneDescription()+" 상대가 “"+base.opportunitySentence()+"”라고 말한다.";
+        if(description.length()>8000)return script;
+        var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
+        return new ScenarioScript(scenes);
+    }
+    /**
+     * 기본 장면 설명에 기회 조건 원문이 없으면 끝에 덧붙인다(내부 설명만, 아이에게 읽지 않는다). 모델은 조건을 뜻은 같게 표현만 바꿔 쓰는 일이 잦아
+     * 글자 그대로 비교하는 서버 검사(CONDITION_MISSING)에 걸려 고쳐 생성하느라 호출 2번을 더 썼다(2026-10-27 실키, JIRA-283). 덧붙인 대본도
+     * 독립 검토와 모든 서버 검사를 그대로 거친다.
+     */
+    static ScenarioScript includeOpportunityCondition(ScenarioScript script,String condition){
+        if(script.scenes().isEmpty()||condition==null||ScenarioContentPolicy.normalize(condition).isBlank())return script;
+        var base=script.scenes().getFirst();
+        if(!"BASE".equals(base.sceneKind())||base.sceneDescription()==null||base.sceneDescription().isBlank()
+                ||ScenarioContentPolicy.normalize(base.sceneDescription()).contains(ScenarioContentPolicy.normalize(condition)))return script;
+        String sentence=condition.strip();
+        if(!sentence.matches(".*[.!?。]$"))sentence+=".";
+        String description=base.sceneDescription().strip()+" "+sentence;
         if(description.length()>8000)return script;
         var scenes=new java.util.ArrayList<>(script.scenes());scenes.set(0,base.withDescription(description));
         return new ScenarioScript(scenes);
@@ -199,10 +244,10 @@ public final class ScenarioScriptGenerator {
     }
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
-        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v3");
+        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v4");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v2"),new Scenario.Generation(model,"scenario-generation.v3",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v3"),new Scenario.Generation(model,"scenario-generation.v4",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

@@ -79,6 +79,11 @@ export const ACCOUNT_COPY = {
     disconnectedBody: "기기 연결이 끊겼어요. 기기 전원과 와이파이를 확인해 주세요.", // C.S-05.62.7
     stopSectionSuffix: "의 종료 표현", // C.S-05.6.8 '민준의 종료 표현'
     stopSettings: "설정", // C.S-05.6.10
+    stopDefaultLabel: "기본 종료 표현",
+    stopAdditionalLabel: "추가 종료 표현",
+    stopAdditionalEmpty: "추가한 종료 표현이 없어요.",
+    stopLoading: "종료 표현을 불러오고 있어요.",
+    stopReadFailed: "추가 종료 표현을 불러오지 못했어요. 설정에서 다시 확인해 주세요.",
     sinceSuffix: "부터", // C.S-05.62.5 '10:34부터'
     disconnectsSuffix: "회", // C.S-05.61.5 '끊김 3회'
     rttPrefix: "지연 ", // C.S-05.7.5 '지연 0.3초'

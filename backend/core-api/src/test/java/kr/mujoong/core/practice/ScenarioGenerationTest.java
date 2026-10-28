@@ -40,6 +40,21 @@ class ScenarioGenerationTest {
     ScenarioScriptGenerator.Input input(){return new ScenarioScriptGenerator.Input(Map.of("age",8,"history",List.of()),Map.of("합성아이","아이"),rules(),false,"{}");}
     ScenarioScriptGenerator.Result run(){return generator.generate(input(),new ScenarioDeadline(clock,clock.now().plusSeconds(15)));}
     @Test void normalNeedsSeparateReviewAndServerRole(){var result=run();verify(provider).generate(any());verify(provider).review(any());assertThat(result.details().generation().calls()).isEqualTo(2);assertThat(result.details().review().verdict()).isEqualTo("APPROVE");assertThat(result.details().scenes().getFirst().partnerRole()).isEqualTo(ScenarioContentPolicy.PARTNER_ROLE);}
+    /** JIRA-283: 조건을 뜻만 같게 바꿔 쓴 대본은 서버가 원문을 덧붙여 검토받게 해, 고쳐 생성하느라 호출을 더 쓰지 않는다. */
+    @Test void aParaphrasedConditionIsAppendedBeforeReviewInsteadOfCostingACorrection(){
+        var b=base();var paraphrased=new ScenarioScript.Scene(b.sceneKey(),b.sceneKind(),"블록 놀이 중이야. 친구가 이제 쉬고 싶어 해. "+b.opportunitySentence(),
+                b.opportunitySentence(),b.reexplanation(),b.focusPoints(),b.expressionExamples(),b.relation(),b.place(),b.topic(),null,null);
+        when(provider.generate(any())).thenReturn(generated(paraphrased));
+        var result=run();
+        assertThat(result.details().generation().calls()).isEqualTo(2);
+        assertThat(result.details().scenes().getFirst().sceneDescription()).endsWith(OPPORTUNITY);
+        var reviewed=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider).review(reviewed.capture());
+        assertThat(((ScenarioScript)reviewed.getValue().input().get("script")).scenes().getFirst().sceneDescription()).as("검토도 덧붙인 설명을 본다").endsWith(OPPORTUNITY);
+    }
+    @Test void aConditionAlreadyPresentIsNotAppendedAgain(){
+        var result=run();
+        assertThat(result.details().scenes().getFirst().sceneDescription()).isEqualTo(base().sceneDescription());
+    }
     @Test void rejectionUsesOneContentCorrectionThenSeparateReview(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());assertThat(run().details().generation().calls()).isEqualTo(4);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void correctionReceivesTheRejectionReasonWithoutAcceptingTheRejectedScript(){

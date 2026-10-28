@@ -2,6 +2,7 @@ package kr.mujoong.realtime.judgment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.net.URI;
 import java.time.Duration;
@@ -103,6 +104,39 @@ class DecisionsJudgeClientTest {
             map.put(OPTIONS.get(i), i < values.length ? values[i] : 0.0);
         }
         return map;
+    }
+
+    @Test
+    void warmUpRunsTheProviderWarmUpWithoutAJudgment() {
+        var warmed = new AtomicInteger();
+        var called = new AtomicInteger();
+        var client = DecisionsJudgeClient.withUsage((request, question, turnId) -> {
+            called.incrementAndGet();
+            return new CompletableFuture<>();
+        }, warmed::incrementAndGet, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
+
+        client.warmUp();
+
+        assertThat(warmed).hasValue(1);
+        assertThat(called).as("예열은 판정을 부르지 않는다").hasValue(0);
+    }
+
+    @Test
+    void aFailingWarmUpDoesNotReachTheCaller() {
+        var client = DecisionsJudgeClient.withUsage((request, question, turnId) -> new CompletableFuture<>(), () -> {
+            throw new IllegalStateException("연결 실패");
+        }, PROMPT, new JudgeOutcomeValidator(0.6, 0.15), clock);
+
+        assertThatCode(client::warmUp).doesNotThrowAnyException();
+    }
+
+    @Test
+    void withoutAProviderWarmUpDoesNothing() {
+        assertThatCode(() -> new UnavailableJudgeClient(PROMPT.version()).warmUp())
+                .doesNotThrowAnyException();
+        assertThatCode(judge::warmUp).as("예열을 주지 않은 판정기는 아무것도 하지 않는다")
+                .doesNotThrowAnyException();
+        assertThat(stub.requestCount()).isZero();
     }
 
     @Test

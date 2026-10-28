@@ -65,6 +65,8 @@ class ErrorCodeTest {
         table.put("CHILD_EXISTS", List.of(409));
         // JIRA-266(편차 FT-1023-b): 아이 이름 욕설 거절
         table.put("CHILD_NAME_NOT_ALLOWED", List.of(400));
+        // JIRA-280: 관리자 API의 비관리자 거절
+        table.put("ADMIN_FORBIDDEN", List.of(403));
         return table;
     }
 

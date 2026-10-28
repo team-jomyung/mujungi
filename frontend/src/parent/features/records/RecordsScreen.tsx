@@ -10,16 +10,42 @@ import { PARENT_ROUTES, routeForTab } from "../../common/navigation";
 import { formatHhmm, minutesBetween } from "@/shared/copy/timeText";
 import { RESULT_TEMP_COPY as C, durationLabel } from "@/shared/copy/result";
 import { SavedReports } from "../../common/components/SavedReports";
+import { ActivityTypeFilter, type ActivityTypeFilterValue } from "../../common/components/ActivityTypeFilter";
+import { ACTIVITY_SELECTION_COPY, UNSTARTED_RECORD_COPY } from "@/shared/copy/result";
 export function RecordsScreen() {
   const router = useRouter(), params = useSearchParams(), api = useApiClient(), today = seoulDate();
   const initial = params.get("date"); const [selected, setSelected] = useState(validDate(initial) && initial <= today ? initial : today); const [month, setMonth] = useState(selected.slice(0, 7));
   const days = useQuery({ queryKey: ["record-days", month], queryFn: ({ signal }) => fetchRecordDays(api, month, signal) });
   const items = useQuery({ queryKey: ["records", selected], queryFn: ({ signal }) => fetchRecords(api, selected, signal) });
+  const [activityType, setActivityType] = useState<ActivityTypeFilterValue>("ALL");
+  const visibleItems = items.data?.filter(item => activityType === "ALL" || item.activityType === activityType);
   const select = (date: string) => { setSelected(date); router.replace(PARENT_ROUTES.recordsOn(date)); };
   return <div className="mj-screen"><header className="mj-header mj-header--records"><h1>{C.records}</h1><button type="button" data-testid="records-report" onClick={() => router.push(PARENT_ROUTES.reportNew())}>{C.reportCreate}</button></header><main className="mj-screen__body"><MonthCalendar month={month} selected={selected} today={today} counts={days.data} prefix="records" onSelect={select} onMonth={setMonth} /><h2 data-testid="records-day-title">{dateLabel(selected)} {new Intl.DateTimeFormat("ko-KR", { weekday: "long", timeZone: "UTC" }).format(new Date(`${selected}T00:00:00Z`))}</h2>
     {days.isError || items.isError ? <p role="alert">{C.recordReadFailed} <button onClick={() => { void days.refetch(); void items.refetch(); }}>{C.retry}</button></p> : null}
+    <ActivityTypeFilter id="records-activity-type" value={activityType} onChange={setActivityType} />
     {items.data?.length === 0 ? <p data-testid="records-empty-day">{C.emptyDay}</p> : null}{days.data?.length === 0 && items.data?.length === 0 ? <p data-testid="records-empty">{C.emptyRecords}</p> : null}
-    {items.data?.map(item => { const kind = item.activityType === "PRACTICE" ? "연습" : "자유대화"; const time = formatHhmm(item.startedAt) ?? "시각 미확인"; if (!item.linkable || item.finalStatus === "DECLINED") return <p key={item.sessionId} data-testid={`records-item-declined-${item.sessionId}`} aria-disabled="true">{time}　{kind}{C.declinedSuffix}</p>; return <button type="button" className="mj-card mj-button--block" key={item.sessionId} data-testid={`records-item-${item.sessionId}`} onClick={() => router.push(PARENT_ROUTES.recordDetail(item.sessionId))}>{time}　{kind}{item.activityType === "PRACTICE" ? ` · 목표 ${item.goalCount}개` : ""}{durationLabel(minutesBetween(item.startedAt, item.endedAt) ?? 0)}{item.interrupted || item.finalStatus === "FAILED" ? " · 중간에 끊김" : ""}</button>; })}
+    {items.data && items.data.length > 0 && visibleItems?.length === 0 ? <p role="status">{ACTIVITY_SELECTION_COPY.emptyFilter}</p> : null}
+    {visibleItems?.map(item => {
+      const kind = item.activityType === "PRACTICE" ? "연습" : "자유대화";
+      const startedTime = formatHhmm(item.startedAt);
+      if (!item.linkable || item.finalStatus === "DECLINED") return (
+        <article className="mj-card mj-record-unstarted" key={item.sessionId}
+          data-testid={`records-item-declined-${item.sessionId}`}
+          aria-labelledby={`record-kind-${item.sessionId}`}>
+          <div className="mj-record-unstarted__heading">
+            <h3 id={`record-kind-${item.sessionId}`}>
+              {item.activityType === "PRACTICE" ? ACTIVITY_SELECTION_COPY.practice : ACTIVITY_SELECTION_COPY.freeTalk}
+            </h3>
+            <span className="mj-record-unstarted__status">{UNSTARTED_RECORD_COPY.status}</span>
+          </div>
+          <p className="mj-record-unstarted__time">
+            {startedTime ? <>{UNSTARTED_RECORD_COPY.timeLabel} <time dateTime={item.startedAt!}>{startedTime}</time></> : UNSTARTED_RECORD_COPY.timeUnknown}
+          </p>
+        </article>
+      );
+      const time = startedTime ?? ACTIVITY_SELECTION_COPY.timeUnknown;
+      return <button type="button" className="mj-card mj-button--block" key={item.sessionId} data-testid={`records-item-${item.sessionId}`} onClick={() => router.push(PARENT_ROUTES.recordDetail(item.sessionId))}>{time}　{kind}{item.activityType === "PRACTICE" ? ` · 목표 ${item.goalCount}개` : ""}{durationLabel(minutesBetween(item.startedAt, item.endedAt) ?? 0)}{item.interrupted || item.finalStatus === "FAILED" ? " · 중간에 끊김" : ""}</button>;
+    })}
     <SavedReports />
   </main><BottomTabBar active="records" lockMessage={null} onLockedPress={() => {}} onNavigate={tab => router.push(routeForTab(tab))} /></div>;
 }

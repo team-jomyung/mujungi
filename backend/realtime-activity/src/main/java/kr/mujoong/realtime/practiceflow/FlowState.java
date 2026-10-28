@@ -48,7 +48,9 @@ public final class FlowState {
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */
-        REEXPLAIN
+        REEXPLAIN,
+        /** OPPORTUNITY: 유도 대화 뒤 상대가 기회 문장(승인 발화)을 말하는 중. 재생 뒤 아이 입력을 기다린다. */
+        OPPORTUNITY_LINE
     }
 
     private Phase phase = Phase.SCENE_INTRO;

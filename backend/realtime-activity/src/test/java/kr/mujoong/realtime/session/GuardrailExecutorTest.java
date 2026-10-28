@@ -57,7 +57,7 @@ class GuardrailExecutorTest {
         assertThat(h.link.outputs()).hasSize(1);
         // 검사가 도는 동안 쌓인 두 조각은 제브 한 번에 묶어 보내고, 한 번의 ALLOW로 순서대로 나간다
         assertThat(guard.count()).isEqualTo(2);
-        assertThat(guard.last().request().candidate()).isEqualTo("다음 조각마지막 조각");
+        assertThat(guard.last().request().candidate()).isEqualTo("다음 조각 마지막 조각");
         assertThat(guard.last().request().recentContext()).singleElement()
                 .satisfies(turn -> assertThat(turn.text()).isEqualTo("첫 조각"));
         guard.allow(); h.drain();
@@ -87,7 +87,7 @@ class GuardrailExecutorTest {
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
             assertThat(row.approvedForDisplay()).isTrue();
-            assertThat(row.text()).isEqualTo("첫 조각다음 조각마지막 조각");
+            assertThat(row.text()).isEqualTo("첫 조각 다음 조각 마지막 조각 ");
         });
     }
 
@@ -104,7 +104,7 @@ class GuardrailExecutorTest {
         h.drain();
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
-            assertThat(row.text()).isEqualTo("안내하는 말");
+            assertThat(row.text()).isEqualTo("안내하는 말 ");
         });
     }
 
@@ -123,7 +123,7 @@ class GuardrailExecutorTest {
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
             assertThat(row.approvedForDisplay()).isTrue();
-            assertThat(row.text()).isEqualTo("앞 응답의 말");
+            assertThat(row.text()).isEqualTo("앞 응답의 말 ");
         });
     }
 
@@ -138,7 +138,7 @@ class GuardrailExecutorTest {
         guard.block(); h.drain();
         assertThat(aiRows()).singleElement().satisfies(row -> {
             assertThat(row.assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
-            assertThat(row.text()).isEqualTo("안전한 말").doesNotContain("금지");
+            assertThat(row.text()).isEqualTo("안전한 말 ").doesNotContain("금지");
         });
     }
 
@@ -172,7 +172,7 @@ class GuardrailExecutorTest {
         h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[19200]));
         h.drain();
         guard.allow(); h.drain();
-        assertThat(guard.last().request().candidate()).isEqualTo("가나다");
+        assertThat(guard.last().request().candidate()).isEqualTo("가 나 다");
         guard.block(); h.drain();
         assertThat(h.link.outputs()).hasSize(1);
         assertThat(coordinator().hasQueued()).isFalse();
@@ -336,7 +336,8 @@ class GuardrailExecutorTest {
             String instructionId = h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).getLast().eventId();
             h.provider.last().emit(new ProviderEvent.InstructionsAppended(instructionId, 0, 0));
         }
-        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text, start == 0 ? 0 : start + margin, end + margin));
+        // 조각마다 어절 경계(끝 공백)를 둔다: 출력 단위는 어절 경계까지 이어 붙여 검사한다(2026-10-27, TimedOutputBuffer)
+        h.provider.last().emit(new ProviderEvent.OutputTranscriptDelta(text + " ", start == 0 ? 0 : start + margin, end + margin));
         if (start == 0) h.provider.last().emit(new ProviderEvent.OutputAudioDelta(new byte[(int) margin * 48]));
     }
 

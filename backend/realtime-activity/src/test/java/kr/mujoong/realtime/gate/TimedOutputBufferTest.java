@@ -83,11 +83,12 @@ class TimedOutputBufferTest {
 
     @Test
     void pollTextGivesTheTranscriptBeforeItsAudioHasArrivedOnceTheAudioHasStarted() {
-        buffer.transcript("안녕하세요", 0, 100, at, 1);
+        // 어절 경계(문장부호)로 끝나는 조각은 다음 조각을 기다리지 않고 낸다
+        buffer.transcript("안녕하세요.", 0, 100, at, 1);
         assertThat(buffer.pollText(1, 2, at, 2)).as("음성이 시작되기 전에는 내지 않는다").isNull();
         buffer.audio(new byte[480], 0);
         var unit = buffer.pollText(1, 2, at, 3);
-        assertThat(unit.sealed().transcript()).isEqualTo("안녕하세요");
+        assertThat(unit.sealed().transcript()).isEqualTo("안녕하세요.");
         assertThat(unit.sealed().totalBytes()).as("음성은 따로 꺼낸다").isZero();
         assertThat(unit.sealed().complete()).isTrue();
         assertThat(unit.endByte()).isEqualTo(100L * 48);
@@ -97,10 +98,10 @@ class TimedOutputBufferTest {
     @Test
     void pollTextMergesATranscriptThatLiesEntirelyInTheTrimmedMarginIntoTheNextUnit() {
         buffer.transcript("잘린 앞말", 0, 100, at, 1);
-        buffer.transcript("새 말", 100, 800, at, 2);
+        buffer.transcript("새 말.", 100, 800, at, 2);
         buffer.audio(new byte[4800], 700 * 48);
         var unit = buffer.pollText(1, 2, at, 3);
-        assertThat(unit.sealed().transcript()).isEqualTo("잘린 앞말새 말");
+        assertThat(unit.sealed().transcript()).isEqualTo("잘린 앞말새 말.");
         assertThat(unit.endByte()).isEqualTo(800L * 48);
     }
 
@@ -140,6 +141,40 @@ class TimedOutputBufferTest {
         assertThat(trailing.sealed().transcript()).isEqualTo("?");
         assertThat(trailing.endByte()).isEqualTo(120 * 48);
         assertThat(buffer.hasPendingText()).isFalse();
+    }
+
+    /** 2026-10-27 실키: "개념"이 "개" | "념" 조각으로 갈려 "기본 개"만 따로 검사돼 제브가 욕설로 막았다. 단위는 어절 경계까지 이어 붙인다. */
+    @Test
+    void aWordSplitAcrossTranscriptDeltasIsCheckedAsOneUnit() {
+        buffer.transcript("기본 개", 0, 100, at, 1);
+        buffer.audio(new byte[480], 0);
+        assertThat(buffer.pollText(1, 2, at, 2)).as("낱말 중간에서 끝난 조각은 다음 조각을 기다린다").isNull();
+        buffer.transcript("념은", 100, 160, at, 3);
+        buffer.transcript(" 알고 있어.", 160, 300, at, 4);
+        var first = buffer.pollText(1, 2, at, 5);
+        assertThat(first.sealed().transcript()).isEqualTo("기본 개념은");
+        assertThat(first.endByte()).as("이어 붙인 조각의 끝까지").isEqualTo(160L * 48);
+        assertThat(buffer.pollText(1, 2, at, 6).sealed().transcript()).isEqualTo(" 알고 있어.");
+        assertThat(buffer.hasPendingText()).isFalse();
+    }
+
+    @Test
+    void theLastWordHeldForABoundaryIsReleasedOnceTheResponseIsQuiet() {
+        buffer.transcript("좋아", 0, 100, at, 1);
+        buffer.audio(new byte[100 * 48], 0);
+        assertThat(buffer.pollText(1, 2, at, 2)).isNull();
+        var trailing = buffer.pollTrailingText(1, 2, at, 3);
+        assertThat(trailing.sealed().transcript()).isEqualTo("좋아");
+        assertThat(trailing.endByte()).isEqualTo(100L * 48);
+        assertThat(buffer.hasPendingText()).isFalse();
+    }
+
+    @Test
+    void aVeryLongRunWithoutABoundaryIsStillReleasedAtTheCharacterCap() {
+        String run = "가".repeat(TimedOutputBuffer.WORD_UNIT_MAX_CHARS);
+        buffer.transcript(run, 0, 100, at, 1);
+        buffer.audio(new byte[480], 0);
+        assertThat(buffer.pollText(1, 2, at, 2).sealed().transcript()).isEqualTo(run);
     }
 
     @Test

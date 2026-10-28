@@ -35,7 +35,15 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const toggleSelected = (id: string) => setSelected((before) => {
     const available = new Set(visible.map((goal) => goal.goalSelectionId));
     const after = new Set([...before].filter((key) => available.has(key)));
-    if (after.has(id)) after.delete(id); else if (after.size < MAX_PRACTICE_GOALS && available.has(id)) after.add(id);
+    if (after.has(id)) after.delete(id);
+    else if (available.has(id)) {
+      // 상한이 1개면 다른 목표를 고를 때 앞 선택을 바꾼다. 상한이 더 크면 상한에서 더 담지 않는다
+      if (after.size >= MAX_PRACTICE_GOALS) {
+        if (MAX_PRACTICE_GOALS !== 1) return after;
+        after.clear();
+      }
+      after.add(id);
+    }
     return after;
   });
 
@@ -56,7 +64,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
           return (
             <li key={id} className="mj-practice__goal" data-testid={`goal-${id}`} data-selected={checked} aria-busy={busy}>
               <label className="mj-practice__select">
-                <input type="checkbox" checked={checked} disabled={startLocked || (!checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
+                <input type="checkbox" checked={checked} disabled={startLocked || (MAX_PRACTICE_GOALS > 1 && !checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
                 <span className="mj-practice__text">
                   <span className="mj-practice__name">{goal.displayName}</span>
                   <span className="mj-practice__meta">{goalMeta(goal)}</span>

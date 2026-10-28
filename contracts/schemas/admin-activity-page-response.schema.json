@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-activity-page-response.schema.json",
+  "title": "관리자 활동 목록 응답(JIRA-280)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "page",
+    "pageSize",
+    "total"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "admin-common.schema.json#/$defs/ActivitySummary"
+      }
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pageSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

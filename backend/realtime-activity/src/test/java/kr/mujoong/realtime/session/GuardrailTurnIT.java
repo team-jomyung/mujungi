@@ -48,7 +48,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 class GuardrailTurnIT {
 
     private static final byte[] PCM = kr.mujoong.realtime.testing.RealtimeItEnvironment.audiblePcm(4800);
-    private static final String CLEAN = "나도 공룡 좋아해";
+    // 문장부호로 끝난다: 출력 단위는 어절 경계까지 이어 붙여 검사한다(2026-10-27)
+    private static final String CLEAN = "나도 공룡 좋아해.";
 
     private final FakeGuardrailClient guard = new FakeGuardrailClient(GuardrailMode.STUB);
     private RealtimeItEnvironment env;
@@ -154,20 +155,20 @@ class GuardrailTurnIT {
         awaitTrue(() -> guard.count() == 1, "첫 제브 요청");
         FakeGuardrailClient.Call first = guard.last();
 
-        env.provider.emitSpeech("티라노도 좋아하니", List.of(PCM, PCM));
+        env.provider.emitSpeech("티라노도 좋아하니?", List.of(PCM, PCM));
         RealtimeItEnvironment.sleep(1_200);
         assertThat(guard.count()).as("대기 구간은 앞 검사가 끝나기 전에 검사하지 않는다").isEqualTo(1);
 
         guard.allow(first);
         awaitTrue(() -> device.received(WsMessageType.OUTPUT_BEGIN).size() == 1, "첫 구간 송신");
         awaitTrue(() -> guard.count() == 2, "대기 구간의 제브 요청");
-        assertThat(guard.last().request().candidate()).isEqualTo("티라노도 좋아하니");
+        assertThat(guard.last().request().candidate()).isEqualTo("티라노도 좋아하니?");
 
         guard.allow();
         awaitTrue(() -> device.received(WsMessageType.OUTPUT_BEGIN).size() == 2, "대기 구간 송신");
         // 같은 응답에서 나온 두 출력 단위는 보호자 화면에서 한 행으로, 응답이 끝나고 두 단위가 모두 정리된 뒤 한꺼번에 나온다
         awaitTrue(() -> visibleAiRows().size() == 1, "승인된 AI 행 하나");
-        assertThat(visibleAiRows()).extracting(TranscriptRow::text).containsExactly(CLEAN + "티라노도 좋아하니");
+        assertThat(visibleAiRows()).extracting(TranscriptRow::text).containsExactly(CLEAN + "티라노도 좋아하니?");
     }
 
     // ---- 도우미 ----
