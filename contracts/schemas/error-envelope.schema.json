@@ -46,7 +46,8 @@
         "GOOGLE_AUTH_FAILED",
         "CHILD_NOT_REGISTERED",
         "CHILD_EXISTS",
-        "CHILD_NAME_NOT_ALLOWED"
+        "CHILD_NAME_NOT_ALLOWED",
+        "ADMIN_FORBIDDEN"
       ]
     },
     "message": {

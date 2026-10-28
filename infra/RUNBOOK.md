@@ -712,6 +712,24 @@ mj config --quiet                       # 유효성만(값을 펼치는 config�
 
 `mj`는 `/opt/mujoong/bin/mj`다. 11/2 측정 창의 스택 내리기만 `mj --measurement-window down`(`-v` 금지)을 쓴다(13절).
 
+### 10.1 관리자 등록 · 회수 (JIRA-280) [호스트]
+
+관리자 화면(`/admin`)과 관리자 API(`/api/admin/**`)는 기존 보호자 로그인을 그대로 쓰고, 서버가 요청마다 `core.core_admin_account`에서
+그 보호자가 `ACTIVE`인지 확인한다. 등록 화면 · 등록 API는 없으므로 아래 SQL로만 등록 · 회수한다. 대상자는 먼저 보호자 화면에서
+구글 로그인을 한 번 해 계정을 만들어야 한다. 보호자 id는 대상자 본인에게 확인받고, 저장소 · 채팅에 붙여 넣지 않는다.
+
+```bash
+# 등록(이미 있으면 다시 ACTIVE로). <보호자 id> 자리에 대상 보호자의 UUID를 넣는다
+mj exec postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -h "$(hostname -i | cut -d" " -f1)" -U postgres -d mujoong -v ON_ERROR_STOP=1 -c "insert into core.core_admin_account (guardian_id, status, created_at, updated_at) values ('"'"'<보호자 id>'"'"', '"'"'ACTIVE'"'"', now(), now())
+      on conflict (guardian_id) do update set status = '"'"'ACTIVE'"'"', updated_at = now()"'
+# 회수(다음 요청부터 403 ADMIN_FORBIDDEN)
+mj exec postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -h "$(hostname -i | cut -d" " -f1)" -U postgres -d mujoong -v ON_ERROR_STOP=1 -c "update core.core_admin_account set status = '"'"'REVOKED'"'"', updated_at = now() where guardian_id = '"'"'<보호자 id>'"'"'"'
+```
+
+- 보호자 계정이 지워지면 관리자 행도 함께 지워진다(외래 키 `ON DELETE CASCADE`).
+- 관리자의 활동 상세 조회(대화 원문)는 사건 줄 `ADMIN_RECORD_VIEWED`(component `core-api/AdminQuery`)로 남는다. `ownerHash`는 활동,
+  `viewerHash`는 관리자의 해시이고 원문 · id 원문은 없다.
+
 ## 11. 백업 · 복원 (infra-spec 4.4 · reliability-design 2.12)
 
 백업 트리거 4종은 같은 스크립트(`/opt/mujoong/backup/backup.sh`)를 `flock`으로 겹침 없이 부른다: 정기 03:00 KST(backup 컨테이너의

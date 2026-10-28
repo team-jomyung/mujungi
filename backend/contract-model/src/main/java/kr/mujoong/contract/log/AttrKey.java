@@ -86,7 +86,8 @@ public enum AttrKey {
     CLOSE_CODE("closeCode", ValueType.NUMBER, null),
     // INTERNAL_HTTP
     TARGET("target", ValueType.ENUM, Set.of(
-            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH", "PRACTICE_SCENARIO")),
+            "SESSION_START", "SESSION_END", "SESSION_VIEW", "VERIFY_TOKEN", "DEVICE_STATUS", "EVENT_PUBLISH", "PRACTICE_SCENARIO",
+            "ADMIN_FACTS", "ADMIN_USAGE")),
     OUTCOME("outcome", ValueType.ENUM, Set.of("OK", "TIMEOUT", "CONN_ERROR", "HTTP_4XX", "HTTP_5XX", "BREAKER_OPEN")),
     STATUS_CODE("statusCode", ValueType.NUMBER, null),
     DURATION_MS("durationMs", ValueType.NUMBER, null),
@@ -159,7 +160,9 @@ public enum AttrKey {
             "FORBIDDEN_DICTIONARY", "NUMBER_GUARD", "DUPLICATE", "OVER_LIMIT", "CHECK_EMPTY", "CHECK_QUOTE", "CHECK_NUMBER",
             "CHECK_DICTIONARY", "CHECK_CLASSIFIER")),
     DROP_FIELD("dropField", ValueType.ENUM, Set.of("DISPLAY_NAME", "DISPLAY_EVIDENCE", "TARGET_EXPRESSION", "REASON_TEXT",
-            "SKILL_REF", "SITUATION", "PARTNER", "INTENT", "EXPRESSION", "EVIDENCE", "NONE"));
+            "SKILL_REF", "SITUATION", "PARTNER", "INTENT", "EXPRESSION", "EVIDENCE", "NONE")),
+    // ADMIN_RECORD_VIEWED(JIRA-280): 열람한 관리자의 ownerHash(OwnerHasher 12자 16진). 관리자 id 원문은 싣지 않는다
+    VIEWER_HASH("viewerHash", ValueType.LABEL, null);
 
     /** 값 형식(OD-1 표). */
     public enum ValueType {

@@ -76,7 +76,9 @@ public final class EventLog {
         /** U9 Luna 호출부(core-api/LunaClient, BR6.3). 두 앱이 같은 이름을 각자 쓴다(코드 공유 없음, R-F5). */
         CORE_LUNA_CLIENT(App.CORE_API, "LunaClient"),
         /** U9 Luna 호출부(realtime/LunaClient, BR6.3). */
-        REALTIME_LUNA_CLIENT(App.REALTIME, "LunaClient");
+        REALTIME_LUNA_CLIENT(App.REALTIME, "LunaClient"),
+        /** JIRA-280 관리자 조회(core-api/admin). */
+        ADMIN_QUERY(App.CORE_API, "AdminQuery");
 
         private final App app;
         private final String name;
