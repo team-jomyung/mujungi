@@ -22,12 +22,26 @@ class GoalCandidateGatewayTest {
         when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{List<OutputChecker.Draft> checks=i.getArgument(0);assertThat(checks).extracting(OutputChecker.Draft::id).containsExactly("goal-reason-0","goal-display-0","goal-name-0","goal-target-0");Map<String,String> result=new LinkedHashMap<>();for(var check:checks)result.put(check.id(),check.id().equals("goal-name-0")?null:check.text());return result;});
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).isEmpty();verify(checker,times(1)).check(anyList(),eq(deadline),any(Runnable.class));
     }
-    /** FT-1027-g: 목표 후보는 관찰된 지원 필요에서 만든다(goal-candidates.v2). 강점 강화로 후보를 채우던 v1은 이력으로만 남는다. */
-    @Test void sendsTheSupportNeedPromptVersionTwo(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());
-        assertThat(request.getValue().promptVersion()).isEqualTo("goal-candidates.v2");
+    /** FT-1027-g · FT-1027-i: 목표 후보는 관찰된 지원 필요에서 만든다(goal-candidates.v3). v3는 평가 기준표 P1 · P3(응답 · 화제)와 씨앗 정의 확인을 더한다. */
+    @Test void sendsTheSupportNeedPromptVersionThree(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());
+        assertThat(request.getValue().promptVersion()).isEqualTo("goal-candidates.v3");
         assertThat(request.getValue().instructions()).contains("실제로 어려움을 겪었거나 목표 관련 도움이 필요했던 의사소통 과제","이미 적절하게 사용한 표현만 있는 경우에도 빈 배열이다");
         // 서버 NumberGuard가 숫자 섞인 사유를 버리므로 지시문이 seq 번호를 evidence에만 쓰게 한다
-        assertThat(request.getValue().instructions()).contains("reasonText·displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다").doesNotContain("입력에 seq가 있으면 해당 seq로 근거를 연결한다");}
+        assertThat(request.getValue().instructions()).contains("reasonText·displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다").doesNotContain("입력에 seq가 있으면 해당 seq로 근거를 연결한다");
+        // PERFORM_RUBRIC P1(응답) · P3(화제)와 씨앗 정의로 다시 확인하는 문장. 모욕 · 무시하는 말 자체는 근거가 아니다(3-2)
+        assertThat(request.getValue().instructions()).contains("아이가 그에 답하지 않고 관련 없는 말을 했다","연결이나 알림 없이 자기 화제로 바꿨다",
+                "상대를 탓하거나 무시하는 말 자체는 응답·화제 기준의 근거가 아니다","그 seedId를 skillRef로 쓰고, 그 정의에 비추어 근거가 맞는지 다시 확인한다");}
+    /** FT-1027-i: AI가 같은 말을 되풀이한 구간은 보내지 않고, 그 구간의 아이 발화를 인용한 후보는 인용 검사에서 빠진다. */
+    @Test void repeatedAiSpanIsNotSentAndCannotGroundACandidate(){
+        var draft=new GoalCandidateValidatorTest().draft();draft.put("evidence",List.of(Map.of("utteranceSeq",4,"quote","너 왜 그 말만 반복해")));
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(draft))),"fake","goal-candidates.v3",Duration.ZERO,1,false));
+        var result=run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","AI","text","헷갈릴 수 있지."),Map.of("seq",2,"speaker","CHILD","text","사후세계에 갔어"),
+                Map.of("seq",3,"speaker","AI","text","음, 헷갈릴 수 있지."),Map.of("seq",4,"speaker","CHILD","text","너 왜 그 말만 반복해"),Map.of("seq",5,"speaker","AI","text","걱정되는구나."),Map.of("seq",6,"speaker","CHILD","text","응"))));
+        assertThat(result).isEmpty();
+        var capture=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(capture.capture());
+        assertThat(kr.mujoong.core.result.ResultData.objects(capture.getValue().input().get("transcript"))).extracting(row->((Number)row.get("seq")).intValue()).containsExactly(5,6);
+        assertThat(events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED)).singleElement().extracting(line->kr.mujoong.testsupport.log.LogCapture.attrs(line).get("dropReason")).isEqualTo("QUOTE_MISMATCH");
+    }
     @Test void usesGoalPurposeAndJobAttemptOneCall(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna,times(1)).call(request.capture());assertThat(request.getValue().purpose()).isEqualTo(LunaPurpose.GOAL_CANDIDATES);assertThat(request.getValue().outputMode()).isEqualTo(LunaRequest.OutputMode.CONTRACT);}
     @Test void removesIdentifiersAgeAndGuardianRawInput(){run(Map.of("guardianId",guardian,"childId",child,"age",8,"guardianInput","원문","audio","원음","transcript",List.of(Map.of("speaker","CHILD","seq",1,"text","합성이름 같이 할래"))));var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());String serialized=JsonCodec.shared().write(request.getValue().input());assertThat(serialized).doesNotContain("guardianId","childId","age","guardianInput","원문","원음","합성이름").contains("아이 같이 할래");}
     @Test void rejectsInvalidRoot(){when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult("{}","fake","goal-candidates.v1",Duration.ZERO,1,false));assertThatThrownBy(()->run(Map.of())).isInstanceOf(kr.mujoong.core.result.ResultAiException.class);}
@@ -81,7 +95,7 @@ class GoalCandidateGatewayTest {
         when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> all=new LinkedHashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))all.put(d.id(),d.text());return all;});
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).singleElement().extracting(GoalCandidateRepository.Draft::displayName).isEqualTo("다른 이름");
         var lines=events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED);
-        assertThat(lines).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs).isEqualTo(Map.of("promptVersion","goal-candidates.v2","candidateIndex",0,"candidatesProposed",2,"dropReason","NUMBER_GUARD","dropField","REASON_TEXT"));
+        assertThat(lines).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs).isEqualTo(Map.of("promptVersion","goal-candidates.v3","candidateIndex",0,"candidatesProposed",2,"dropReason","NUMBER_GUARD","dropField","REASON_TEXT"));
         assertThat(events.capture().lines()).noneMatch(line->line.contains("41번")||line.contains("같이 할래"));
     }
     @Test void secondClassifierDropKeepsOriginalIndexAndFirstFailingField(){

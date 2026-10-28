@@ -1805,6 +1805,11 @@ public final class SessionExecutor {
         }
 
         @Override
+        public void onStreamResumeExpired() {
+            ctx.transcripts().closeResumable();
+        }
+
+        @Override
         public void onResponseStallExpired() {
             SessionExecutor.this.onResponseStallExpired();
         }
@@ -3003,8 +3008,11 @@ public final class SessionExecutor {
                     }
                     streamedPracticeEnded = true;
                     finishStreamedPractice();
-                    // 응답이 끝났다: 모아 둔 AI 전사를 한 행으로 닫는다(검사 중인 단위가 남았으면 마지막 단위가 정리될 때 닫힌다)
-                    ctx.transcripts().endStream(now);
+                    // 응답이 조용함으로 끝났다: 모아 둔 AI 전사를 한 행으로 닫되, 같은 응답의 늦은 조각이 조용 시간 한 번 안에 오면
+                    // 같은 행에 이어 붙이도록 잠깐 열어 둔다(만기 · 아이 입력 · 서버 지시 · 세대 올림 때 닫는다. 검사 중인 단위가 남았으면
+                    // 마지막 단위가 정리될 때 닫힌다)
+                    ctx.transcripts().pauseStream(now);
+                    ctx.timers().arm(Kind.STREAM_RESUME, ctx.services().settings().segmentQuiet());
                     ctx.relay().setHolding(false);
                     onResponseEnded();
                 }
@@ -3121,6 +3129,8 @@ public final class SessionExecutor {
         timedOutput.reset();
         resetProgressive();
         ctx.transcripts().aiFinal("", false, now);
+        // 지시한 새 말은 앞 응답의 이어짐이 아니다
+        ctx.transcripts().closeResumable();
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().arm(Kind.PRACTICE_SEND_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = deferred.job().onFailure;
@@ -3226,6 +3236,8 @@ public final class SessionExecutor {
         timedOutput.reset();
         resetProgressive();
         ctx.transcripts().aiFinal("", false, now);
+        // 지시한 새 말은 앞 응답의 이어짐이 아니다
+        ctx.transcripts().closeResumable();
         ctx.timers().cancel(Kind.SEGMENT_QUIET);
         ctx.timers().arm(Kind.INSTRUCTION_WAIT, ctx.services().settings().instructionWait());
         instructionNotHeard = onFailure;
