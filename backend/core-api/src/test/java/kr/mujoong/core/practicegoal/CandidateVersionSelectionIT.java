@@ -38,4 +38,40 @@ class CandidateVersionSelectionIT {
     @Test void replacedResultRejectsOldHandleBeforePendingDelivery(){var v=version();fixture.publish();assertThat(repository.version(child,v.id())).isPresent();assertThatThrownBy(()->service.add(guardian,v.id())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(repository.list(guardian)).isEmpty();}
     @Test void replacedResultKeepsAlreadySelectedSnapshotReadable(){var v=version();var selected=service.add(guardian,v.id()).orElseThrow();fixture.publish();assertThat(repository.saved(child,selected.id()).orElseThrow().candidateVersion()).isEqualTo(1);}
     @Test void removedSourceCannotBeSelectedEvenBeforeCleanup(){var v=version();db.jdbc().update("delete from core.core_activity_record where session_id=:s",Map.of("s",session));assertThatThrownBy(()->service.add(guardian,v.id())).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);}
+    UUID savedGoal(int index){
+        var v=repository.register(child,session,fixture.result+":"+index,fixture.pending().candidates().getFirst(),clock.now());
+        return service.add(guardian,v.id()).orElseThrow().id();
+    }
+    void limitError(Runnable request){
+        assertThatThrownBy(request::run).isInstanceOfSatisfying(kr.mujoong.core.common.error.CoreApiException.class,
+            error->assertThat(error.code()).isEqualTo(kr.mujoong.contract.error.ErrorCode.FAVORITE_LIMIT_REACHED));
+    }
+    @Test void generatedFavoritesAllowFiveAndIdempotentUpdatesButRejectTheSixth(){
+        List<UUID> ids=new ArrayList<>();for(int i=0;i<6;i++)ids.add(savedGoal(i));
+        for(int i=0;i<5;i++)service.favorite(guardian,ids.get(i),true);
+        limitError(()->service.favorite(guardian,ids.get(5),true));
+        assertThat(service.favorite(guardian,ids.getFirst(),true).isFavorite()).isTrue();
+        service.favorite(guardian,ids.getFirst(),false);
+        assertThat(service.favorite(guardian,ids.get(5),true).isFavorite()).isTrue();
+        assertThat(repository.list(guardian).stream().filter(kr.mujoong.core.practice.GoalSelection::isFavorite)).hasSize(5);
+    }
+    @Test void concurrentFavoritesCannotBothTakeTheFifthSlot(){
+        for(int i=0;i<4;i++)service.favorite(guardian,savedGoal(i),true);
+        UUID a=savedGoal(4),b=savedGoal(5);
+        java.util.function.Function<UUID,Boolean> attempt=id->{try{service.favorite(guardian,id,true);return true;}
+            catch(kr.mujoong.core.common.error.CoreApiException e){assertThat(e.code()).isEqualTo(kr.mujoong.contract.error.ErrorCode.FAVORITE_LIMIT_REACHED);return false;}};
+        var first=db.start(()->attempt.apply(a));var second=db.start(()->attempt.apply(b));
+        assertThat(List.of(DbTestSupport.await(first),DbTestSupport.await(second))).containsExactlyInAnyOrder(true,false);
+        assertThat(repository.list(guardian).stream().filter(kr.mujoong.core.practice.GoalSelection::isFavorite)).hasSize(5);
+    }
+    @Test void restoreCannotExceedFiveAndCanRetryAfterFreeingASlot(){
+        List<UUID> ids=new ArrayList<>();for(int i=0;i<6;i++)ids.add(savedGoal(i));
+        for(int i=0;i<5;i++)service.favorite(guardian,ids.get(i),true);
+        service.delete(guardian,ids.getFirst(),java.time.Duration.ofSeconds(30));
+        service.favorite(guardian,ids.get(5),true);
+        limitError(()->service.restore(guardian,ids.getFirst()));
+        assertThat(repository.saved(child,ids.getFirst())).isEmpty();
+        service.favorite(guardian,ids.get(5),false);
+        assertThat(service.restore(guardian,ids.getFirst()).isFavorite()).isTrue();
+    }
 }

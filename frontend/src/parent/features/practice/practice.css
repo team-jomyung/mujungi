@@ -19,4 +19,7 @@
 .mj-practice__start { margin-top: auto; }
 .mj-practice__notice { font-size: 0.875rem; color: var(--color-text-secondary); text-align: center; }
 .mj-practice__loading { color: var(--color-text-secondary); }
+.mj-practice__count { margin-inline-start: calc(var(--space-unit) * 2); font-weight: 400; }
+.mj-practice__pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-unit); margin-block: calc(var(--space-unit) * 3); }
+.mj-practice__pagination [role="status"] { text-align: center; font-size: 0.875rem; color: var(--color-text-secondary); }
 @media (hover: hover) { .mj-practice__icon:hover:not(:disabled) { background: var(--color-surface-base); } }

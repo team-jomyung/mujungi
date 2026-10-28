@@ -13,6 +13,7 @@ import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "./copy";
 import { usePracticeGoals } from "./usePracticeGoals";
 import { PracticeStartAction } from "./PracticeStartAction";
 import { MAX_PRACTICE_GOALS } from "./practiceStart";
+import { MAX_FAVORITE_GOALS, SAVED_GOALS_PAGE_SIZE } from "./goalList";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useTiming } from "@/shared/timing/TimingProvider";
@@ -31,7 +32,13 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startLocked, setStartLocked] = useState(false);
   const [showReturnedFailure, setShowReturnedFailure] = useState(returnedFailed);
+  const [savedPage, setSavedPage] = useState(0);
   const visible = goals.items ?? [];
+  const favorites = visible.filter(goal => goal.isFavorite);
+  const saved = visible.filter(goal => !goal.isFavorite);
+  const savedPageCount = Math.max(1, Math.ceil(saved.length / SAVED_GOALS_PAGE_SIZE));
+  const currentSavedPage = Math.min(savedPage, savedPageCount - 1);
+  const pageItems = saved.slice(currentSavedPage * SAVED_GOALS_PAGE_SIZE, (currentSavedPage + 1) * SAVED_GOALS_PAGE_SIZE);
   const selectedCount = visible.filter((goal) => selected.has(goal.goalSelectionId)).length;
 
   const toggleSelected = (id: string) => setSelected((before) => {
@@ -57,7 +64,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
 
   const group = (items: readonly GoalSelection[], favorite: boolean) => items.length === 0 ? null : (
     <section className="mj-practice__group" aria-labelledby={favorite ? "practice-favorites" : "practice-saved"}>
-      <h2 id={favorite ? "practice-favorites" : "practice-saved"}>{favorite ? PRACTICE_COPY.favorites : PRACTICE_COPY.saved}</h2>
+      <h2 id={favorite ? "practice-favorites" : "practice-saved"}>{favorite ? PRACTICE_COPY.favorites : PRACTICE_COPY.saved}{favorite ? <span className="mj-practice__count">{PRACTICE_COPY.favoriteCount(favorites.length)}</span> : null}</h2>
       <ul className="mj-practice__list">
         {items.map((goal) => {
           const id = goal.goalSelectionId;
@@ -73,7 +80,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
                   {goals.deletingIds.has(id) ? <span role="status" className="mj-practice__meta">{PRACTICE_TEMP_COPY.deleting}</span> : null}
                 </span>
               </label>
-              <button type="button" className="mj-practice__icon" aria-label={PRACTICE_TEMP_COPY.favorite(goal.displayName, goal.isFavorite)} aria-pressed={goal.isFavorite} disabled={busy} onClick={() => { void goals.toggleFavorite(goal); }}>
+              <button type="button" className="mj-practice__icon" aria-label={PRACTICE_TEMP_COPY.favorite(goal.displayName, goal.isFavorite)} aria-pressed={goal.isFavorite} aria-describedby={!goal.isFavorite && favorites.length >= MAX_FAVORITE_GOALS ? "practice-favorite-limit" : undefined} disabled={busy || (!goal.isFavorite && favorites.length >= MAX_FAVORITE_GOALS)} onClick={() => { void goals.toggleFavorite(goal); }}>
                 <span aria-hidden="true">{goal.isFavorite ? PRACTICE_COPY.favoriteIcon : PRACTICE_COPY.notFavoriteIcon}</span>
               </button>
               <button type="button" className="mj-practice__icon" aria-label={PRACTICE_TEMP_COPY.remove(goal.displayName)} disabled={busy} onClick={() => goals.scheduleDelete(goal)}>
@@ -110,7 +117,16 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
             <ol className="mj-practice__steps">{PRACTICE_COPY.steps.map((step) => <li key={step}>{step}</li>)}</ol>
             <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.dismissUndo}>{PRACTICE_COPY.goFree}</Link>
           </section>
-        ) : <><p id="practice-selection-limit">{PRACTICE_COPY.selectionLimit}</p>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
+        ) : <>
+          <p id="practice-selection-limit">{PRACTICE_COPY.selectionLimit}</p>
+          <p id="practice-favorite-limit" className="mj-practice__meta">{PRACTICE_COPY.favoriteLimit}</p>
+          {group(favorites, true)}{group(pageItems, false)}
+          {savedPageCount > 1 ? <nav className="mj-practice__pagination" aria-label={PRACTICE_COPY.pages}>
+            <button type="button" className="mj-button" disabled={currentSavedPage === 0 || startLocked} onClick={() => setSavedPage(currentSavedPage - 1)}>{PRACTICE_COPY.previousPage}</button>
+            <span role="status">{PRACTICE_COPY.pageCount(currentSavedPage + 1, savedPageCount, saved.length)}</span>
+            <button type="button" className="mj-button" disabled={currentSavedPage + 1 >= savedPageCount || startLocked} onClick={() => setSavedPage(currentSavedPage + 1)}>{PRACTICE_COPY.nextPage}</button>
+          </nav> : null}
+        </>}
         {entry.startMessage !== null ? <p className="mj-reason-card" role="status" data-testid="practice-readiness">{entry.startMessage}</p> : null}
         {goals.items !== undefined && (visible.length > 0 || startLocked) ? (
           <PracticeStartAction selected={[...selected]} owned={visible.map((goal) => goal.goalSelectionId)} port={port}
