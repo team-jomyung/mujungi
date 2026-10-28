@@ -19,8 +19,8 @@ export interface AdminHttpOptions {
 }
 
 /**
- * 조회 경로와 DTO는 제안이다.
- * 모든 경로의 서버 인가를 확인한 뒤 활성화한다.
+ * 관리자 조회 계약의 경로와 DTO를 사용한다.
+ * 모든 경로의 관리자 인가는 서버가 검사한다.
  */
 export function createHttpAdminSource({
   timeoutMs,
@@ -98,7 +98,7 @@ export function createHttpAdminSource({
     if (filter.type !== "ALL") {
       params.set("type", filter.type);
     }
-    for (const key of ["query", "guardianId", "childId"] as const) {
+    for (const key of ["query", "guardianId", "childId", "deviceId"] as const) {
       if (filter[key]) {
         params.set(key, filter[key]);
       }

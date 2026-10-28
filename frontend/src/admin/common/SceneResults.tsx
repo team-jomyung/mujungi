@@ -1,6 +1,6 @@
 import type { SceneResult } from "../data/types";
 import { Badge } from "./Badge";
-import { ADMIN_COPY as C, consentLabel, helpKind, judgmentLabel } from "./copy";
+import { ADMIN_COPY as C, consentLabel, helpKind, helpOfferLabel, helpResponseLabel, judgmentLabel } from "./copy";
 import { responseTiming, times } from "./format";
 
 export function SceneResults({ scenes, showHelp = false }: { scenes: SceneResult[]; showHelp?: boolean }) {
@@ -17,7 +17,8 @@ export function SceneResults({ scenes, showHelp = false }: { scenes: SceneResult
           <dl className="mj-admin-scene-facts">
             <div><dt>{C.rationale}</dt><dd>{scene.reason ?? C.noneRecorded}</dd></div>
             <div><dt>{C.timing}</dt><dd>{responseTiming(scene.responseTiming)}</dd></div>
-            <div><dt>{C.responses}</dt><dd>{consentLabel[scene.helpResponse ?? "NONE"]}</dd></div>
+            <div><dt>{C.helpOffer}</dt><dd>{helpOfferLabel[scene.helpOffer]}</dd></div>
+            <div><dt>{C.responses}</dt><dd>{helpResponseLabel(scene.helpOffer, scene.helpResponse)}</dd></div>
             {scene.abstainReason && <div><dt>{C.abstain}</dt><dd>{scene.abstainReason}</dd></div>}
             {scene.variantSkipReason && <div><dt>{C.skipped}</dt><dd>{scene.variantSkipReason}</dd></div>}
             <div><dt>{C.retries}</dt><dd>{times(scene.retryCount)}</dd></div>

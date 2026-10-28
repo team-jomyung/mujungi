@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AdminFilter } from "../data/types";
+import { MAX_ADMIN_QUERY_LENGTH } from "../data/filters";
 import { ADMIN_COPY as C } from "./copy";
 
 export function AdminToolbar({ filter, effectiveFilter, quality, onChange }: {
@@ -26,7 +27,7 @@ export function AdminToolbar({ filter, effectiveFilter, quality, onChange }: {
         event.preventDefault();
         onChange({ ...filter, query: search.trim() || undefined });
       }}>
-        <input type="search" aria-label={C.search} placeholder={C.searchPlaceholder} value={search} onChange={(event) => {
+        <input type="search" aria-label={C.search} placeholder={C.searchPlaceholder} maxLength={MAX_ADMIN_QUERY_LENGTH} value={search} onChange={(event) => {
           setSearch(event.target.value);
           if (!event.target.value) onChange({ ...filter, query: undefined });
         }} />

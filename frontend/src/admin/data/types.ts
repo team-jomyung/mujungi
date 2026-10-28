@@ -1,6 +1,9 @@
-/** 관리자 화면의 제안 DTO다. 구현된 백엔드 계약이 아니며 서버 연결 전에 합의해야 한다. */
+/** 관리자 조회 API 계약에 맞춘 화면 DTO다. */
 export type ActivityType = "FREE_TALK" | "PRACTICE";
 export type ActivityStatus = "COMPLETED" | "INTERRUPTED" | "FAILED_TO_START";
+export type EndCategory = "ENDED" | "ENDED_UNCONFIRMED" | "INTERRUPTED" | "DECLINED" | "NOT_STARTED";
+export type HelpOffer = "OFFERED" | "REQUESTED" | "NOT_OFFERED" | "UNKNOWN";
+export type UsdAmount = string;
 export type CollectionStatus = "COMPLETE" | "PARTIAL" | "UNKNOWN" | "NOT_COLLECTED";
 export type ConsentAnswer = "ACCEPT" | "DECLINE" | "REQUESTED" | "UNCLEAR" | null;
 export type HelpKind = "FOCUS_HELP" | "SITUATION_EXPLAIN" | "EXPRESSION_EXAMPLE";
@@ -11,6 +14,7 @@ export interface AdminFilter {
   query?: string;
   guardianId?: string;
   childId?: string;
+  deviceId?: string;
   status?: "ALL" | ActivityStatus;
 }
 
@@ -35,6 +39,7 @@ export interface ActivitySummary {
   childName: string;
   type: ActivityType;
   status: ActivityStatus;
+  endCategory: EndCategory;
   startedAt: string;
   endedAt: string | null;
   durationSeconds: number | null;
@@ -67,9 +72,10 @@ export interface SceneResult {
   abstainReason: string | null;
   /** 도움을 실행하지 않은 경우도 포함하는 장면 단위 제안 응답 값이다. */
   helpResponse: ConsentAnswer;
+  helpOffer: HelpOffer;
   variantSkipReason: string | null;
-  retryCount: number;
-  reExplanationCount: number;
+  retryCount: number | null;
+  reExplanationCount: number | null;
   helpRecords: HelpRecord[];
 }
 
@@ -133,7 +139,9 @@ export interface Quality {
     declined: number;
     unclear: number;
     requested: number;
-    unanswered: number;
+    unanswered: null;
+    notOffered: number;
+    unknown: number;
     rate: number | null;
   };
   helpTypes: {
@@ -142,6 +150,8 @@ export interface Quality {
   }[];
   focusExamples: number;
   records: QualityRecord[];
+  recordsTotal: number;
+  recordsLimit: number;
 }
 
 export type CostCategory = "ACTIVITY" | "FAILED_TO_START" | "NON_ACTIVITY" | "UNLINKED";
@@ -156,7 +166,7 @@ export interface CostPhase {
   cachedInputTokens: number | null;
   cacheWriteTokens: number | null;
   reasoningTokens: number | null;
-  estimatedUsd: number | null;
+  estimatedUsd: UsdAmount | null;
   status: CollectionStatus;
   /** 서버가 제공하는 표시용 계산 설명이다. 브라우저는 단가를 적용하지 않는다. */
   calculation: string | null;
@@ -174,7 +184,7 @@ export interface CostSummary {
   voiceSeconds: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
-  estimatedUsd: number | null;
+  estimatedUsd: UsdAmount | null;
 }
 
 export interface CostDetail extends CostSummary {
@@ -184,11 +194,11 @@ export interface CostDetail extends CostSummary {
 
 export interface Costs {
   totals: {
-    collectedUsd: number | null;
-    activityUsd: number | null;
-    failedStartUsd: number | null;
-    nonActivityUsd: number | null;
-    unlinkedUsd: number | null;
+    collectedUsd: UsdAmount | null;
+    activityUsd: UsdAmount | null;
+    failedStartUsd: UsdAmount | null;
+    nonActivityUsd: null;
+    unlinkedUsd: UsdAmount | null;
     unknownCount: number;
   };
   activities: Page<CostSummary>;

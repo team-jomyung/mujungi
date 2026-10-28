@@ -18,7 +18,7 @@ export function ActivityContent({ source, filter, tab, onTab }: ActivityContentP
   const scopedFilter = {
     ...filter,
     status,
-    ...(child ? { childId: child.id, guardianId: child.guardianId } : {}),
+    ...(child ? { childId: child.id, guardianId: child.guardianId, deviceId: child.deviceId } : {}),
   };
 
   return (

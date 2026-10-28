@@ -25,11 +25,11 @@ describe("관리자 합성 데이터", () => {
     const detail = await source.costDetail("COST-MJ-1092");
     const voice = detail.phases.find((phase) => phase.phase === "VOICE");
     expect(voice?.voiceSeconds).toBe(246);
-    expect(voice?.estimatedUsd).toBeCloseTo(246 / 60 * 0.05, 12);
+    expect(voice?.estimatedUsd).toBe("0.205");
     expect(voice?.calculation).toContain("합성 예시");
     expect(voice?.calculation).not.toContain("환율");
-    expect(detail.estimatedUsd).toBeCloseTo(0.2074, 12);
-    expect((await source.costDetail("COST-OTHER-01")).estimatedUsd).toBe(0.0009);
+    expect(detail.estimatedUsd).toBe("0.2074");
+    expect((await source.costDetail("COST-OTHER-01")).estimatedUsd).toBe("0.0009");
   });
   it("기간·대화 유형·아이·보호자 필터를 적용하고 페이지가 겹치지 않는다", async () => {
     const source = createMockAdminSource(today);
@@ -71,16 +71,96 @@ describe("관리자 합성 데이터", () => {
     expect(known.phases[0].cachedInputTokens).toBe(0);
     const costs = await source.costs(filter, 0);
     expect(costs.totals.unknownCount).toBeGreaterThan(0);
-    expect(costs.otherCosts.find(item => item.category === "UNLINKED")?.estimatedUsd).toBeNull();
-    expect(costs.totals.collectedUsd).toBeCloseTo((costs.totals.activityUsd ?? 0) + (costs.totals.failedStartUsd ?? 0) + (costs.totals.nonActivityUsd ?? 0), 12);
+    expect(costs.otherCosts.find(item => item.id === "COST-UNLINKED-01")?.estimatedUsd).toBeNull();
+    expect(costs.totals.nonActivityUsd).toBeNull();
+    expect(Number(costs.totals.collectedUsd)).toBeCloseTo(
+      Number(costs.totals.activityUsd ?? "0") + Number(costs.totals.failedStartUsd ?? "0")
+        + Number(costs.totals.unlinkedUsd ?? "0"),
+      12,
+    );
     const timestamps = costs.activities.items.map(item => Date.parse(item.observedAt));
     expect(timestamps).toEqual([...timestamps].sort((a, b) => b - a));
   });
+  it("미확인 건수는 목록 항목 수가 아니라 계산하지 못한 호출 수다", async () => {
+    const source = createMockAdminSource(today);
+    const first = await source.costs(filter, 0);
+    const pages = await Promise.all(Array.from(
+      { length: Math.ceil(first.activities.total / first.activities.pageSize) },
+      (_, page) => source.costs(filter, page),
+    ));
+    const items = [...pages.flatMap(page => page.activities.items), ...first.otherCosts];
+    const details = await Promise.all(items.map(item => source.costDetail(item.id)));
+    const unmeasuredCalls = details.flatMap(detail => detail.phases)
+      .filter(phase => phase.estimatedUsd === null)
+      .reduce((total, phase) => total + phase.calls, 0);
+    expect(first.totals.unknownCount).toBe(unmeasuredCalls);
+    expect(first.totals.unknownCount).toBeGreaterThan(items.filter(item => item.estimatedUsd === null).length);
+  });
+  it("미수집 활동은 활동 시각으로 목록에 표시하고 금액과 토큰을 미확인으로 유지한다", async () => {
+    const source = createMockAdminSource(today);
+    const detail = await source.costDetail("COST-MJ-1058");
+    const activity = await source.activity("MJ-1058");
+    expect(detail.status).toBe("NOT_COLLECTED");
+    expect(detail.estimatedUsd).toBeNull();
+    expect(detail.phases).toEqual([]);
+    const result = await source.costs({ ...filter, from: "2026-10-14", to: "2026-10-14" }, 0);
+    expect(result.activities.total).toBe(3);
+    expect(result.activities.items).toContainEqual(expect.objectContaining({
+      id: detail.id,
+      activityId: activity.id,
+      observedAt: activity.startedAt,
+      status: "NOT_COLLECTED",
+      estimatedUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      voiceSeconds: null,
+    }));
+    expect(result.activities.items.every(item => item.status === "NOT_COLLECTED" && item.estimatedUsd === null)).toBe(true);
+    expect(result.totals.collectedUsd).toBeNull();
+    expect(result.totals.activityUsd).toBeNull();
+    expect(result.totals.unknownCount).toBe(0);
+  });
+  it("활동 행 없는 시작 실패 비용은 대화 외 목록에 두고 활동 필터 중에는 숨긴다", async () => {
+    const source = createMockAdminSource(today);
+    const all = await source.costs(filter, 0);
+    const preparation = all.otherCosts.filter(item => item.category === "FAILED_TO_START");
+    expect(preparation.length).toBeGreaterThan(0);
+    expect(preparation.every(item => item.activityId === null && item.childName === null && item.type === null)).toBe(true);
+    expect(all.activities.items.every(item => item.activityId !== null)).toBe(true);
+    expect(all.otherCosts.every(item => item.category !== "NON_ACTIVITY")).toBe(true);
+    expect(all.totals.nonActivityUsd).toBeNull();
+    expect((await source.costs({ ...filter, from: today, to: today }, 0)).otherCosts.length).toBeGreaterThan(0);
+    for (const condition of [
+      { type: "PRACTICE" as const },
+      { guardianId: "G-001" },
+      { childId: "C-002" },
+      { deviceId: "D-202" },
+      { status: "INTERRUPTED" as const },
+      { query: "아이" },
+    ]) {
+      expect((await source.costs({ ...filter, ...condition }, 0)).otherCosts).toEqual([]);
+    }
+  });
+  it("기기 필터와 품질 목록 전체 수를 유지하고 미래 날짜는 거절한다", async () => {
+    const source = createMockAdminSource(today);
+    const result = await source.activities({ ...filter, deviceId: "D-202" }, 0);
+    expect(result.total).toBeGreaterThan(0);
+    expect(result.items.every(item => item.deviceId === "D-202")).toBe(true);
+    expect((await source.activities({ ...filter, deviceId: "missing-device" }, 0)).total).toBe(0);
+    const quality = await source.quality(filter);
+    expect(quality.recordsTotal).toBe((await source.activities({ ...filter, type: "PRACTICE" }, 0)).total);
+    expect(quality.recordsLimit).toBe(100);
+    expect(quality.records.length).toBe(Math.min(quality.recordsTotal, quality.recordsLimit));
+    expect(quality.records.flatMap(record => record.scenes).some(scene => scene.retryCount === null)).toBe(true);
+    expect(validRange(today, "2026-10-27", today)).toBe(false);
+    expect(() => source.overview({ ...filter, to: "2026-10-27" })).toThrow(RangeError);
+  });
   it("명시적인 수락과 거절만 수락률의 분모로 사용한다", async () => {
     const quality = await createMockAdminSource(today).quality(filter);
-    const { accepted, declined, rate, requested, unclear, unanswered } = quality.acceptance;
+    const { accepted, declined, rate, requested, unclear, unanswered, notOffered, unknown } = quality.acceptance;
     expect(rate).toBe(accepted / (accepted + declined));
-    expect(requested + unclear + unanswered).toBeGreaterThan(0);
+    expect(requested + unclear + notOffered + unknown).toBeGreaterThan(0);
+    expect(unanswered).toBeNull();
     expect(quality.focusExamples).toBeLessThanOrEqual(quality.helpTypes.find(item => item.kind === "FOCUS_HELP")!.count);
     const answers = quality.records.flatMap(record => record.scenes.map(scene => scene.helpResponse));
     expect({
@@ -88,13 +168,15 @@ describe("관리자 합성 데이터", () => {
       declined,
       requested,
       unclear,
-      unanswered
+      notOffered,
+      unknown
     }).toEqual({
       accepted: answers.filter(answer => answer === "ACCEPT").length,
       declined: answers.filter(answer => answer === "DECLINE").length,
       requested: answers.filter(answer => answer === "REQUESTED").length,
       unclear: answers.filter(answer => answer === "UNCLEAR").length,
-      unanswered: answers.filter(answer => answer === null).length
+      notOffered: quality.records.flatMap(record => record.scenes).filter(scene => scene.helpOffer === "NOT_OFFERED").length,
+      unknown: quality.records.flatMap(record => record.scenes).filter(scene => scene.helpOffer === "UNKNOWN").length
     });
     expect(quality.records.flatMap(record => record.scenes).some(scene => scene.helpResponse === "DECLINE" && scene.helpRecords.length === 0)).toBe(true);
   });
@@ -112,7 +194,7 @@ describe("관리자 합성 데이터", () => {
       from: "0001-01-01"
     })).toThrow(RangeError);
   });
-  it("중첩 상세까지 제안 응답 스키마와 일치한다", async () => {
+  it("중첩 상세까지 관리자 응답 계약과 일치한다", async () => {
     const source = createMockAdminSource(today);
     const activity = await source.activity("MJ-1094");
     expect(parseActivity(activity)).toEqual(activity);
@@ -231,7 +313,8 @@ describe("관리자 HTTP 경계", () => {
     }).activities({
       ...filter,
       query: "아이 & test",
-      type: "PRACTICE"
+      type: "PRACTICE",
+      deviceId: "00000000-0000-4000-8000-000000000003"
     }, 0);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [
       string,
@@ -241,6 +324,7 @@ describe("관리자 HTTP 경계", () => {
     expect(parsed.pathname).toBe("/api/admin/activities");
     expect(parsed.searchParams.get("query")).toBe("아이 & test");
     expect(parsed.searchParams.get("timezone")).toBe("Asia/Seoul");
+    expect(parsed.searchParams.get("deviceId")).toBe("00000000-0000-4000-8000-000000000003");
     expect(init).toMatchObject({
       method: "GET",
       credentials: "same-origin",
@@ -255,7 +339,7 @@ describe("관리자 HTTP 경계", () => {
         ...payload.activities,
         items: [{
             ...payload.activities.items[0],
-            estimatedUsd: "0"
+            estimatedUsd: 0
           }]
       }
     }));
@@ -323,6 +407,7 @@ function awaitedActivity() {
     childName: "c",
     type: "FREE_TALK",
     status: "COMPLETED",
+    endCategory: "ENDED",
     startedAt: `${today}T00:00:00Z`,
     endedAt: null,
     durationSeconds: null,

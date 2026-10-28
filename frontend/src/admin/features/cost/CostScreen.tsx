@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AdminDataSource, AdminFilter } from "../../data/types";
+import { hasActivityFilter } from "../../data/filters";
 import { Badge } from "../../common/Badge";
 import { ADMIN_COPY as C } from "../../common/copy";
 import { money, number, unknownCostText, unlinkedText } from "../../common/format";
@@ -17,6 +18,7 @@ export function CostScreen({ source, filter }: { source: AdminDataSource; filter
   const query = useAdminQuery(["costs", filter, page], (signal) => source.costs(filter, page, signal));
   const data = query.data;
   if (!data) return <ResourceState loading={query.loading} error={query.error} retry={query.reload} />;
+  const otherCostsHidden = hasActivityFilter(filter);
   return (
     <div className="mj-admin-stack">
       <div className="mj-admin-cost-notice">
@@ -26,7 +28,7 @@ export function CostScreen({ source, filter }: { source: AdminDataSource; filter
         <section className="mj-admin-stat accent"><span>{C.costTotal}</span><strong>{money(data.totals.collectedUsd)}</strong><p>{C.estimated}</p></section>
         <section className="mj-admin-stat"><span>{C.costActivity}</span><strong>{money(data.totals.activityUsd)}</strong><p>{C.categoryNames.ACTIVITY}</p></section>
         <section className="mj-admin-stat"><span>{C.costFailed}</span><strong>{money(data.totals.failedStartUsd)}</strong><p>{C.failed}</p></section>
-        <section className="mj-admin-stat"><span>{C.costOther}</span><strong>{money(data.totals.nonActivityUsd)}</strong><p>{unlinkedText(money(data.totals.unlinkedUsd))}</p></section>
+        <section className="mj-admin-stat"><span>{C.costOther}</span><strong>{C.nonActivityOutOfScope}</strong><p>{unlinkedText(money(data.totals.unlinkedUsd))}</p></section>
       </div>
       <p className="mj-admin-note">{unknownCostText(data.totals.unknownCount)}</p>
       <section className="mj-admin-panel">
@@ -41,7 +43,11 @@ export function CostScreen({ source, filter }: { source: AdminDataSource; filter
       </section>
       <section className="mj-admin-panel">
         <div className="mj-admin-panel-heading"><div><h2>{C.otherCostList}</h2><p>{C.otherCostHint}</p></div></div>
-        {data.otherCosts.length ? <CostRows items={data.otherCosts} source={source} group="other" selected={selected} select={setSelected} /> : <EmptyState />}
+        {otherCostsHidden ? (
+          <p className="mj-admin-note" role="status">{C.otherCostsFiltered}</p>
+        ) : data.otherCosts.length ? (
+          <CostRows items={data.otherCosts} source={source} group="other" selected={selected} select={setSelected} />
+        ) : <EmptyState />}
       </section>
       <p className="mj-admin-note">{data.scope}</p>
     </div>

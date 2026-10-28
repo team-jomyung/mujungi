@@ -29,7 +29,7 @@ export function RecentActivities({ activities }: { activities: ActivitySummary[]
                   <td><TypeBadge type={activity.type} /></td>
                   <td>{dateTime(activity.startedAt)}</td>
                   <td>{duration(activity.durationSeconds)}</td>
-                  <td><StatusBadge status={activity.status} /></td>
+                  <td><StatusBadge status={activity.status} endCategory={activity.endCategory} /></td>
                 </tr>
               ))}
             </tbody>

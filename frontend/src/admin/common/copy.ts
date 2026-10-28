@@ -1,4 +1,4 @@
-import type { ActivityStatus, ActivityType, HelpKind, SceneResult } from "../data/types";
+import type { ActivityStatus, ActivityType, ConsentAnswer, EndCategory, HelpKind, HelpOffer, SceneResult } from "../data/types";
 export const ADMIN_COPY = {
   detailSeparator: " · ",
   otherDetailScope: "이 호출의 사용량",
@@ -46,6 +46,8 @@ export const ADMIN_COPY = {
   abstain: "보류 사유",
   skipped: "변형 장면을 건너뛴 사유",
   noneRecorded: "기록 없음",
+  notOffered: "제안 전 종료",
+  responseUnknown: "확인 불가",
   base: "기본 장면",
   variant: "변형 장면",
   retries: "다시 말하기",
@@ -73,13 +75,14 @@ export const ADMIN_COPY = {
   helpHint: "저장된 도움 실행 기록 수",
   retryHint: "장면의 다시 말하기 횟수 합계",
   acceptanceHint: "수락 ÷ (수락 + 거절)",
-  acceptanceDescription: "수락률은 ACCEPT ÷ (ACCEPT + DECLINE)입니다. 직접 요청, 불명확한 응답, 기록 없음은 분모에서 제외합니다.",
+  acceptanceDescription: "수락률은 ACCEPT ÷ (ACCEPT + DECLINE)입니다. 직접 요청, 불명확한 응답, 제안 전 종료, 확인 불가는 분모에서 제외합니다.",
   helpTitle: "어떤 도움을 실행했나요?",
   helpDescription: "도움 종류별 실행 기록을 집계합니다.",
   focusExample: "초점 도움에 포함된 표현 예시",
   focusExampleHint: "FOCUS_HELP 중 example_given이 참인 기록입니다. 별도 EXPRESSION_EXAMPLE 도움과 구분합니다.",
   responses: "도움 제안에 대한 반응",
-  responsesDescription: "도움 기록에 저장된 응답 값입니다. 기록 없음은 거절로 계산하지 않습니다.",
+  helpOffer: "도움 제안",
+  responsesDescription: "장면마다 도움 제안 상태와 반응을 한 번씩 집계합니다. 기록만으로 미응답을 구분할 수 없는 경우는 확인 불가에 포함합니다.",
   practices: "연습 활동 기록",
   practiceCaption: "연습 활동과 저장된 장면 및 도움 기록",
   scenes: "장면",
@@ -169,23 +172,25 @@ export const ADMIN_COPY = {
   recent: "최근 활동",
   start: "시작 시각",
   normal: "정상 종료",
-  interrupted: "연결 중단",
+  interrupted: "진행 중 중단",
   failed: "시작 실패",
   collection: {
-    COMPLETE: "수집 완료", PARTIAL: "부분 수집", UNKNOWN: "미확인", NOT_COLLECTED: "과거 미수집"
+    COMPLETE: "수집 완료", PARTIAL: "부분 수집", UNKNOWN: "미확인", NOT_COLLECTED: "미수집"
   },
   collectionStatus: "수집 상태",
   costTotal: "수집된 비용 합계",
   costActivity: "대화별 비용",
   costFailed: "시작 실패 준비 비용",
   costOther: "대화 외 비용",
+  nonActivityOutOfScope: "현재 수집 범위 밖",
+  otherCostsFiltered: "필터 적용 중에는 시작 실패·연결 미확인 목록을 표시하지 않습니다.",
   costNote: "수집된 사용량 기준 예상 비용으로 실제 청구액과 다를 수 있습니다.",
   costPeriod: "기간 합계는 API 호출 완료 시각 기준입니다. 상세는 해당 활동의 전체 기간을 보여줍니다.",
   costScope: "GPT-Live · Luna 대상 · 제브 비용 제외",
   costList: "대화별 사용량",
   costDetail: "사용량 · 예상 비용 상세",
-  otherCostList: "대화 외 사용량",
-  otherCostHint: "특정 대화에 속하지 않는 호출과 연결을 확인하지 못한 호출입니다.",
+  otherCostList: "시작 실패 · 연결 미확인 사용량",
+  otherCostHint: "활동 기록에 연결되지 않은 시작 실패 준비 비용과 연결 미확인 호출입니다. 대화와 무관한 호출은 현재 수집 범위 밖입니다.",
   purpose: "사용 목적",
   observed: "호출 완료 시각",
   voice: "음성 사용 시간",
@@ -203,7 +208,7 @@ export const ADMIN_COPY = {
   categoryNames: {
     ACTIVITY: "대화", FAILED_TO_START: "시작 실패", NON_ACTIVITY: "대화 외", UNLINKED: "연결 미확인"
   },
-  totalsHint: "미확인 사용량은 $0.00으로 계산하지 않습니다. 일부 사용량만 확인된 경우 확인된 항목의 소계입니다.",
+  totalsHint: "저장된 호출 중 금액을 계산하지 못한 호출 수입니다. 미확인 사용량은 $0.00으로 합산하지 않으며 확인된 항목의 소계입니다.",
   breakdown: "단계별 비용 구성",
   calculation: "적용 계산 기준",
   detailScope: "이 활동 전체 기간",
@@ -225,7 +230,20 @@ export const activityType: Record<ActivityType, string> = {
   FREE_TALK: "자유대화", PRACTICE: "연습대화"
 };
 export const activityStatus: Record<ActivityStatus, string> = {
-  COMPLETED: "정상 종료", INTERRUPTED: "연결 중단", FAILED_TO_START: "시작 실패"
+  COMPLETED: "완료", INTERRUPTED: "진행 중 중단", FAILED_TO_START: "시작 실패"
+};
+export const endCategoryLabel: Record<EndCategory, string> = {
+  ENDED: "정상 종료",
+  ENDED_UNCONFIRMED: "종료 확인 안 됨",
+  INTERRUPTED: "진행 중 중단",
+  DECLINED: "아이가 참여하지 않음",
+  NOT_STARTED: "시작 실패",
+};
+export const helpOfferLabel: Record<HelpOffer, string> = {
+  OFFERED: "제안함",
+  REQUESTED: "직접 요청",
+  NOT_OFFERED: ADMIN_COPY.notOffered,
+  UNKNOWN: ADMIN_COPY.responseUnknown,
 };
 export const judgmentLabel: Record<SceneResult["judgment"], string> = {
   SUCCESS: "목표 표현 확인", FAILURE: "목표 표현 미확인", ABSTAINED: "판정 보류", NOT_EVALUATED: "판정 없음"
@@ -236,6 +254,10 @@ export const helpKind: Record<HelpKind, string> = {
 export const consentLabel = {
   ACCEPT: "수락", DECLINE: "거절", REQUESTED: "직접 요청", UNCLEAR: "불명확", NONE: "기록 없음"
 } as const;
+export function helpResponseLabel(offer: HelpOffer, response: ConsentAnswer): string {
+  if (response !== null) return consentLabel[response];
+  return offer === "NOT_OFFERED" ? ADMIN_COPY.notOffered : ADMIN_COPY.responseUnknown;
+}
 export const timingLabel: Record<string, string> = {
   IMMEDIATE: "바로 응답", AFTER_REASK: "다시 물은 뒤", AFTER_HELP: "도움을 받은 뒤", NONE: "응답 없음", ABSTAINED: "판정 보류"
 };

@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import type { Quality } from "../../data/types";
 import { StatusBadge } from "../../common/Badge";
 import { ADMIN_COPY as C } from "../../common/copy";
-import { dateTime, duration, number, times } from "../../common/format";
+import { dateTime, duration, number, qualityRecordsText, times } from "../../common/format";
 import { Pagination } from "../../common/Pagination";
 import { EmptyState } from "../../common/ResourceState";
 import { SceneResults } from "../../common/SceneResults";
@@ -13,13 +13,18 @@ export function PracticeRecords({ quality }: { quality: Quality }) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const pageSize = 8;
-  // 현재 제안 DTO는 전체 기록 배열이다. 서버 페이지 계약은 연결 전에 별도로 확정한다.
+  // 서버가 제공한 최근 기록 범위 안에서만 페이지를 나눈다.
   const rows = quality.records.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
     <section className="mj-admin-panel mj-admin-list-panel">
       <div className="mj-admin-panel-heading">
-        <h2>{C.practices}</h2>
+        <div>
+          <h2>{C.practices}</h2>
+          <p className="mj-admin-muted">
+            {qualityRecordsText(quality.records.length, quality.recordsTotal, quality.recordsLimit)}
+          </p>
+        </div>
         <span className="mj-admin-muted">{C.qualityAll}</span>
       </div>
       {rows.length ? (
@@ -50,7 +55,7 @@ export function PracticeRecords({ quality }: { quality: Quality }) {
                       <td>{duration(record.activity.durationSeconds)}</td>
                       <td>{number(record.scenes.length)}</td>
                       <td>{times(record.scenes.reduce((sum, scene) => sum + scene.helpRecords.length, 0))}</td>
-                      <td><StatusBadge status={record.activity.status} /></td>
+                      <td><StatusBadge status={record.activity.status} endCategory={record.activity.endCategory} /></td>
                       <td>
                         <button
                           type="button"

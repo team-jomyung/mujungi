@@ -1,5 +1,6 @@
 import { dateInRange, shiftDate, validDate, validRange } from "./dates";
 import { AdminDataError, assertNotAborted } from "./errors";
+import { hasActivityFilter } from "./filters";
 import type {
   ActivityDetail,
   ActivitySummary,
@@ -13,8 +14,11 @@ import type {
   Page,
   Quality,
   SceneResult,
+  UsdAmount,
 } from "./types";
 const PAGE_SIZE = 8;
+const QUALITY_RECORDS_LIMIT = 100;
+const USD_SCALE = 10n ** 8n;
 const SCOPE = "GPT-Live · Luna 사용량과 USD 금액의 합성 예시입니다. 제브 비용은 제외합니다. 실제 청구액과 다를 수 있습니다.";
 const lifetimeScope = "이 활동의 준비부터 종료 후 처리까지 누적한 사용량입니다. 기간 목록은 API 호출 완료 시각(한국 시간)을 기준으로 하므로 상세 합계와 다를 수 있습니다.";
 function pageOf<T>(items: T[], page: number): Page<T> {
@@ -37,6 +41,7 @@ function summary(activity: ActivityDetail): ActivitySummary {
     childName: activity.childName,
     type: activity.type,
     status: activity.status,
+    endCategory: activity.endCategory,
     startedAt: activity.startedAt,
     endedAt: activity.endedAt,
     durationSeconds: activity.durationSeconds,
@@ -50,6 +55,28 @@ const knownSum = (values: (number | null)[]): number | null => {
   const known = values.filter((value): value is number => value !== null);
   return known.length ? known.reduce((sum, value) => sum + value, 0) : null;
 };
+
+// 합성 금액만 소수 8자리 정수로 합산한다.
+// 실제 API의 금액은 서버가 계산하며 이 함수로 다시 계산하지 않는다.
+function usdUnits(value: UsdAmount): bigint {
+  const [whole, fraction = ""] = value.split(".");
+  return BigInt(whole) * USD_SCALE + BigInt(fraction.padEnd(8, "0"));
+}
+
+function usdFromUnits(value: bigint): UsdAmount {
+  const whole = value / USD_SCALE;
+  const fraction = (value % USD_SCALE).toString().padStart(8, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function sumUsd(values: (UsdAmount | null)[]): UsdAmount | null {
+  const known = values.filter((value): value is UsdAmount => value !== null);
+  return known.length ? usdFromUnits(known.reduce((total, value) => total + usdUnits(value), 0n)) : null;
+}
+
+function voiceUsd(seconds: number): UsdAmount {
+  return usdFromUnits((BigInt(seconds) * USD_SCALE + 600n) / 1200n);
+}
 
 const average = (items: ActivityDetail[]): number | null => {
   const seconds = items.map(item => item.durationSeconds).filter((value): value is number => value !== null);
@@ -70,12 +97,16 @@ function matches(activity: ActivitySummary, filter: AdminFilter, includeDate = t
     && (!filter.status || filter.status === "ALL" || activity.status === filter.status)
     && (!filter.guardianId || activity.guardianId === filter.guardianId)
     && (!filter.childId || activity.childId === filter.childId)
+    && (!filter.deviceId || activity.deviceId === filter.deviceId)
     && (!query || searchFields.some(value => value.toLowerCase().includes(query)));
 }
 
 function makeScene(index: number, scene: number): SceneResult {
-  const answers: ConsentAnswer[] = ["ACCEPT", "DECLINE", "REQUESTED", "UNCLEAR", null];
-  const answer = answers[(index + scene) % answers.length];
+  const answers: ConsentAnswer[] = ["ACCEPT", "DECLINE", "REQUESTED", "UNCLEAR", null, null];
+  const missingRun = (index + scene) % 11 === 0;
+  const answer = missingRun ? null : answers[(index + scene) % answers.length];
+  const helpOffer = answer === "REQUESTED" ? "REQUESTED" : answer !== null ? "OFFERED"
+    : missingRun || (index + scene) % 2 !== 0 ? "UNKNOWN" : "NOT_OFFERED";
   const help = answer === "ACCEPT" || answer === "REQUESTED";
   const abstained = (index + scene) % 7 === 0;
   const failed = (index + scene) % 6 === 0;
@@ -85,12 +116,13 @@ function makeScene(index: number, scene: number): SceneResult {
     kind: scene ? "VARIANT" : "BASE",
     judgment: abstained ? "ABSTAINED" : failed ? "FAILURE" : "SUCCESS",
     reason: abstained ? null : failed ? "장면의 목표 표현이 확인되지 않았습니다." : "상대에게 필요한 것을 말하고 부탁하는 표현이 확인됐습니다.",
-    responseTiming: help ? "AFTER_HELP" : "IMMEDIATE",
-    abstainReason: abstained ? "LOW_CONFIDENCE" : null,
+    responseTiming: help ? "AFTER_HELP" : helpOffer === "NOT_OFFERED" ? "IMMEDIATE" : null,
+    abstainReason: null,
     helpResponse: answer,
+    helpOffer,
     variantSkipReason: !scene && abstained ? "TIME_LIMIT" : null,
-    retryCount: help ? 1 : 0,
-    reExplanationCount: help && index % 3 === 0 ? 1 : 0,
+    retryCount: missingRun ? null : help ? 1 : 0,
+    reExplanationCount: missingRun ? null : help && index % 3 === 0 ? 1 : 0,
     helpRecords: help ? [
       {
         id: `H-${index}-${scene}`,
@@ -129,11 +161,16 @@ export function createMockAdminSource(anchorDate: string, options: {
     const guardian = Math.ceil(child / 2);
     const type = index % 3 === 1 ? "PRACTICE" : "FREE_TALK";
     const failed = type === "PRACTICE" && index % 10 === 1;
-    const interrupted = !failed && index % 8 === 0;
-    const seconds = failed ? null : [343, 517, 246, 720, 984, 420][index % 6];
+    const declined = !failed && index === 25;
+    const started = !failed && !declined;
+    const interrupted = started && index % 8 === 0;
+    const unconfirmed = started && !interrupted && index % 9 === 0;
+    const endCategory = failed ? "NOT_STARTED" : declined ? "DECLINED" : interrupted ? "INTERRUPTED"
+      : unconfirmed ? "ENDED_UNCONFIRMED" : "ENDED";
+    const seconds = started ? [343, 517, 246, 720, 984, 420][index % 6] : null;
     const startedAt = `${day}T${String(9 + index % 3 * 3).padStart(2, "0")}:20:00+09:00`;
     const endedAt = new Date(new Date(startedAt).getTime() + (seconds ?? 25) * 1000).toISOString();
-    const scenes = type === "PRACTICE" && !failed ? [makeScene(index, 0), makeScene(index, 1)] : [];
+    const scenes = type === "PRACTICE" && started ? [makeScene(index, 0), makeScene(index, 1)] : [];
     if (scenes[0]?.variantSkipReason)
       scenes.splice(1);
     const id = `MJ-${1094 - index}`;
@@ -143,7 +180,7 @@ export function createMockAdminSource(anchorDate: string, options: {
     const aiLines = type === "PRACTICE"
       ? ["친구가 옆에 있어. 어떻게 말하면 좋을까?", "친구에게 필요한 것을 잘 말했네.", "빌린 다음에 할 말도 생각했구나."]
       : ["오늘 어떤 일이 있었는지 들려줄래?", "어떤 그림을 그렸어?", "친구와 함께 그리니까 즐거웠겠네."];
-    const transcript = failed ? [] : aiLines.flatMap((text, line) => [
+    const transcript = !started ? [] : aiLines.flatMap((text, line) => [
       {
         sequence: line * 2 + 1,
         speaker: "AI" as const,
@@ -165,15 +202,17 @@ export function createMockAdminSource(anchorDate: string, options: {
       childId: `C-00${child}`,
       childName: `아이 ${String(child).padStart(2, "0")}`,
       type,
-      status: failed ? "FAILED_TO_START" : interrupted ? "INTERRUPTED" : "COMPLETED",
+      status: !started ? "FAILED_TO_START" : interrupted ? "INTERRUPTED" : "COMPLETED",
+      endCategory,
       startedAt,
       endedAt,
       durationSeconds: seconds,
-      childTurns: failed ? 0 : 3,
-      aiTurns: failed ? 0 : 3,
-      endReason: failed ? "연습 준비 실패" : interrupted ? "기기 연결 끊김" : index % 2 ? "보호자 종료" : "아이 종료 표현",
+      childTurns: started ? 3 : 0,
+      aiTurns: started ? 3 : 0,
+      endReason: failed ? "연습 준비 실패" : declined ? "아이가 참여하지 않음" : interrupted ? "기기 연결 끊김"
+        : unconfirmed ? "종료 확인 안 됨" : index % 2 ? "보호자 종료" : "아이 종료 표현",
       transcript,
-      transcriptAvailable: !failed,
+      transcriptAvailable: started,
       scenes
     };
     activities.push(activity);
@@ -199,18 +238,18 @@ export function createMockAdminSource(anchorDate: string, options: {
         cachedInputTokens: unknown ? null : 1600,
         cacheWriteTokens: unknown ? null : 1200,
         reasoningTokens: unknown ? null : 300,
-        estimatedUsd: unknown ? null : 0.0021,
+        estimatedUsd: unknown ? null : "0.0021",
         status,
         calculation: unknown ? null : "합성 예시 금액입니다. 실제 단가를 적용한 청구 내역이 아닙니다."
       });
-    if (!failed) {
+    if (started) {
       phases.push({
         ...emptyUsage,
         phase: "VOICE",
         model: "GPT-Live",
         calls: 1,
         voiceSeconds: unknown ? null : seconds,
-        estimatedUsd: unknown || seconds === null ? null : seconds / 60 * 0.05,
+        estimatedUsd: unknown || seconds === null ? null : voiceUsd(seconds),
         status,
         calculation: unknown ? null : "합성 예시: 연결 초 ÷ 60 × $0.05/분. 실제 적용 단가가 아닙니다."
       });
@@ -225,7 +264,7 @@ export function createMockAdminSource(anchorDate: string, options: {
           cachedInputTokens: unknown ? null : 2048,
           cacheWriteTokens: null,
           reasoningTokens: unknown ? null : 800,
-          estimatedUsd: unknown ? null : 0.0014,
+          estimatedUsd: unknown ? null : "0.0014",
           status,
           calculation: null
         });
@@ -239,24 +278,25 @@ export function createMockAdminSource(anchorDate: string, options: {
         cachedInputTokens: unknown ? null : 3072,
         cacheWriteTokens: unknown ? null : 1200,
         reasoningTokens: unknown ? null : 500,
-        estimatedUsd: unknown ? null : 0.0024,
+        estimatedUsd: unknown ? null : "0.0024",
         status,
         calculation: null
       });
     }
+    if (status === "NOT_COLLECTED") phases.splice(0);
     costs.push({
       id: `COST-${id}`,
-      activityId: id,
-      childName: activity.childName,
-      type,
+      activityId: failed ? null : id,
+      childName: failed ? null : activity.childName,
+      type: failed ? null : type,
       category: failed ? "FAILED_TO_START" : "ACTIVITY",
       purpose: failed ? "연습 준비" : "대화 · 연습",
-      observedAt: endedAt,
-      status,
+      observedAt: phases.length ? endedAt : startedAt,
+      status: phases.length ? status : "NOT_COLLECTED",
       voiceSeconds: unknown || failed ? null : seconds,
       inputTokens: knownSum(phases.map(phase => phase.inputTokens)),
       outputTokens: knownSum(phases.map(phase => phase.outputTokens)),
-      estimatedUsd: knownSum(phases.map(phase => phase.estimatedUsd)),
+      estimatedUsd: sumUsd(phases.map(phase => phase.estimatedUsd)),
       phases,
       scope: lifetimeScope
     });
@@ -267,14 +307,14 @@ export function createMockAdminSource(anchorDate: string, options: {
       activityId: null,
       childName: null,
       type: null,
-      category: "NON_ACTIVITY",
-      purpose: "활동 외 유지 작업",
+      category: "UNLINKED",
+      purpose: "연결 미확인 · 준비 요청",
       observedAt: `${anchorDate}T10:40:00+09:00`,
       status: "COMPLETE",
       voiceSeconds: null,
       inputTokens: 4096,
       outputTokens: 1000,
-      estimatedUsd: 0.0009,
+      estimatedUsd: "0.0009",
       phases: [{
           phase: "OTHER",
           model: "GPT-6 Luna",
@@ -285,11 +325,11 @@ export function createMockAdminSource(anchorDate: string, options: {
           cachedInputTokens: 0,
           cacheWriteTokens: 0,
           reasoningTokens: 200,
-          estimatedUsd: 0.0009,
+          estimatedUsd: "0.0009",
           status: "COMPLETE",
           calculation: null
         }],
-      scope: "활동과 연결되지 않는 호출을 별도로 집계한 합성 예시입니다."
+      scope: "활동 연결을 확인하지 못한 호출을 별도로 집계한 합성 예시입니다."
     });
   if (!options.empty)
     costs.push({
@@ -305,7 +345,20 @@ export function createMockAdminSource(anchorDate: string, options: {
       inputTokens: null,
       outputTokens: null,
       estimatedUsd: null,
-      phases: [],
+      phases: [{
+        phase: "OTHER",
+        model: "GPT-6 Luna",
+        calls: 2,
+        voiceSeconds: null,
+        inputTokens: null,
+        outputTokens: null,
+        cachedInputTokens: null,
+        cacheWriteTokens: null,
+        reasoningTokens: null,
+        estimatedUsd: null,
+        status: "UNKNOWN",
+        calculation: null,
+      }],
       scope: "연결 정보 또는 사용량이 확인되지 않은 합성 예시입니다. $0.00으로 합산하지 않습니다."
     });
   activities.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
@@ -331,7 +384,7 @@ export function createMockAdminSource(anchorDate: string, options: {
     }, signal),
     overview: (filter, signal) => {
       const items = filtered(filter);
-      const started = items.filter(item => item.status !== "FAILED_TO_START");
+      const started = items.filter(item => item.endCategory !== "NOT_STARTED" && item.endCategory !== "DECLINED");
       const free = started.filter(item => item.type === "FREE_TALK");
       const practice = started.filter(item => item.type === "PRACTICE");
       const daily: {
@@ -359,19 +412,13 @@ export function createMockAdminSource(anchorDate: string, options: {
           practice: average(practice)
         },
         daily,
-        endReasons: [{
-            code: "COMPLETED",
-            label: "정상 종료",
-            count: items.filter(item => item.status === "COMPLETED").length
-          }, {
-            code: "INTERRUPTED",
-            label: "연결 중단",
-            count: items.filter(item => item.status === "INTERRUPTED").length
-          }, {
-            code: "FAILED_TO_START",
-            label: "시작 실패",
-            count: items.filter(item => item.status === "FAILED_TO_START").length
-          }],
+        endReasons: [
+          { code: "ENDED", label: "정상 종료" },
+          { code: "ENDED_UNCONFIRMED", label: "종료 확인 안 됨(완료로 집계)" },
+          { code: "INTERRUPTED", label: "진행 중 중단" },
+          { code: "DECLINED", label: "아이가 참여하지 않음" },
+          { code: "NOT_STARTED", label: "시작 실패" },
+        ].map(ending => ({ ...ending, count: items.filter(item => item.endCategory === ending.code).length })),
         recentActivities: items.slice(0, 5).map(summary)
       }, signal);
     },
@@ -412,7 +459,8 @@ export function createMockAdminSource(anchorDate: string, options: {
       return respond(pageOf(guardians, page), signal);
     },
     quality: (filter, signal) => {
-      const items = filtered(filter).filter(item => item.type === "PRACTICE" && item.status !== "FAILED_TO_START");
+      const rows = filtered(filter).filter(item => item.type === "PRACTICE");
+      const items = rows.filter(item => item.status !== "FAILED_TO_START");
       const scenes = items.flatMap(item => item.scenes);
       const helps = scenes.flatMap(scene => scene.helpRecords);
       const answers = scenes.map(scene => scene.helpResponse);
@@ -421,13 +469,15 @@ export function createMockAdminSource(anchorDate: string, options: {
       const quality: Quality = {
         startedPractices: items.length,
         helpExecutionCount: helps.length,
-        retryCount: scenes.reduce((sum, scene) => sum + scene.retryCount, 0),
+        retryCount: scenes.reduce((sum, scene) => sum + (scene.retryCount ?? 0), 0),
         acceptance: {
           accepted,
           declined,
           unclear: answers.filter(value => value === "UNCLEAR").length,
           requested: answers.filter(value => value === "REQUESTED").length,
-          unanswered: answers.filter(value => value === null).length,
+          unanswered: null,
+          notOffered: scenes.filter(scene => scene.helpOffer === "NOT_OFFERED").length,
+          unknown: scenes.filter(scene => scene.helpOffer === "UNKNOWN").length,
           rate: accepted + declined ? accepted / (accepted + declined) : null
         },
         helpTypes: ["FOCUS_HELP", "SITUATION_EXPLAIN", "EXPRESSION_EXAMPLE"].map(kind => ({
@@ -435,28 +485,28 @@ export function createMockAdminSource(anchorDate: string, options: {
           count: helps.filter(help => help.kind === kind).length
         })),
         focusExamples: helps.filter(help => help.kind === "FOCUS_HELP" && help.exampleGiven).length,
-        records: items.map(item => ({
+        records: rows.slice(0, QUALITY_RECORDS_LIMIT).map(item => ({
           activity: summary(item),
           scenes: item.scenes
-        }))
+        })),
+        recordsTotal: rows.length,
+        recordsLimit: QUALITY_RECORDS_LIMIT,
       };
       return respond(quality, signal);
     },
     costs: (filter, page, signal) => {
       validateFilter(filter);
+      const unfiltered = !hasActivityFilter(filter);
       const selected = costs.filter(cost => {
+        if (!cost.phases.length && !cost.activityId) return false;
         if (!dateInRange(cost.observedAt, filter.from, filter.to)) return false;
         if (cost.activityId) {
           const activity = activities.find(item => item.id === cost.activityId);
           return activity !== undefined && matches(activity, filter, false);
         }
-        return filter.type === "ALL"
-          && !filter.childId
-          && !filter.guardianId
-          && (!filter.status || filter.status === "ALL")
-          && (!filter.query || cost.purpose.includes(filter.query));
+        return unfiltered;
       });
-      const group = (category: CostSummary["category"]) => knownSum(selected.filter(cost => cost.category === category).map(cost => cost.estimatedUsd));
+      const group = (category: CostSummary["category"]) => sumUsd(selected.filter(cost => cost.category === category).map(cost => cost.estimatedUsd));
       const toSummary = (cost: CostDetail): CostSummary => ({
         id: cost.id,
         activityId: cost.activityId,
@@ -473,12 +523,14 @@ export function createMockAdminSource(anchorDate: string, options: {
       });
       return respond({
         totals: {
-          collectedUsd: knownSum(selected.map(item => item.estimatedUsd)),
+          collectedUsd: sumUsd(selected.map(item => item.estimatedUsd)),
           activityUsd: group("ACTIVITY"),
           failedStartUsd: group("FAILED_TO_START"),
-          nonActivityUsd: group("NON_ACTIVITY"),
+          nonActivityUsd: null,
           unlinkedUsd: group("UNLINKED"),
-          unknownCount: selected.filter(item => item.estimatedUsd === null).length
+          unknownCount: selected.reduce((total, item) => total + item.phases
+            .filter(phase => phase.estimatedUsd === null)
+            .reduce((calls, phase) => calls + phase.calls, 0), 0)
         },
         activities: pageOf(selected.filter(cost => cost.activityId !== null).map(toSummary), page),
         otherCosts: selected.filter(cost => cost.activityId === null).map(toSummary),

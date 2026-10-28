@@ -47,7 +47,7 @@ describe("관리자 활동 분석", () => {
     fireEvent.click(within(row).getByRole("button", { name: "기기 · 아이 보기" }));
     fireEvent.click(screen.getAllByRole("button", { name: "활동 보기↗" })[0]);
     await waitFor(() => expect(activitySpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ childId: child.id, guardianId: guardian.id }),
+      expect.objectContaining({ childId: child.id, guardianId: guardian.id, deviceId: device.id }),
       0,
       expect.any(AbortSignal),
     ));
@@ -71,6 +71,25 @@ describe("관리자 활동 분석", () => {
       expect.any(AbortSignal),
     ));
     expect(await screen.findByRole("button", { name: "이전" })).toBeDisabled();
+  });
+
+  it.each([
+    ["COMPLETED", "ENDED_UNCONFIRMED", "종료 확인 안 됨"],
+    ["INTERRUPTED", "INTERRUPTED", "진행 중 중단"],
+  ] as const)("활동 상태 %s와 종료 분류 %s를 함께 사용해 %s로 표시한다", async (status, endCategory, label) => {
+    const source = createMockAdminSource("2026-10-26");
+    const activity = (await source.activities(filter, 0)).items[0];
+    render(
+      <ActivityScreen
+        source={{
+          ...source,
+          activities: async () => ({ items: [{ ...activity, status, endCategory }], page: 0, pageSize: 8, total: 1 }),
+        }}
+        filter={filter}
+      />,
+    );
+    const row = (await screen.findByText(activity.childName)).closest("tr")!;
+    expect(within(row).getByText(label)).toBeVisible();
   });
 });
 

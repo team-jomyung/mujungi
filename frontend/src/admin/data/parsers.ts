@@ -28,6 +28,9 @@ const timestamp: Parser<string> = value => {
 
 const number: Parser<number> = value => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : invalid();
 const count: Parser<number> = value => Number.isInteger(number(value)) ? value as number : invalid();
+const usd: Parser<string> = value => typeof value === "string" && value.length <= 40
+  && /^[0-9]+(?:\.[0-9]{1,8})?$/.test(value) ? value : invalid();
+const nullValue: Parser<null> = value => value === null ? null : invalid();
 const bool: Parser<boolean> = value => typeof value === "boolean" ? value : invalid();
 const nullable = <T>(parser: Parser<T>): Parser<T | null> => value => value === null ? null : parser(value);
 const array = <T>(parser: Parser<T>): Parser<T[]> => value => Array.isArray(value) ? value.map(parser) : invalid();
@@ -56,6 +59,7 @@ const activityFields = {
   childName: text,
   type: activityType,
   status: oneOf("COMPLETED", "INTERRUPTED", "FAILED_TO_START"),
+  endCategory: oneOf("ENDED", "ENDED_UNCONFIRMED", "INTERRUPTED", "DECLINED", "NOT_STARTED"),
   startedAt: timestamp,
   endedAt: nullable(timestamp),
   durationSeconds: nullable(number),
@@ -76,8 +80,9 @@ const parseScene = object<SceneResult>({
   abstainReason: nullable(text),
   variantSkipReason: nullable(text),
   helpResponse: nullable(oneOf("ACCEPT", "DECLINE", "REQUESTED", "UNCLEAR")),
-  retryCount: count,
-  reExplanationCount: count,
+  helpOffer: oneOf("OFFERED", "REQUESTED", "NOT_OFFERED", "UNKNOWN"),
+  retryCount: nullable(count),
+  reExplanationCount: nullable(count),
   helpRecords: array(object({
     id: text,
     kind: helpKind,
@@ -151,7 +156,7 @@ export const parseGuardian = object<GuardianSummary>({
   }))
 });
 const rate: Parser<number> = value => number(value) <= 1 ? value as number : invalid();
-export const parseQuality = object<Quality>({
+const qualityFields = object<Quality>({
   startedPractices: count,
   helpExecutionCount: count,
   retryCount: count,
@@ -160,7 +165,9 @@ export const parseQuality = object<Quality>({
     declined: count,
     unclear: count,
     requested: count,
-    unanswered: count,
+    unanswered: nullValue,
+    notOffered: count,
+    unknown: count,
     rate: nullable(rate)
   }),
   helpTypes: array(object({
@@ -171,8 +178,19 @@ export const parseQuality = object<Quality>({
   records: array(object({
     activity: parseActivitySummary,
     scenes: array(parseScene)
-  }))
+  })),
+  recordsTotal: count,
+  recordsLimit: count
 });
+
+export const parseQuality: Parser<Quality> = value => {
+  const quality = qualityFields(value);
+  if (!quality.recordsLimit || quality.records.length > 100
+    || quality.records.length > quality.recordsLimit || quality.records.length > quality.recordsTotal) {
+    return invalid();
+  }
+  return quality;
+};
 const collectionStatus = oneOf("COMPLETE", "PARTIAL", "UNKNOWN", "NOT_COLLECTED");
 const costFields = {
   id: text,
@@ -186,7 +204,7 @@ const costFields = {
   voiceSeconds: nullable(number),
   inputTokens: nullable(count),
   outputTokens: nullable(count),
-  estimatedUsd: nullable(number)
+  estimatedUsd: nullable(usd)
 };
 
 export const parseCostSummary = object<CostSummary>(costFields);
@@ -200,7 +218,7 @@ const parsePhase = object<CostPhase>({
   cachedInputTokens: nullable(count),
   cacheWriteTokens: nullable(count),
   reasoningTokens: nullable(count),
-  estimatedUsd: nullable(number),
+  estimatedUsd: nullable(usd),
   status: collectionStatus,
   calculation: nullable(text)
 });
@@ -211,11 +229,11 @@ export const parseCostDetail = object<CostDetail>({
 });
 export const parseCosts = object<Costs>({
   totals: object({
-    collectedUsd: nullable(number),
-    activityUsd: nullable(number),
-    failedStartUsd: nullable(number),
-    nonActivityUsd: nullable(number),
-    unlinkedUsd: nullable(number),
+    collectedUsd: nullable(usd),
+    activityUsd: nullable(usd),
+    failedStartUsd: nullable(usd),
+    nonActivityUsd: nullValue,
+    unlinkedUsd: nullable(usd),
     unknownCount: count
   }),
   activities: parsePage(parseCostSummary),

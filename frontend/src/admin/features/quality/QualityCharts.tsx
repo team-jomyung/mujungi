@@ -8,7 +8,8 @@ export function QualityCharts({ quality }: { quality: Quality }) {
     { label: consentLabel.DECLINE, count: quality.acceptance.declined, tone: "amber" },
     { label: consentLabel.REQUESTED, count: quality.acceptance.requested, tone: "purple" },
     { label: consentLabel.UNCLEAR, count: quality.acceptance.unclear, tone: "gray" },
-    { label: consentLabel.NONE, count: quality.acceptance.unanswered, tone: "gray" },
+    { label: C.notOffered, count: quality.acceptance.notOffered, tone: "gray" },
+    { label: C.responseUnknown, count: quality.acceptance.unknown, tone: "gray" },
   ];
   const reactionTotal = reactions.reduce((sum, reaction) => sum + reaction.count, 0);
   const maxHelp = Math.max(1, ...quality.helpTypes.map((help) => help.count));

@@ -51,7 +51,7 @@ export function ActivityList({ source, filter }: ActivityScreenProps) {
                   <td className="mj-admin-numeric">{duration(activity.durationSeconds)}</td>
                   <td className="mj-admin-numeric">{number(activity.childTurns)}</td>
                   <td className="mj-admin-numeric">{number(activity.aiTurns)}</td>
-                  <td><StatusBadge status={activity.status} /></td>
+                  <td><StatusBadge status={activity.status} endCategory={activity.endCategory} /></td>
                   <td>
                     <button
                       type="button"

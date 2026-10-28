@@ -3,6 +3,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createAdminQueryClient, useAdminQuery } from "@/admin/common/queries";
 import { describe, expect, it, vi } from "vitest";
 import { DateFilter } from "@/admin/common/DateFilter";
+import { AdminToolbar } from "@/admin/common/AdminToolbar";
+import { StatusBadge } from "@/admin/common/Badge";
+import { SceneResults } from "@/admin/common/SceneResults";
 import { ResourceState } from "@/admin/common/ResourceState";
 import { AdminDataError } from "@/admin/data/errors";
 import { createMockAdminSource } from "@/admin/data/mock";
@@ -21,9 +24,48 @@ describe("관리자 화면 공통 동작", () => {
     fireEvent.click(screen.getByRole("button", { name: C.apply }));
     expect(change).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(C.dateError);
+    fireEvent.change(screen.getByLabelText(C.to), { target: { value: "2026-10-27" } });
+    fireEvent.click(screen.getByRole("button", { name: C.apply }));
+    expect(change).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(C.dateError);
     fireEvent.change(screen.getByLabelText(C.to), { target: { value: "2026-10-26" } });
     fireEvent.click(screen.getByRole("button", { name: C.apply }));
     expect(change).toHaveBeenCalledWith({ ...filter, from: "2026-10-25" });
+  });
+  it("검색어는 계약의 최대 50자로 제한하고 검색 시 공백을 정리한다", () => {
+    const change = vi.fn();
+    render(<AdminToolbar filter={filter} effectiveFilter={filter} quality={false} onChange={change} />);
+    const input = screen.getByRole("searchbox", { name: C.search });
+    expect(input).toHaveAttribute("maxlength", "50");
+    fireEvent.change(input, { target: { value: "  아이 01  " } });
+    fireEvent.click(screen.getByRole("button", { name: C.searchAction }));
+    expect(change).toHaveBeenLastCalledWith({ ...filter, query: "아이 01" });
+  });
+  it("완료 상태라도 종료 확인 여부를 구분하고 중단 원인을 연결로 한정하지 않는다", () => {
+    const { rerender } = render(<StatusBadge status="COMPLETED" endCategory="ENDED_UNCONFIRMED" />);
+    expect(screen.getByText("종료 확인 안 됨")).toBeVisible();
+    expect(screen.queryByText("정상 종료")).not.toBeInTheDocument();
+    rerender(<StatusBadge status="INTERRUPTED" endCategory="INTERRUPTED" />);
+    expect(screen.getByText("진행 중 중단")).toBeVisible();
+    expect(screen.queryByText("연결 중단")).not.toBeInTheDocument();
+    rerender(<StatusBadge status="FAILED_TO_START" endCategory="DECLINED" />);
+    expect(screen.getByText("아이가 참여하지 않음")).toBeVisible();
+  });
+  it("장면의 제안 전 종료와 확인 불가를 구분하고 저장되지 않은 횟수는 미확인이다", async () => {
+    const source = createMockAdminSource("2026-10-26");
+    const quality = await source.quality({ ...filter, type: "PRACTICE" });
+    const scene = quality.records.flatMap(record => record.scenes)[0];
+    expect(scene).toBeDefined();
+    render(<SceneResults scenes={[
+      { ...scene, id: "not-offered", title: "제안 전에 끝난 장면", helpOffer: "NOT_OFFERED", helpResponse: null, retryCount: null, reExplanationCount: null },
+      { ...scene, id: "unknown", title: "제안 상태를 모르는 장면", helpOffer: "UNKNOWN", helpResponse: null },
+    ]} />);
+    const notOffered = screen.getByRole("heading", { name: "제안 전에 끝난 장면" }).closest("article")!;
+    const unknown = screen.getByRole("heading", { name: "제안 상태를 모르는 장면" }).closest("article")!;
+    expect(within(notOffered).getAllByText(C.notOffered)).toHaveLength(2);
+    expect(within(unknown).getAllByText(C.responseUnknown)).toHaveLength(2);
+    expect(within(notOffered).getAllByText(C.unknown)).toHaveLength(2);
+    expect(screen.queryByText("미확인회")).not.toBeInTheDocument();
   });
   it("로그인 필요와 권한 없음을 구분하고 로그인 반복 이동을 막는다", () => {
     const { rerender } = render(<ResourceState loading={false} error={new AdminDataError("unauthenticated")} />);
