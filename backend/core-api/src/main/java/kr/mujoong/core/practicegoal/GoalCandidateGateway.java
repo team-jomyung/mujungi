@@ -5,8 +5,12 @@ import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import kr.mujoong.contract.json.JsonCodec;
+import kr.mujoong.contract.log.AttrKey;
+import kr.mujoong.contract.log.EventCode;
+import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.core.knowledge.ChildKnowledgeService;
 import kr.mujoong.core.luna.*;
+import kr.mujoong.core.observability.EventLogger;
 import kr.mujoong.core.result.ResultAiException;
 import kr.mujoong.core.result.check.OutputChecker;
 import org.springframework.core.io.ClassPathResource;
@@ -19,9 +23,12 @@ public class GoalCandidateGateway {
     private final Optional<CoreLunaClient> luna;
     private final ChildKnowledgeService knowledge;
     private final GoalCandidateValidator validator;
+    private static final String PROMPT_VERSION="goal-candidates.v2";
+    private static final Map<String,String> CHECK_FIELDS=Map.of("goal-reason","REASON_TEXT","goal-display","DISPLAY_EVIDENCE","goal-name","DISPLAY_NAME","goal-target","TARGET_EXPRESSION");
     private final OutputChecker checker;
+    private final EventLogger events;
     private final JsonCodec json=JsonCodec.shared();
-    public GoalCandidateGateway(Optional<CoreLunaClient> luna,ChildKnowledgeService knowledge,GoalCandidateValidator validator,OutputChecker checker){this.luna=luna;this.knowledge=knowledge;this.validator=validator;this.checker=checker;}
+    public GoalCandidateGateway(Optional<CoreLunaClient> luna,ChildKnowledgeService knowledge,GoalCandidateValidator validator,OutputChecker checker,EventLogger events){this.luna=luna;this.knowledge=knowledge;this.validator=validator;this.checker=checker;this.events=events;}
     public boolean available(){return luna.isPresent();}
     public List<GoalCandidateRepository.Draft> generate(UUID guardian,UUID child,Map<String,Object> input,Map<String,String> aliases,Instant deadline,Runnable access){
         access.run();var catalog=knowledge.seedSummaries(guardian,child);
@@ -36,18 +43,32 @@ public class GoalCandidateGateway {
         Map<String,String> references=new HashMap<>();
         request.replaceAll((key,value)->referenceIds(value,references));
         var quotes=childQuotes(objects(request.get("transcript")));
-        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v1.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
+        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v2.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
         access.run();LunaResult generated;
-        try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,"goal-candidates.v1",prompt,request,Map.of(),deadline));}
+        try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,PROMPT_VERSION,prompt,request,Map.of(),deadline));}
         catch(LunaException failed){throw new ResultAiException(failed.reason()==LunaFailureReason.TIMEOUT?"TIMEOUT":"PROVIDER_ERROR");}
         Map<String,Object> output=object(json.read(generated.outputJson(),Map.class));
         if(!(output.get("candidates") instanceof List<?>))throw new ResultAiException("SCHEMA_INVALID");
-        var candidates=validator.validate(objects(output.get("candidates")),catalog.stream().map(s->s.seedId()).collect(java.util.stream.Collectors.toSet()),quotes);
+        var proposed=objects(output.get("candidates"));
+        var validated=validator.check(proposed,catalog.stream().map(s->s.seedId()).collect(java.util.stream.Collectors.toSet()),quotes);
+        // 서버 검사에서 빠진 후보는 사유 코드만 남긴다(R-F14: 후보 글 · 인용 없음). 모델이 0개를 냈는지, 냈는데 서버가 버렸는지를 가른다
+        for(var drop:validated.dropped())dropped(guardian,proposed.size(),drop);
+        var candidates=validated.kept();
         var checks=new ArrayList<OutputChecker.Draft>();
         for(int i=0;i<candidates.size();i++){var c=candidates.get(i);var refs=c.evidence().stream().map(GoalCandidateRepository.Evidence::quote).toList();checks.add(new OutputChecker.Draft("goal-reason-"+i,c.reasonText(),refs,null));checks.add(new OutputChecker.Draft("goal-display-"+i,c.displayEvidence(),refs,null));checks.add(new OutputChecker.Draft("goal-name-"+i,c.displayName(),refs,null));checks.add(new OutputChecker.Draft("goal-target-"+i,c.targetExpression(),refs,null,OutputChecker.TextUse.PRACTICE_PROPOSAL));}
         var checked=checker.check(checks,deadline,access);var kept=new ArrayList<GoalCandidateRepository.Draft>();
-        for(int i=0;i<candidates.size();i++)if(checked.get("goal-reason-"+i)!=null&&checked.get("goal-display-"+i)!=null&&checked.get("goal-name-"+i)!=null&&checked.get("goal-target-"+i)!=null)kept.add(candidates.get(i));
+        for(int i=0;i<candidates.size();i++){
+            OutputChecker.Draft failed=null;
+            for(int j=i*4;j<i*4+4&&failed==null;j++)if(checked.get(checks.get(j).id())==null)failed=checks.get(j);
+            if(failed==null){kept.add(candidates.get(i));continue;}
+            String reason="CHECK_"+checker.firstPassFailure(failed).orElse("CLASSIFIER");
+            dropped(guardian,proposed.size(),new GoalCandidateValidator.Drop(validated.indexes().get(i),reason,CHECK_FIELDS.get(failed.id().substring(0,failed.id().lastIndexOf('-')))));
+        }
         return List.copyOf(kept);
+    }
+    private void dropped(UUID guardian,int proposed,GoalCandidateValidator.Drop drop){
+        events.log(EventCode.GOAL_CANDIDATE_DROPPED,EventLog.Component.CORE_MAINTENANCE,guardian,entry->entry.attr(AttrKey.PROMPT_VERSION,PROMPT_VERSION)
+                .attr(AttrKey.CANDIDATE_INDEX,drop.index()).attr(AttrKey.CANDIDATES_PROPOSED,proposed).attr(AttrKey.DROP_REASON,drop.reason()).attr(AttrKey.DROP_FIELD,drop.field()));
     }
     private Object referenceIds(Object value,Map<String,String> references){
         if(value instanceof Map<?,?> map){Map<String,Object> result=new LinkedHashMap<>();map.forEach((key,item)->result.put((String)referenceIds(String.valueOf(key),references),referenceIds(item,references)));return result;}

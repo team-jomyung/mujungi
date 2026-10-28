@@ -10,6 +10,8 @@ import java.util.List;
 /** Matches transcript deltas to the continuous PCM clock. Never releases audio beyond a transcript's end. */
 public final class TimedOutputBuffer {
     private record Text(String value, long endByte, Instant at, long nanos) { }
+    /** 어절 경계를 기다리며 이어 붙일 글자 상한(넘으면 경계가 없어도 낸다). 시간 값이 아니다. */
+    static final int WORD_UNIT_MAX_CHARS = 40;
     private final Deque<Text> texts = new ArrayDeque<>();
     private final Deque<byte[]> audio = new ArrayDeque<>();
     private long firstByte;
@@ -133,6 +135,19 @@ public final class TimedOutputBuffer {
      * @param sealed 전사만 든 단위(음성 조각 없음, 길이 0)
      * @param endByte 이 단위 전사가 끝나는 세션 PCM 누적 바이트 위치
      */
+    private Text secondText() {
+        var it = texts.iterator();
+        it.next();
+        return it.next();
+    }
+
+    /** 글이 어절 경계에서 끝나는가: 마지막 글자가 글자 · 숫자가 아니거나(공백 · 문장부호), 다음 조각이 글자 · 숫자로 시작하지 않는다. */
+    static boolean atWordBoundary(String text, String next) {
+        if (text.isEmpty()) return false;
+        if (!Character.isLetterOrDigit(text.codePointBefore(text.length()))) return true;
+        return next != null && !next.isEmpty() && !Character.isLetterOrDigit(next.codePointAt(0));
+    }
+
     public record TextUnit(SegmentBuffer.Sealed sealed, long endByte) {
     }
 
@@ -151,6 +166,17 @@ public final class TimedOutputBuffer {
         }
         Text text = texts.peekFirst();
         if (text == null || SeedDictionary.normalize(skippedText + text.value()).isEmpty()) return null;
+        // 어절 단위로 낸다(2026-10-27): 공급자 전사 조각은 단어 중간에서 끊겨("개념" → "개" | "념") 조각 하나를 따로 검사하면 제브가 욕설로 오판한다.
+        // 글이 어절 경계(공백 · 문장부호로 끝나거나 다음 조각이 공백 · 문장부호로 시작)에 닿을 때까지 다음 조각을 이어 붙이고, 아직 경계가 아니면
+        // 다음 조각을 기다린다. 응답이 조용해지면 pollTrailingText가 남은 글을 낸다
+        while (!atWordBoundary(skippedText + text.value(), texts.size() > 1 ? secondText().value() : null)
+                && (skippedText + text.value()).length() < WORD_UNIT_MAX_CHARS) {
+            if (texts.size() == 1) return null;
+            Text first = texts.removeFirst();
+            Text next = texts.removeFirst();
+            text = new Text(first.value() + next.value(), next.endByte(), first.at(), first.nanos());
+            texts.addFirst(text);
+        }
         texts.removeFirst();
         String transcript = skippedText + text.value();
         skippedText = "";
@@ -163,7 +189,7 @@ public final class TimedOutputBuffer {
     /**
      * 응답이 조용해진 뒤 남은 마지막 전사가 구두점뿐(말끝 "?" 등)이면 그것을 단위로 낸다(FT-1023-e). {@link #pollText}는 구두점뿐인 조각을 다음
      * 조각과 합치려고 붙잡아 두는데, 응답 끝의 조각은 합칠 다음 조각이 없어 남는다 — 그대로 두면 말끝 음성이 나가지 않고 남은 전사 시한이 지나 출력 세대를
-     * 올린다. 남은 전사가 구두점뿐이 아니면(빈 전사 포함) 아무것도 꺼내지 않는다.
+     * 올린다. 어절 경계를 기다리며 붙잡아 둔 마지막 낱말도 같은 까닭으로 여기서 낸다(2026-10-27). 보이지 않는 글자뿐인 조각은 꺼내지 않는다.
      */
     public TextUnit pollTrailingText(long providerGeneration, long deviceGeneration, Instant at, long nanos) {
         if (failed || !audioStarted) return null;
@@ -173,7 +199,8 @@ public final class TimedOutputBuffer {
         if (texts.size() != 1) return null;
         Text text = texts.peekFirst();
         String transcript = skippedText + text.value();
-        if (!OutputGate.punctuationOnly(transcript)) return null;
+        // 구두점뿐인 말끝(FT-1023-e)이나, 어절 경계를 기다리며 붙잡아 둔 마지막 낱말을 낸다. 보이지 않는 글자뿐인 조각은 내지 않는다
+        if (!OutputGate.punctuationOnly(transcript) && SeedDictionary.normalize(transcript).isEmpty()) return null;
         texts.removeFirst();
         skippedText = "";
         textCharacters -= transcript.length();

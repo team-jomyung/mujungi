@@ -9,15 +9,16 @@ import org.junit.jupiter.api.Test;
 
 @Tag("practice-legacy")
 class PracticeStartRequestTest {
-    @Test void acceptsThreeGoalsButRejectsFourBeforePreparation() {
-        List<UUID> ids=java.util.stream.IntStream.range(0,4).mapToObj(i->UUID.randomUUID()).toList();
-        assertThat(new PracticeStartRequest(UUID.randomUUID(),ids.subList(0,3)).goalSelectionIds()).hasSize(3);
+    /** FT-1027-a: 한 번에 목표 1개(이전 3개). 상한을 넘으면 준비 전에 거절한다. */
+    @Test void acceptsOneGoalButRejectsTwoBeforePreparation() {
+        List<UUID> ids=java.util.stream.IntStream.range(0,2).mapToObj(i->UUID.randomUUID()).toList();
+        assertThat(new PracticeStartRequest(UUID.randomUUID(),ids.subList(0,1)).goalSelectionIds()).hasSize(1);
         assertThatThrownBy(()->new PracticeStartRequest(UUID.randomUUID(),ids)).isInstanceOf(CoreApiException.class);
     }
-    @Test void reorderingTheSameSelectionDoesNotChangeIdempotencyIdentity() {
+    @Test void theSameSelectionKeepsItsIdempotencyIdentity() {
         UUID key = UUID.randomUUID(), a = UUID.randomUUID(), b = UUID.randomUUID();
-        assertThat(new PracticeStartRequest(key, List.of(a, b)).requestHash())
-                .isEqualTo(new PracticeStartRequest(key, List.of(b, a)).requestHash());
+        assertThat(new PracticeStartRequest(key, List.of(a)).requestHash())
+                .isEqualTo(new PracticeStartRequest(key, List.of(a)).requestHash());
         assertThat(new PracticeStartRequest(key, List.of(a)).requestHash())
                 .isNotEqualTo(new PracticeStartRequest(key, List.of(b)).requestHash());
     }

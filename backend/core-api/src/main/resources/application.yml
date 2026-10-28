@@ -97,6 +97,20 @@ springdoc:
     enabled: false
 
 mujoong:
+  # JIRA-280 관리자 비용 화면 단가(USD, contracts/ai-io.md 비용 절). 조회할 때 저장된 토큰 · 초에 곱한다. 실제 청구액이 아니다
+  admin:
+    pricing:
+      voice-usd-per-minute: "0.05"
+      responses:
+        input-usd-per-million: "0.10"
+        cached-input-usd-per-million: "0.01"
+        cache-write-usd-per-million: "0.125"
+        output-usd-per-million: "0.50"
+      decisions:
+        input-usd-per-million: "0.10"
+        cached-input-usd-per-million: "0.01"
+        cache-write-usd-per-million: "0.125"
+        output-usd-per-million: "0"
   # JIRA-277 Core Luna 사용량 수집. realtime 스위치(MUJOONG_AI_USAGE_ENABLED)와 따로 켠다
   ai-usage:
     enabled: ${MUJOONG_CORE_AI_USAGE_ENABLED:false}
@@ -198,6 +212,7 @@ mujoong:
     session-start-retries: 1
     session-end-timeout: 2s
     session-view-timeout: 1s
+    admin-facts-timeout: 3s
     event-publish-timeout: 3s
     breaker-failure-threshold: 3
     breaker-open-duration: 5s

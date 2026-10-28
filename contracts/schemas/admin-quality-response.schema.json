@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/admin-quality-response.schema.json",
+  "title": "관리자 연습 · AI 품질 응답(JIRA-280)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "startedPractices",
+    "helpExecutionCount",
+    "retryCount",
+    "acceptance",
+    "helpTypes",
+    "focusExamples",
+    "records",
+    "recordsTotal",
+    "recordsLimit"
+  ],
+  "properties": {
+    "startedPractices": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "helpExecutionCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "retryCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "acceptance": {
+      "type": "object",
+      "description": "장면당 한 번 센 도움 반응",
+      "additionalProperties": false,
+      "required": [
+        "accepted",
+        "declined",
+        "unclear",
+        "requested",
+        "unanswered",
+        "notOffered",
+        "unknown",
+        "rate"
+      ],
+      "properties": {
+        "accepted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declined": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unclear": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requested": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unanswered": {
+          "description": "제안했지만 반응 없음은 지금 기록으로 가를 수 없어 늘 null이다. 그런 장면은 unknown에 든다",
+          "type": "null"
+        },
+        "notOffered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate": {
+          "description": "accepted ÷ (accepted + declined). 분모 0이면 null",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "helpTypes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "count"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "FOCUS_HELP",
+              "SITUATION_EXPLAIN",
+              "EXPRESSION_EXAMPLE"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "focusExamples": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "records": {
+      "description": "최근 순 최대 recordsLimit건",
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activity",
+          "scenes"
+        ],
+        "properties": {
+          "activity": {
+            "$ref": "admin-common.schema.json#/$defs/ActivitySummary"
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "$ref": "admin-common.schema.json#/$defs/SceneResult"
+            }
+          }
+        }
+      }
+    },
+    "recordsTotal": {
+      "description": "기간 안 연습 활동 전체 수(records보다 클 수 있음)",
+      "type": "integer",
+      "minimum": 0
+    },
+    "recordsLimit": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

@@ -4,6 +4,7 @@
 # - 미룬 경로(U5b · U7: /activities/practice · /push-subscription …)는 넣지 않는다. 소유 유닛이 더하기만 한다(계약 10절 · J25).
 #   U2는 /auth/* · /me · /policies/current · /consents · /child · /child/stop-expressions를 더했다.
 #   U4a는 /sessions/current · /records · /records/{sessionId}, U5a는 /goal-selections/**를 더했다.
+#   JIRA-280은 관리자 조회 /admin/** 8개 경로(읽기 전용, 서버가 연산마다 관리자 확인)를 더했다.
 #   U6은 C5 9개 경로(/sessions/{sessionId}/result · /result/status · /result/retry · /reports/** )를 더했다(x-u6-deviation, deviations.md 'U6 편차' 절).
 # - x-unit: 경로를 만든 유닛, x-deviation: 승인 계약에 더한 U1 편차 기호, x-u2-deviation: U2 편차 기호(deviations.md 'U2 편차' 절),
 #   x-error-codes: 그 응답이 낼 수 있는 오류 code(contracts/errors.md).
@@ -268,7 +269,7 @@ paths:
                 goalSelectionIds:
                   type: array
                   minItems: 1
-                  maxItems: 3
+                  maxItems: 1 # FT-1027-a: 3 → 1
                   uniqueItems: true
                   items: { type: string, format: uuid }
       responses:
@@ -1321,6 +1322,224 @@ paths:
         "403": { $ref: "#/components/responses/AccountDeletion" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceNotReady" }
+  # ---- JIRA-280 관리자 조회 API. 서비스 개발자용 읽기 전용 GET이다. 보호자 세션으로 인증하고(없음 · 만료 401), 연산마다 서버가
+  # 활성 관리자(core.core_admin_account ACTIVE)인지 확인한다(아니면 403 ADMIN_FORBIDDEN). 화면 가드는 이 검사를 대신하지 않는다.
+  # 기간은 Asia/Seoul 날짜 from ~ to(양 끝 포함, 최대 366일). 미확인 값은 null이고 0은 확인된 0이다. 금액은 USD 소수 문자열이다.
+  /admin/me:
+    get:
+      operationId: getAdminIdentity
+      x-unit: JIRA-280
+      summary: 관리자 확인 — 로그인한 보호자가 활성 관리자인가
+      responses:
+        "200":
+          description: 활성 관리자
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-me-response.schema.json" }
+              example: { displayName: 관리자 3f2a1c, role: ADMIN }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      x-unit: JIRA-280
+      summary: 대시보드 — 시작한 활동 수 · 평균 시간 · 일별 수 · 끝 분류(ENDED_UNCONFIRMED는 정상 종료와 따로)
+      description: |
+        활동 시각(시작 시각, 시작 전이면 요청 시각)이 기간 안인 끝난 활동만 센다. 활동 수 · 평균 · 일별 수는 시작한 활동만
+        (시작 실패 · 참여 거절 제외), endReasons는 시작하지 못한 활동까지 끝 분류별로 센다. 평균 시간은 시작 · 종료 시각이 모두
+        있는 활동의 평균이고 없으면 null이다.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: timezone, in: query, required: false, schema: { enum: [Asia/Seoul] } }
+        - { name: type, in: query, required: false, schema: { enum: [FREE_TALK, PRACTICE] } }
+        - { name: query, in: query, required: false, description: "아이 이름 일부 또는 활동 · 보호자 · 기기 id 앞부분. 로그에 남기지 않는다", schema: { type: string, maxLength: 50 } }
+        - { name: guardianId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: childId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: deviceId, in: query, required: false, description: 활동을 한 기기(해제된 기기 포함), schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { enum: [COMPLETED, INTERRUPTED, FAILED_TO_START] } }
+      responses:
+        "200":
+          description: 대시보드 집계
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-overview-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /admin/activities:
+    get:
+      operationId: listAdminActivities
+      x-unit: JIRA-280
+      summary: 활동 목록(활동 시각 내림차순, 같으면 id 내림차순)
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: timezone, in: query, required: false, schema: { enum: [Asia/Seoul] } }
+        - { name: type, in: query, required: false, schema: { enum: [FREE_TALK, PRACTICE] } }
+        - { name: query, in: query, required: false, schema: { type: string, maxLength: 50 } }
+        - { name: guardianId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: childId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: deviceId, in: query, required: false, description: 활동을 한 기기(해제된 기기 포함), schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { enum: [COMPLETED, INTERRUPTED, FAILED_TO_START] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+        - { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 8 } }
+      responses:
+        "200":
+          description: 활동 한 쪽. total은 필터 적용 뒤 전체 수
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-activity-page-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /admin/activities/{sessionId}:
+    get:
+      operationId: getAdminActivity
+      x-unit: JIRA-280
+      summary: 활동 상세 — 대화 원문 · 장면 결과(부를 때마다 열람 기록 ADMIN_RECORD_VIEWED)
+      description: |
+        대화 원문은 Core 활동 기록의 전사(아이 말 · 승인된 AI 말)이고 참여 거절 · 기록 없음이면 transcriptAvailable=false다. 연습의
+        장면 결과는 현재 결과의 장면 판정에 Realtime 장면 실행 기록(횟수 · 도움)을 붙인 것이다. 도움 반응은 장면당 한 번만 판정하고
+        기록으로 가를 수 없으면 helpOffer=UNKNOWN이다. Realtime 조회가 실패하면 503 REALTIME_UNAVAILABLE이다. 없는 · 진행 중 ·
+        삭제 접수된 보호자의 활동은 404다. 열람 기록에는 관리자 · 활동의 해시와 시각만 남고 원문은 남지 않는다.
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: 활동 상세
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-activity-detail-response.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/AdminRealtimeUnavailable" }
+  /admin/guardians:
+    get:
+      operationId: listAdminGuardians
+      x-unit: JIRA-280
+      summary: 보호자 → 등록된 기기 → 아이 목록(가입 최근 순). 활동 수는 기간 안 끝난 활동
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: timezone, in: query, required: false, schema: { enum: [Asia/Seoul] } }
+        - { name: type, in: query, required: false, schema: { enum: [FREE_TALK, PRACTICE] } }
+        - { name: query, in: query, required: false, schema: { type: string, maxLength: 50 } }
+        - { name: guardianId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: childId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: deviceId, in: query, required: false, description: 활동을 한 기기(해제된 기기 포함), schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { enum: [COMPLETED, INTERRUPTED, FAILED_TO_START] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+        - { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 8 } }
+      responses:
+        "200":
+          description: 보호자 한 쪽. 보호자 · 기기 이름은 저장하지 않아 id 앞 6자로 만든 표시 이름이다
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-guardian-page-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceNotReady" }
+  /admin/quality:
+    get:
+      operationId: getAdminQuality
+      x-unit: JIRA-280
+      summary: 연습 · AI 품질 — 도움 실행 · 반응(장면당 한 번) · 재시도 집계와 최근 연습 최대 100건
+      description: |
+        도움 반응은 도움 행을 세지 않고 장면당 한 번 판정한다(수락은 역할 전환 · 첫 초점 도움 행에 함께 저장되고 거절은 장면 사실
+        HELP_DECLINED로만 남기 때문). 제안 전에 끝난 장면(IMMEDIATE · AFTER_REASK)은 notOffered, 기록으로 가를 수 없는 장면은
+        unknown이다. 수락률은 accepted ÷ (accepted + declined)이고 분모 0이면 null이다. records는 최근 순 최대 recordsLimit건이고
+        전체 수는 recordsTotal이다. Realtime 조회가 실패하면 503 REALTIME_UNAVAILABLE이다.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: timezone, in: query, required: false, schema: { enum: [Asia/Seoul] } }
+        - { name: type, in: query, required: false, schema: { enum: [FREE_TALK, PRACTICE] } }
+        - { name: query, in: query, required: false, schema: { type: string, maxLength: 50 } }
+        - { name: guardianId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: childId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: deviceId, in: query, required: false, description: 활동을 한 기기(해제된 기기 포함), schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { enum: [COMPLETED, INTERRUPTED, FAILED_TO_START] } }
+      responses:
+        "200":
+          description: 연습 품질 집계
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-quality-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/AdminRealtimeUnavailable" }
+  /admin/costs:
+    get:
+      operationId: listAdminCosts
+      x-unit: JIRA-280
+      summary: API · 비용 — 호출 완료 시각이 기간 안인 사용량의 USD 예상 비용(실제 청구액 아님)
+      description: |
+        수집된 사용량 가운데 금액을 계산할 수 있는 호출 기준의 예상 비용이다. 저장된 토큰 · 음성 초에 현재 설정 단가
+        (mujoong.admin.pricing, contracts/ai-io.md)를 곱하고, 단가를 바꾸면 지난 비용도 새 단가로 다시 계산된다. 토큰 수는 필드마다
+        아는 값을 더해 보여 주지만 금액은 입력 · 출력을 모두 아는 호출만 계산하고, 계산하지 못한 호출 수는 totals.unknownCount로
+        준다(0원으로 더하지 않음). 저장된 사용량이 없는 합계는 "0"이 아니라 null(확인 불가)이고, nonActivityUsd는 현재 수집 범위에
+        들지 않아 늘 null이다. 수집 중 빠져 저장되지 않은 호출과 일부만 수집된 기간의 빠진 대화는 알 수 없다. 캐시 읽기 토큰을 모르는
+        호출은 캐시 0으로 계산하고 status=PARTIAL이다. activities는 끝난 활동에 연결된 항목(최근 호출 순)이고, 활동 시각이 기간 안인데
+        저장된 사용량이 하나도 없는 활동도 status=NOT_COLLECTED · 금액 null로 들어간다(목록 시각은 활동 시각, JIRA-287). otherCosts는 필터가 없을
+        때만 시작 실패 · 연결 미확인 항목이다. 금액은 소수 최대 8자리로 반올림한 문자열이고 반올림한 값을 다시 더하지 않아 목록 합과
+        합계가 마지막 자리에서 다를 수 있다. Realtime 조회가 실패하면 503 REALTIME_UNAVAILABLE이다.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: timezone, in: query, required: false, schema: { enum: [Asia/Seoul] } }
+        - { name: type, in: query, required: false, schema: { enum: [FREE_TALK, PRACTICE] } }
+        - { name: query, in: query, required: false, schema: { type: string, maxLength: 50 } }
+        - { name: guardianId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: childId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: deviceId, in: query, required: false, description: 활동을 한 기기(해제된 기기 포함), schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { enum: [COMPLETED, INTERRUPTED, FAILED_TO_START] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 100000, default: 0 } }
+        - { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 8 } }
+      responses:
+        "200":
+          description: 비용 합계 · 활동 항목 한 쪽 · 기타 항목
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-costs-response.schema.json" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/AdminRealtimeUnavailable" }
+  /admin/costs/{costId}:
+    get:
+      operationId: getAdminCost
+      x-unit: JIRA-280
+      summary: 비용 상세 — 항목의 전체 기간 단계별(준비 · 음성 · 판정 · 종료 후) 사용량과 계산 근거
+      description: |
+        costId는 목록 항목의 id(활동 · 준비 id 또는 연결 미확인 호출 id)다. 상세는 기간과 관계없이 그 항목의 전체 사용량이라 목록의
+        기간 소계와 다를 수 있다. 저장된 사용량이 없는 활동은 status=NOT_COLLECTED · phases=[]다.
+      parameters:
+        - { name: costId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: 비용 상세
+          content:
+            application/json:
+              schema: { $ref: "schemas/admin-cost-detail-response.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AdminForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/AdminRealtimeUnavailable" }
 components:
   securitySchemes:
     session: { type: apiKey, in: cookie, name: MUJOONG_SESSION }
@@ -1388,6 +1607,21 @@ components:
         application/json:
           schema: { $ref: "schemas/error-envelope.schema.json" }
           example: { code: CHILD_NOT_REGISTERED, message: 아이 정보가 아직 없어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    AdminForbidden:
+      description: 로그인한 보호자가 활성 관리자가 아님(JIRA-280) 또는 계정 삭제 접수. 관리자 API 전부가 서버에서 검사한다
+      x-error-codes: [ADMIN_FORBIDDEN, ACCOUNT_DELETION_IN_PROGRESS]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: ADMIN_FORBIDDEN, message: 관리자만 볼 수 있어요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
+    AdminRealtimeUnavailable:
+      description: 앱 NOT_READY · DRAINING(편차 (n)) 또는 관리자 조회에 필요한 Realtime 내부 조회 실패 · 시간 초과(JIRA-280). 빈 값을 0으로 채워 답하지 않는다
+      x-error-codes: [SERVICE_NOT_READY, REALTIME_UNAVAILABLE]
+      x-deviation: ["(n)"]
+      content:
+        application/json:
+          schema: { $ref: "schemas/error-envelope.schema.json" }
+          example: { code: REALTIME_UNAVAILABLE, message: 지금은 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요., traceId: 4bf92f3577b34da6a3ce929d0e0e4736 }
     InternalError:
       description: 처리하지 못한 서버 오류. 스택 · 예외 메시지 · 입력값을 담지 않는다(편차 (o))
       x-error-codes: [INTERNAL_ERROR]

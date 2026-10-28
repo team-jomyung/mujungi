@@ -45,8 +45,12 @@ public final class LunaTransport implements AutoCloseable {
     /** 기준 주소 뒤에 붙는 Decisions API 경로(FT-1023-d). */
     static final String DECISIONS_PATH = "decisions";
 
+    /** 연결 예열 GET 경로. 키 없이 보내므로 판정 · 과금이 없다. */
+    static final String WARM_UP_PATH = "models";
+
     private final HttpClient client;
     private final URI endpoint;
+    private final URI warmUpTarget;
     private final LunaHosts.Mode mode;
     private final Supplier<String> apiKey;
     private final int maxResponseBytes;
@@ -62,6 +66,7 @@ public final class LunaTransport implements AutoCloseable {
         String base = baseUrl.toString();
         String trimmed = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
         this.endpoint = URI.create(trimmed + "/" + DECISIONS_PATH);
+        this.warmUpTarget = URI.create(trimmed + "/" + WARM_UP_PATH);
         this.mode = Objects.requireNonNull(mode, "mode");
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
         if (maxResponseBytes <= 0) {
@@ -120,6 +125,26 @@ public final class LunaTransport implements AutoCloseable {
             }
         });
         return returned;
+    }
+
+    /**
+     * 판정 전에 공급자 연결을 미리 맺는다. 세션 첫 판정이 연결 생성 · TLS 협상 비용으로 시한(live-budget)을 넘지 않게 하려는 것이다. 같은 호스트의
+     * {@code {baseUrl}/models}에 키 없이 GET 한 번을 보내고(판정 · 과금 없음, 데이터 없음) 응답 상태와 관계없이 연결만 남긴다. 반환 Future는
+     * 실패하지 않고 시한 안에 끝난다. 주소 규칙을 어기면 보내지 않는다.
+     */
+    public CompletableFuture<Void> warmUp(Duration limit) {
+        if (limit == null || limit.isNegative() || limit.isZero() || LunaHosts.check(warmUpTarget, mode).isPresent()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        HttpRequest request = HttpRequest.newBuilder(warmUpTarget).timeout(limit).GET().build();
+        CompletableFuture<HttpResponse<Void>> http = client.sendAsync(request, HttpResponse.BodyHandlers.discarding());
+        return http.orTimeout(limit.toNanos(), TimeUnit.NANOSECONDS).handle((response, failure) -> {
+            if (failure != null) {
+                // 예열 실패는 판정에 영향을 주지 않는다: 첫 판정이 연결을 새로 맺을 뿐이다
+                http.cancel(true);
+            }
+            return null;
+        });
     }
 
     /**

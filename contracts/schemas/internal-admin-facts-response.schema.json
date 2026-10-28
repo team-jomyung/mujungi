@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mujoong.invalid/contracts/schemas/internal-admin-facts-response.schema.json",
+  "title": "관리자 조회 — 세션별 연습 장면 실행 · 사실 · 도움 기록(JIRA-280). 원문 없음",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sessions"],
+  "properties": {
+    "sessions": {
+      "type": "array",
+      "description": "장면 실행이 있는 세션만 싣는다",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sessionId", "sceneRuns"],
+        "properties": {
+          "sessionId": { "type": "string", "format": "uuid" },
+          "sceneRuns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sceneRunId", "sceneKind", "retryCount", "reexplainCount", "facts", "helps"],
+              "properties": {
+                "sceneRunId": { "type": "string", "format": "uuid" },
+                "sceneKind": { "enum": ["BASE", "VARIANT"] },
+                "liveTiming": { "enum": ["IMMEDIATE", "AFTER_REASK", "AFTER_HELP", "NONE", "ABSTAINED"] },
+                "variantSkipReason": { "enum": ["NO_VARIANT", "DECLINED", "TIME_LIMIT", "FOCUS_LIMIT", "END_OR_REST"] },
+                "retryCount": { "type": "integer", "minimum": 0 },
+                "reexplainCount": { "type": "integer", "minimum": 0 },
+                "facts": {
+                  "type": "array",
+                  "description": "practice-record-v2 facts 순서 그대로. 받는 쪽은 모르는 값을 무시한다",
+                  "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" }
+                },
+                "helps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["helpId", "kind", "exampleGiven"],
+                    "properties": {
+                      "helpId": { "type": "string", "format": "uuid" },
+                      "kind": { "enum": ["ROLE_SWITCH", "ROLE_RETURN", "FOCUS_HELP", "EXPRESSION_EXAMPLE", "SITUATION_EXPLAIN"] },
+                      "consentAnswer": { "enum": ["ACCEPT", "DECLINE", "UNCLEAR", "REQUESTED"] },
+                      "exampleGiven": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

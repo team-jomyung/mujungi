@@ -2,7 +2,8 @@ export type StartRequest = Readonly<{ idempotencyKey: string; goalSelectionIds: 
 export type StartResult = { kind: "accepted"; sessionId: string } | { kind: "rejected"; code: string };
 export type StartOutcome = StartResult | { kind: "unknown" };
 export type StartPort = (request: StartRequest) => Promise<StartResult>;
-export const MAX_PRACTICE_GOALS = 3;
+/** 한 번에 연습할 목표 수 상한(2026-10-27 사람 결정 3 → 1, contracts/deviations.md FT-1027-a). */
+export const MAX_PRACTICE_GOALS: number = 1;
 
 export function ownedSelection(selected: readonly string[], owned: readonly string[]): string[] {
   const available = new Set(owned);

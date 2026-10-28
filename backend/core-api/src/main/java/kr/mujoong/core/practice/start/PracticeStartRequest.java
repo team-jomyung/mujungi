@@ -9,7 +9,8 @@ import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.common.error.CoreApiException;
 
 public record PracticeStartRequest(UUID idempotencyKey, List<UUID> goalSelectionIds) {
-    public static final int MAX_GOALS = 3;
+    /** 한 번에 연습할 목표 수 상한(2026-10-27 사람 결정 3 → 1, contracts/deviations.md FT-1027-a). */
+    public static final int MAX_GOALS = 1;
     public PracticeStartRequest {
         if (idempotencyKey == null || goalSelectionIds == null || goalSelectionIds.isEmpty() || goalSelectionIds.size() > MAX_GOALS
                 || goalSelectionIds.stream().anyMatch(java.util.Objects::isNull)

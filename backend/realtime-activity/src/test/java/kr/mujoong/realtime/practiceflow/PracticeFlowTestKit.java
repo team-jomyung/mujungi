@@ -68,6 +68,7 @@ final class PracticeFlowTestKit {
         boolean generatedResult = true;
         boolean judgmentResult = true;
         boolean announceResult = true;
+        boolean speaking;
 
         Output(MutableClock clock) {
             this.clock = clock;
@@ -162,6 +163,11 @@ final class PracticeFlowTestKit {
             calls++;
             judgments.add(new Judgment(point, transcriptSeq, correlationId, criteria));
             return judgmentResult;
+        }
+
+        @Override
+        public boolean childSpeaking() {
+            return speaking;
         }
 
         @Override
