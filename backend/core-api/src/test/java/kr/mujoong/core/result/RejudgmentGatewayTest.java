@@ -22,6 +22,27 @@ class RejudgmentGatewayTest {
     @Test void noLiveObservationDoesNotInventDifference(){assertThat(validate(List.of(row("functional","IMMEDIATE")),null).getFirst().differsFromLive()).isFalse();}
     @Test void abstainedIsNotAnObservedTiming(){assertThat(validate(List.of(row("functional","AFTER_REASK")),"ABSTAINED").getFirst().differsFromLive()).isFalse();}
     @Test void noneDiffersOnlyWhenARealTimingIsProduced(){assertThat(validate(List.of(row("none",null)),"NONE").getFirst().differsFromLive()).isFalse();assertThat(validate(List.of(row("functional","IMMEDIATE")),"NONE").getFirst().differsFromLive()).isTrue();}
+    @Test void requestKeepsPreparationFactsAndSceneStartWithoutTurningThemIntoAnOutcome(){
+        var luna=mock(CoreLunaClient.class);var goals=mock(PinnedSavedGoalReader.class);UUID child=UUID.randomUUID();
+        when(luna.call(any(LunaRequest.class))).thenAnswer(i->{
+            LunaRequest request=i.getArgument(0);
+            assertThat(request.promptVersion()).isEqualTo("rejudgment.v2");
+            assertThat(request.instructions()).contains("사전 연습에서 한 말은 상황극 수행 근거에서 제외", "평소 독립 능력이나 장기 향상이 아니다");
+            var scene=ResultData.objects(request.input().get("scenes")).getFirst();
+            assertThat(scene).containsEntry("startedAt",Instant.EPOCH.toString())
+                    .containsEntry("facts",List.of("PREPRACTICE_PROVIDED","PREPRACTICE_ATTEMPTED"))
+                    .doesNotContainKeys("liveTiming","liveOutcome");
+            return new LunaResult(JsonCodec.shared().write(Map.of("scenes",List.of(Map.of(
+                    "sceneRunId",scene.get("sceneRunId"),"value","functional","timing","IMMEDIATE")))),
+                    "fake","rejudgment.v2",Duration.ZERO,1,false);
+        });
+        var practice=Map.<String,Object>of("flowVersion",PracticeRecordV2.VERSION,"scenes",List.of(Map.of(
+                "sceneRunId",run.toString(),"goalRef",goal.toString(),"sceneKind","BASE","startedAt",Instant.EPOCH.toString(),
+                "facts",List.of("PREPRACTICE_PROVIDED","PREPRACTICE_ATTEMPTED"))));
+        assertThat(new RejudgmentGateway(Optional.of(luna),goals).judge(child,practice,List.of(),Map.of(),Instant.MAX,()->{}))
+                .singleElement().satisfies(scene->assertThat(scene.facts()).contains("PREPRACTICE_PROVIDED"));
+        verify(luna,times(1)).call(any(LunaRequest.class));
+    }
     @Test void realProviderRequestUsesEphemeralSchemaUuidAndOneCall(){
         var luna=mock(CoreLunaClient.class);var goals=mock(PinnedSavedGoalReader.class);UUID child=UUID.randomUUID();
         when(goals.historical(child,goal)).thenReturn(Optional.empty());
@@ -29,5 +50,28 @@ class RejudgmentGatewayTest {
         var gateway=new RejudgmentGateway(Optional.of(luna),goals);
         var practice=Map.<String,Object>of("flowVersion",PracticeRecordV2.VERSION,"scenes",List.of(Map.of("sceneRunId",run.toString(),"goalRef",goal.toString(),"sceneKind","BASE","startedAt",Instant.EPOCH.toString())));
         assertThat(gateway.judge(child,practice,List.of(),Map.of(),Instant.MAX,()->{})).singleElement().extracting(SceneJudgmentRepository.Scene::sceneRunId).isEqualTo(run);verify(luna,times(1)).call(any(LunaRequest.class));
+    }
+    @Test void providerReceivesOnlyBoundedRoleplayAcrossTwoGoalsAndLegacyKeepsItsTranscript(){
+        var luna=mock(CoreLunaClient.class);var goals=mock(PinnedSavedGoalReader.class);UUID child=UUID.randomUUID();
+        var before=PracticeEvidenceTranscriptTest.turn(1,1,2);
+        var roleOne=PracticeEvidenceTranscriptTest.turn(2,11,12);
+        var between=PracticeEvidenceTranscriptTest.turn(3,30,31);
+        var roleTwo=PracticeEvidenceTranscriptTest.turn(4,41,42);
+        var after=PracticeEvidenceTranscriptTest.turn(5,60,61);
+        var transcript=List.of(before,roleOne,between,roleTwo,after);
+        when(luna.call(any(LunaRequest.class))).thenAnswer(i->{
+            LunaRequest request=i.getArgument(0);var requested=ResultData.objects(request.input().get("scenes"));
+            if(requested.getFirst().containsKey("endedAt"))assertThat(request.input().get("transcript")).isEqualTo(List.of(roleOne,roleTwo));
+            else assertThat(request.input().get("transcript")).isEqualTo(transcript);
+            return new LunaResult(JsonCodec.shared().write(Map.of("scenes",requested.stream().map(scene->Map.of(
+                    "sceneRunId",scene.get("sceneRunId"),"value","functional","timing","IMMEDIATE")).toList())),
+                    "fake","rejudgment.v2",Duration.ZERO,1,false);
+        });
+        var gateway=new RejudgmentGateway(Optional.of(luna),goals);
+        gateway.judge(child,PracticeEvidenceTranscriptTest.practice(PracticeEvidenceTranscriptTest.scene(10,20,true),
+                PracticeEvidenceTranscriptTest.scene(40,50,true)),transcript,Map.of(),Instant.MAX,()->{});
+        gateway.judge(child,PracticeEvidenceTranscriptTest.practice(PracticeEvidenceTranscriptTest.scene(10,null,false)),
+                transcript,Map.of(),Instant.MAX,()->{});
+        verify(luna,times(2)).call(any(LunaRequest.class));
     }
 }

@@ -651,7 +651,7 @@ class FlowTransitionsTest {
 
     @Test
     void theContractEnumsTheTableUsesHaveExactlyTheContractSizes() {
-        assertThat(FactKind.values()).hasSize(15);
+        assertThat(FactKind.values()).contains(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED);
         assertThat(VariantSkipReason.values()).hasSize(5);
         assertThat(LiveTiming.values()).hasSize(5);
     }

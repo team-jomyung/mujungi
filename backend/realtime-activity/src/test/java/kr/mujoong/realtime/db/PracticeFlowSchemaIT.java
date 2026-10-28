@@ -86,8 +86,9 @@ class PracticeFlowSchemaIT {
                 "retry_count", "reexplain_count", "facts", "fact_ats");
         assertThat(columns("realtime_practice_help")).containsExactly("id", "scene_run_id", "guardian_id", "kind", "role",
                 "example_given", "consent_answer", "content_chars", "occurred_at");
-        // 원문 칸은 없다(R-F14 · U12-D2): 긴 글을 받을 수 있는 text 형식 열 자체가 없다(facts는 15종으로 막힌 배열이다)
-        for (String table : List.of("realtime_practice_scene_run", "realtime_practice_help")) {
+        assertThat(columns("realtime_practice_preparation")).containsExactly("scene_run_id", "provided_at", "attempted_at");
+        // 원문 칸은 없다(R-F14 · U12-D2): 긴 글을 받을 수 있는 text 형식 열 자체가 없다(facts는 계약 코드로 제한한 배열이다)
+        for (String table : List.of("realtime_practice_scene_run", "realtime_practice_help", "realtime_practice_preparation")) {
             assertThat(single(connection, "select count(*) from information_schema.columns where table_schema = 'realtime'"
                     + " and table_name = '" + table + "' and data_type = 'text'")).as(table).isEqualTo(0L);
             assertThat(single(connection, "select has_table_privilege('realtime." + table + "', 'SELECT,INSERT,UPDATE,DELETE')"))
@@ -107,7 +108,7 @@ class PracticeFlowSchemaIT {
                         "realtime_practice_scene_run_session_idx");
         // R2: 시각은 앱 MujoongClock 값만 바인딩한다(DB 기본값 없음)
         assertThat(single(connection, "select count(*) from information_schema.columns where table_schema = 'realtime'"
-                + " and table_name in ('realtime_practice_scene_run', 'realtime_practice_help')"
+                + " and table_name in ('realtime_practice_scene_run', 'realtime_practice_help', 'realtime_practice_preparation')"
                 + " and data_type like 'timestamp%' and column_name <> 'fact_ats' and column_default is not null"))
                 .isEqualTo(0L);
     }
@@ -125,7 +126,7 @@ class PracticeFlowSchemaIT {
     }
 
     @Test
-    void factsAcceptOnlyTheFifteenContractKindsAndNeedOneTimestampEach() throws SQLException {
+    void factsAcceptOnlyContractKindsAndNeedOneTimestampEach() throws SQLException {
         UUID run = insertRun("BASE");
 
         assertThat(update(connection, "update realtime.realtime_practice_scene_run set facts = ARRAY['REASK_RESOLVED',"
@@ -135,6 +136,23 @@ class PracticeFlowSchemaIT {
                         + " fact_ats = ARRAY[?]::timestamptz[] where id = ?", T0, run));
         expectSqlState(connection, CHECK_VIOLATION, () -> update(connection,
                 "update realtime.realtime_practice_scene_run set facts = ARRAY['TIMEOUT']::text[] where id = ?", run));
+    }
+
+    @Test
+    void preparationUsesAnAdditiveTableAndLeavesOldFactsChecksIntact() throws SQLException {
+        UUID run = insertRun("BASE");
+        assertThat(update(connection, "insert into realtime.realtime_practice_preparation"
+                + " (scene_run_id, provided_at, attempted_at) values (?, ?, ?)", run, T0, T0)).isEqualTo(1);
+        expectSqlState(connection, CHECK_VIOLATION, () -> update(connection,
+                "update realtime.realtime_practice_scene_run set facts = ARRAY['PREPRACTICE_PROVIDED']::text[],"
+                        + " fact_ats = ARRAY[?]::timestamptz[] where id = ?", T0, run));
+        expectSqlState(connection, CHECK_VIOLATION, () -> update(connection,
+                "update realtime.realtime_practice_preparation set provided_at = null, attempted_at = null where scene_run_id = ?", run));
+        expectSqlState(connection, FOREIGN_KEY_VIOLATION, () -> update(connection,
+                "insert into realtime.realtime_practice_preparation (scene_run_id, provided_at) values (?, ?)", UUID.randomUUID(), T0));
+        assertThat(update(connection, "delete from realtime.realtime_practice_scene_run where id = ?", run)).isEqualTo(1);
+        assertThat(single(connection, "select count(*) from realtime.realtime_practice_preparation where scene_run_id = ?", run))
+                .isEqualTo(0L);
     }
 
     @Test

@@ -1,5 +1,11 @@
 # 계약 편차 목록 (deviations.md)
 
+## 사전 표현 연습 분리 (2026-10-28)
+
+| 기호 | 내용 | 출처 | 제공 | 소비자 | 호환 분류 | 표시 위치 |
+|---|---|---|---|---|---|---|
+| (PP-20261028-a) | 사전 표현 연습 사실 `PREPRACTICE_PROVIDED`·`PREPRACTICE_ATTEMPTED`와 선택 `scenes[].endedAt` 추가. 기존 flowVersion·timing은 유지하며 사전 교육 후 수행 조건을 표시한다. 새 준비 세션의 결과 분석은 실제 장면 구간의 발화만 사용한다. Realtime V10은 기존 facts 배열 변경 없이 준비 표만 추가한다 | 사용자 요청 · `aidlc/spaces/default/intents/261028-practice-phase-separation/change-note.md` | Realtime PracticeFlow | Core 결과·관리자·연습 이력 | 새 값 · 새 선택 필드 · 규칙 구체화 | ai-io.md · schemas/practice-record-v2.schema.json |
+
 > 승인된 `contract-summary.md`(2.8)는 고치지 않는다. 구현이 승인 계약보다 넓어지거나 구체화되는 곳을 여기에 한 행씩 적고,
 > 각 스펙 파일에는 `x-deviation: ["(a)"]`(YAML · JSON) 또는 `[편차 (a)]`(Markdown)로 표시한다(사람 결정 5 · J59 · J112 · J130).
 > (a) ~ (t)는 `docs/cloud_run_report.md` 2.1절, (u) ~ (y)는 3.5 계획 J112(사람 확인)에서 왔다.

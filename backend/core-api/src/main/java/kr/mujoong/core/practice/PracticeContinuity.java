@@ -12,13 +12,14 @@ public final class PracticeContinuity {
     }
     static Map<String,Object> support(Map<String,Object> scene,Map<String,Object> setting) {
         var allowed=Set.of("REASK_RESOLVED","SITUATION_EXPLAINED","FOCUS_HELP","EXPRESSION_EXAMPLE","HELP_DECLINED",
-                "COACH_RETURN","ORIGINAL_SCENE_RETURN","TIMEOUT","TRANSCRIPT_FAILED","PLAYBACK_FAILED");
+                "COACH_RETURN","ORIGINAL_SCENE_RETURN","TIMEOUT","TRANSCRIPT_FAILED","PLAYBACK_FAILED","PREPRACTICE_PROVIDED","PREPRACTICE_ATTEMPTED");
         var facts=scene.get("facts") instanceof List<?> values ? values.stream().filter(String.class::isInstance)
                 .map(String.class::cast).filter(allowed::contains).distinct().toList():List.<String>of();
         String strategy=facts.contains("PLAYBACK_FAILED")||facts.contains("TRANSCRIPT_FAILED") ? "CHECK_INPUT_OR_PLAYBACK"
                 : facts.contains("SITUATION_EXPLAINED") ? "SIMPLER_CONTEXT_SAME_GOAL"
                 : facts.contains("FOCUS_HELP") ? "FAMILIAR_CONTEXT_HELP_ONLY_IF_NEEDED"
                 : facts.contains("REASK_RESOLVED") ? "CONTEXTUAL_CLARIFICATION_WITHOUT_DRILL"
+                : facts.contains("PREPRACTICE_PROVIDED") ? "APPLY_AFTER_PREPRACTICE_NOT_BASELINE"
                 : "START_WITH_ROLE_DIALOGUE_NO_EXTRA_HELP";
         var result=new LinkedHashMap<String,Object>();result.put("observedSupport",facts);result.put("nextRoundStrategy",strategy);
         // Technical failures are not evidence of inability. Timing remains a performed-action observation, not a score.

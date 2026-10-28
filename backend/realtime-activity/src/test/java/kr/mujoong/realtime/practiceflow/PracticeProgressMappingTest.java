@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -92,6 +93,27 @@ class PracticeProgressMappingTest {
         assertThat(h.recorder.list()).as("접기는 표시에만 있다: 기록은 변형 장면을 사실대로 둔다")
                 .extracting(PracticeFlowTypes.SceneRunRecord::sceneKind)
                 .contains(PracticeFlowTypes.SceneKind.BASE, PracticeFlowTypes.SceneKind.VARIANT);
+    }
+
+    @Test
+    void preparationMapsToTheExistingIntroductionStageWithoutLeakingANewWireValue() {
+        Harness h = new Harness(packageJson(GOAL, fullScript(SCENARIO)), APPROVED,
+                new PracticeFlowSettings(Duration.ofSeconds(10), Duration.ofSeconds(90), Duration.ofMinutes(10),
+                        Duration.ofSeconds(20), 2, 1, true));
+        h.activate();
+        h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.PREPARATION);
+        assertThat(h.ext.progress().stage()).isEqualTo("SCENARIO_INTRO");
+        h.played();
+        h.child("파란 상자 줘");
+        h.result("J5", "FULL");
+        assertThat(h.ext.progress().stage()).isEqualTo("SCENARIO_INTRO");
+        assertThat(h.recorder.rows).as("화면 표시를 위해 역할극 결과를 먼저 만들지 않는다").isEmpty();
+        h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.SCENE_INTRO);
+        assertThat(h.ext.progress().stage()).isEqualTo("SCENARIO_INTRO");
+        h.played();
+        assertThat(h.ext.progress().stage()).isEqualTo("FIRST_RESPONSE");
     }
 
     @Test

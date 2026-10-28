@@ -47,6 +47,15 @@ public class PracticeFlowRepository {
     private static final String APPEND_FACT = "update realtime.realtime_practice_scene_run set"
             + " facts = array_append(facts, cast(:kind as text)), fact_ats = array_append(fact_ats, :at) where id = :id";
 
+    private static final String RECORD_PREPARATION = "insert into realtime.realtime_practice_preparation"
+            + " (scene_run_id, provided_at, attempted_at) select id,"
+            + " case when :kind = 'PREPRACTICE_PROVIDED' then cast(:at as timestamptz) end,"
+            + " case when :kind = 'PREPRACTICE_ATTEMPTED' then cast(:at as timestamptz) end"
+            + " from realtime.realtime_practice_scene_run where id = :id"
+            + " on conflict (scene_run_id) do update set"
+            + " provided_at = coalesce(realtime.realtime_practice_preparation.provided_at, excluded.provided_at),"
+            + " attempted_at = coalesce(realtime.realtime_practice_preparation.attempted_at, excluded.attempted_at)";
+
     private static final String UPDATE_OUTCOME = "update realtime.realtime_practice_scene_run set ended_at = :endedAt,"
             + " live_timing = :liveTiming, variant_skip_reason = :skipReason, retry_count = :retryCount,"
             + " reexplain_count = :reexplainCount where id = :id";
@@ -62,6 +71,11 @@ public class PracticeFlowRepository {
     private static final String SELECT_FACTS = "select r.id as run_id, f.fkind as kind, f.fat as fact_at"
             + " from realtime.realtime_practice_scene_run r, unnest(r.facts, r.fact_ats) with ordinality as f(fkind, fat, n)"
             + " where r.session_id = :sessionId order by r.started_at, r.id, f.n";
+
+    private static final String SELECT_PREPARATION = "select p.scene_run_id, p.provided_at, p.attempted_at"
+            + " from realtime.realtime_practice_preparation p"
+            + " join realtime.realtime_practice_scene_run r on r.id = p.scene_run_id"
+            + " where r.session_id = :sessionId order by r.started_at, r.id";
 
     private static final String SELECT_HELPS = "select h.id, h.scene_run_id, h.guardian_id, h.kind, h.role, h.example_given,"
             + " h.consent_answer, h.content_chars, h.occurred_at from realtime.realtime_practice_help h"
@@ -119,7 +133,8 @@ public class PracticeFlowRepository {
         ClockParams.uuid(params, "id", sceneRunId);
         ClockParams.text(params, "kind", kind.name());
         ClockParams.instant(params, "at", Objects.requireNonNull(at, "at"));
-        return jdbc.update(APPEND_FACT, params) == 1;
+        boolean preparation = kind == FactKind.PREPRACTICE_PROVIDED || kind == FactKind.PREPRACTICE_ATTEMPTED;
+        return jdbc.update(preparation ? RECORD_PREPARATION : APPEND_FACT, params) == 1;
     }
 
     /**
@@ -165,6 +180,18 @@ public class PracticeFlowRepository {
             return runs;
         }
         Map<UUID, List<Fact>> facts = new LinkedHashMap<>();
+        // 사전 사실은 옛 facts 배열 밖에 보관해 구 앱의 enum 읽기를 깨뜨리지 않는다.
+        jdbc.query(SELECT_PREPARATION, params, rs -> {
+            List<Fact> preparation = facts.computeIfAbsent(ClockParams.uuid(rs, "scene_run_id"), id -> new ArrayList<>());
+            Instant providedAt = ClockParams.instant(rs, "provided_at");
+            Instant attemptedAt = ClockParams.instant(rs, "attempted_at");
+            if (providedAt != null) {
+                preparation.add(new Fact(FactKind.PREPRACTICE_PROVIDED, providedAt));
+            }
+            if (attemptedAt != null) {
+                preparation.add(new Fact(FactKind.PREPRACTICE_ATTEMPTED, attemptedAt));
+            }
+        });
         jdbc.query(SELECT_FACTS, params, rs -> {
             facts.computeIfAbsent(ClockParams.uuid(rs, "run_id"), id -> new ArrayList<>())
                     .add(new Fact(FactKind.valueOf(rs.getString("kind")), ClockParams.instant(rs, "fact_at")));

@@ -20,11 +20,11 @@ public final class FlowState {
 
     /** 단계(BR3.1). 참여 확인은 실행부 소유라 없다. 변형 장면은 {@code sceneKind=VARIANT}로 같은 단계를 다시 돈다. */
     public enum Phase {
-        SCENE_INTRO, OPPORTUNITY, REASK, HELP_OFFER, FOCUS, RETRY, SCENE_WRAP, VARIANT_OFFER, NEXT_GOAL, CLOSING;
+        SCENE_INTRO, PREPARATION, OPPORTUNITY, REASK, HELP_OFFER, FOCUS, RETRY, SCENE_WRAP, VARIANT_OFFER, NEXT_GOAL, CLOSING;
 
         /** 아이 말을 기다리는 단계(판정 지점 하나에 묶인다, §3.3). */
         public boolean awaitsInput() {
-            return this == OPPORTUNITY || this == REASK || this == HELP_OFFER || this == RETRY || this == VARIANT_OFFER;
+            return this == PREPARATION || this == OPPORTUNITY || this == REASK || this == HELP_OFFER || this == RETRY || this == VARIANT_OFFER;
         }
     }
 
@@ -33,6 +33,8 @@ public final class FlowState {
         NONE,
         /** 오늘의 목표·범위 안내와 사실에 근거한 목표 마무리. */
         GOAL_BRIEF, GOAL_RECAP,
+        /** 역할극 전 설명·예시, 추가 도움, 사전 연습 정리. */
+        PREPARATION_PROMPT, PREPARATION_FEEDBACK, PREPARATION_FINISH,
         /** FOCUS 진입 ①: 역할 전환 알림 재생 중. */
         ROLE_NOTICE,
         /** FOCUS 진입 ②: 코치 발화 재생 중. */
@@ -44,7 +46,7 @@ public final class FlowState {
         /** OPPORTUNITY: 상대 역할의 답변. 재생 뒤 같은 역할 대화의 입력을 기다린다. */
         DIALOGUE_REPLY,
         /** 상황 안의 확인 질문 또는 인식이 불확실할 때의 확인. */
-        CLARIFICATION_REPLY, INPUT_CONFIRMATION,
+        CLARIFICATION_REPLY, RESTATEMENT_REPLY, INPUT_CONFIRMATION,
         /** SCENE_WRAP: 변형 평가(알림이 없거나 끝났다). */
         VARIANT_EVAL,
         /** OPPORTUNITY · RETRY: 상황 다시 설명(승인 발화) 재생 중. */

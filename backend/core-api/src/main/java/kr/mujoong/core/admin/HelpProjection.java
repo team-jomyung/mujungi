@@ -13,7 +13,8 @@ import kr.mujoong.core.admin.RealtimeAdminClient.SceneRunFacts;
  * <ul>
  *   <li>도움 제안 자체는 기록되지 않는다. 반응은 수락 · 요청 · 불명확이면 역할 전환(ROLE_SWITCH) 행과 첫 초점 도움(FOCUS_HELP) 행에 같은 값이
  *       함께 저장되고, 거절은 도움 행 없이 장면 사실 HELP_DECLINED로만 남는다. 그래서 행을 세지 않고 장면당 한 번만 판정한다.
- *   <li>진행 중 판정 시점 IMMEDIATE · AFTER_REASK는 기회 · 되묻기 단계에서만 나오고 도움 제안은 그 뒤 단계라, 이 두 장면은 제안 전에 끝났다.
+ *   <li>IMMEDIATE · AFTER_REASK는 장면 안 도움 제안 전의 수행이다. PREPRACTICE_PROVIDED가 있으면 사전 교육 뒤 수행이며,
+ *       NOT_OFFERED가 모든 교육·도움이 없었다는 뜻은 아니다. 사전 연습을 아이가 요청한 도움이나 무응답으로 세지 않는다.
  *   <li>그 밖(시간 · 종료 요청으로 끝남, 판정 보류, 장면 실행 기록 없음)은 제안 전에 끝났는지 제안 뒤 반응이 없었는지 기록으로 가를 수 없다.
  * </ul>
  */
@@ -25,7 +26,7 @@ public final class HelpProjection {
         OFFERED,
         /** 아이가 먼저 도움을 청했다. */
         REQUESTED,
-        /** 도움 제안 단계 전에 장면이 끝났다(기록으로 확정). */
+        /** 장면 안 도움 제안 단계 전에 끝났다. 사전 연습 여부와 독립적이다. */
         NOT_OFFERED,
         /** 기록으로 가를 수 없다. */
         UNKNOWN
