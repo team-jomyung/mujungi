@@ -111,11 +111,12 @@ public record CoreTimingProperties(
         }
     }
 
-    /** 지식 그래프 일반 업무 상한과 서버 시작 준비의 별도 전체 마감(timing.md 13절). */
-    public record KnowledgeTiming(Duration graphBudget, Duration graphInitializationBudget) {
+    /** 지식 그래프 일반 업무 상한, 서버 시작 준비의 별도 전체 마감, 참고 씨앗 쉬는 기간(timing.md 13절). */
+    public record KnowledgeTiming(Duration graphBudget, Duration graphInitializationBudget, Duration referenceCooldown) {
         public KnowledgeTiming {
             positive(graphBudget, "mujoong.timing.knowledge.graph-budget");
             positive(graphInitializationBudget, "mujoong.timing.knowledge.graph-initialization-budget");
+            positive(referenceCooldown, "mujoong.timing.knowledge.reference-cooldown");
         }
     }
 

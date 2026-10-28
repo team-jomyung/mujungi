@@ -158,4 +158,62 @@ class Neo4jIT {
     @Test void refusesHandleInjection() {
         assertThatThrownBy(() -> graph.terminate("../../commit")).isInstanceOf(IllegalArgumentException.class);
     }
+    private static void commitWith(java.util.function.Consumer<String> work) {
+        String tx = graph.begin();
+        try { work.accept(tx); graph.commit(tx); } finally { graph.terminate(tx); }
+    }
+    @Test void observationsAndReferenceTimeRoundTripOnExistingSeedsOnly() {
+        UUID child = UUID.randomUUID();
+        commitWith(tx -> graph.replaceBase(tx, child, GraphModelTest.catalog()));
+        var observedAt = java.time.Instant.parse("2030-01-02T03:04:05Z");
+        commitWith(tx -> graph.writeObservations(tx, child, java.util.Map.of(
+                "seed:S1", new SeedObservation(3, observedAt), "seed:S9", new SeedObservation(5, observedAt))));
+        var referencedAt = observedAt.plusSeconds(60);
+        commitWith(tx -> graph.markReferenced(tx, child, "seed:S1", referencedAt));
+
+        assertThat(graph.profiles(child)).singleElement().satisfies(profile -> {
+            assertThat(profile.seed().seedId()).isEqualTo("seed:S1");
+            assertThat(profile.observedCount()).isEqualTo(3);
+            assertThat(profile.lastObservedAt()).isEqualTo(observedAt);
+            assertThat(profile.lastReferencedAt()).isEqualTo(referencedAt);
+        });
+
+        commitWith(tx -> graph.writeObservations(tx, child, java.util.Map.of()));
+        assertThat(graph.profiles(child)).singleElement().satisfies(profile -> {
+            assertThat(profile.observedCount()).isZero();
+            assertThat(profile.lastObservedAt()).isNull();
+            assertThat(profile.lastReferencedAt()).isEqualTo(referencedAt);
+        });
+        commitWith(tx -> graph.deleteChild(tx, child));
+    }
+    @Test void reloadingTheBaseKeepsRecordsOfSeedsStillInTheCatalog() {
+        UUID child = UUID.randomUUID();
+        commitWith(tx -> graph.replaceBase(tx, child, GraphModelTest.catalog()));
+        var at = java.time.Instant.parse("2030-01-02T00:00:00Z");
+        commitWith(tx -> graph.writeObservations(tx, child, java.util.Map.of("seed:S1", new SeedObservation(4, at))));
+        commitWith(tx -> graph.markReferenced(tx, child, "seed:S1", at));
+
+        commitWith(tx -> graph.replaceBase(tx, child, GraphModelTest.catalog()));
+        assertThat(graph.profiles(child)).singleElement().satisfies(profile -> {
+            assertThat(profile.observedCount()).isEqualTo(4);
+            assertThat(profile.lastReferencedAt()).isEqualTo(at);
+        });
+
+        commitWith(tx -> graph.replaceBase(tx, child, new SeedCatalog(GraphModelTest.catalog().version(),
+                GraphModelTest.catalog().digest(), List.of())));
+        assertThat(graph.seeds(child)).isEmpty();
+        commitWith(tx -> graph.deleteChild(tx, child));
+    }
+    @Test void recordWritesNeverRecreateADeletedChildGraph() {
+        UUID child = UUID.randomUUID();
+        commitWith(tx -> graph.replaceBase(tx, child, GraphModelTest.catalog()));
+        commitWith(tx -> graph.deleteChild(tx, child));
+
+        commitWith(tx -> graph.writeObservations(tx, child, java.util.Map.of(
+                "seed:S1", new SeedObservation(2, java.time.Instant.parse("2030-01-01T00:00:00Z")))));
+        commitWith(tx -> graph.markReferenced(tx, child, "seed:S1", java.time.Instant.parse("2030-01-01T00:00:00Z")));
+
+        assertThat(graph.seeds(child)).isEmpty();
+        assertThat(graph.profiles(child)).isEmpty();
+    }
 }

@@ -48,11 +48,11 @@ class TimingPropertiesTest {
 
     @Test
     void zeroNegativeOrMissingGraphBudgetIsRejectedWithTheKeyName() {
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ZERO, Duration.ofSeconds(10)))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ZERO, Duration.ofSeconds(10), Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.parse("PT-1S"), Duration.ofSeconds(10)))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.parse("PT-1S"), Duration.ofSeconds(10), Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
-        assertThatThrownBy(() -> new KnowledgeTiming(null, Duration.ofSeconds(10)))
+        assertThatThrownBy(() -> new KnowledgeTiming(null, Duration.ofSeconds(10), Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mujoong.timing.knowledge.graph-budget");
     }
 
@@ -75,7 +75,7 @@ class TimingPropertiesTest {
     @Test
     void initializationOverrideBindsWithoutChangingTheOrdinaryBudget() {
         var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
-                java.util.Map.of("graph-budget", "2s", "graph-initialization-budget", "15s"));
+                java.util.Map.of("graph-budget", "2s", "graph-initialization-budget", "15s", "reference-cooldown", "7d"));
         KnowledgeTiming timing = new org.springframework.boot.context.properties.bind.Binder(source)
                 .bind("", org.springframework.boot.context.properties.bind.Bindable.of(KnowledgeTiming.class)).get();
         assertThat(timing.graphInitializationBudget()).isEqualTo(Duration.ofSeconds(15));
@@ -83,22 +83,37 @@ class TimingPropertiesTest {
     }
 
     @Test
+    void referenceCooldownDefaultsToOneWeek() {
+        KnowledgeTiming timing = ConfigKeyContractTest.bind(APPLICATION_YML).timing().knowledge();
+        assertThat(timing.referenceCooldown()).isEqualTo(Duration.ofDays(7));
+    }
+
+    @Test
+    void zeroNegativeOrMissingReferenceCooldownIsRejectedWithTheKeyName() {
+        for (Duration cooldown : java.util.Arrays.asList(null, Duration.ZERO, Duration.ofDays(-1))) {
+            assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ofSeconds(10), cooldown))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("mujoong.timing.knowledge.reference-cooldown");
+        }
+    }
+
+    @Test
     void missingInitializationBudgetIsRejected() {
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), null))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), null, Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
     }
 
     @Test
     void zeroInitializationBudgetIsRejected() {
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ZERO))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ZERO, Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
     }
 
     @Test
     void negativeInitializationBudgetIsRejected() {
-        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ofSeconds(-1)))
+        assertThatThrownBy(() -> new KnowledgeTiming(Duration.ofSeconds(2), Duration.ofSeconds(-1), Duration.ofDays(7)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mujoong.timing.knowledge.graph-initialization-budget");
     }

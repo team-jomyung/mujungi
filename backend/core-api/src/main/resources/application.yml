@@ -180,6 +180,8 @@ mujoong:
     knowledge:
       graph-budget: 2s
       graph-initialization-budget: 10s
+      # 한 번 장면 참고로 쓴 씨앗을 다시 참고하지 않는 기간(contracts/knowledge-graph.md 참고 씨앗)
+      reference-cooldown: 7d
   outbox:
     poll-interval: 500ms
     batch-size: 20

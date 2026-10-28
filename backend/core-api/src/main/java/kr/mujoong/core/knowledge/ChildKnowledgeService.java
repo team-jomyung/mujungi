@@ -3,6 +3,7 @@ package kr.mujoong.core.knowledge;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -124,18 +125,23 @@ public class ChildKnowledgeService implements AutoCloseable {
 
     private Read readBounded(UUID guardian, UUID child) {
         if (!enabled) return new Read(List.of(), false, null);
-        var future = executor.submit(() -> transaction(() -> read(guardian, child)));
+        Read result = bounded(() -> transaction(() -> read(guardian, child)), new Read(List.of(), false, null));
+        if (result.initialize()) requestInitialization(guardian, child);
+        return result;
+    }
+
+    /** 그래프 예산 안에 끝나지 않거나 실패한 조회는 빈 값으로 바꾼다(FR9.5). */
+    private <T> T bounded(java.util.concurrent.Callable<T> work, T fallback) {
+        var future = executor.submit(work);
         try {
-            Read result = future.get(budget.toNanos(), TimeUnit.NANOSECONDS);
-            if (result.initialize()) requestInitialization(guardian, child);
-            return result;
+            return future.get(budget.toNanos(), TimeUnit.NANOSECONDS);
         } catch (InterruptedException e) {
             future.cancel(true);
             Thread.currentThread().interrupt();
-            return new Read(List.of(), false, null);
+            return fallback;
         } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
             future.cancel(true);
-            return new Read(List.of(), false, null);
+            return fallback;
         }
     }
 
@@ -165,6 +171,118 @@ public class ChildKnowledgeService implements AutoCloseable {
     public Optional<VariantPlanner.Plan> variantPlan(UUID guardian, UUID child, String seedId,
             VariantPlanner.Context context, List<VariantPlanner.Exposure> actualExposures) {
         return skillContext(guardian, child, seedId).flatMap(value -> planner.plan(value.seed(), context, actualExposures));
+    }
+
+    /** 참고 씨앗 후보가 되려면 자유대화에서 이만큼 이상 관찰돼야 한다. 태그 한 번의 오류에 끌려가지 않게 한다. */
+    static final int REFERENCE_MIN_OBSERVATIONS = 2;
+
+    /** 연습 장면의 소재 참고로만 쓰는 씨앗. 목표 기술 · 보존 조건은 바꾸지 않는다. */
+    public record ReferenceSeed(String seedId, String invariantSentence) {
+        @Override public String toString() { return "ReferenceSeed[" + seedId + "]"; }
+    }
+
+    /**
+     * 자유대화 목표 후보의 씨앗 태그 횟수를 그 아이 그래프에 덮어쓴다. 원문 · 세션 출처는 그래프에 두지 않는다(BR2).
+     * 횟수는 권한을 확인한 같은 트랜잭션에서 센다. 그래프가 아직 준비되지 않았으면 쓰지 않고 다음 동기화에 맡긴다.
+     *
+     * @return 그래프에 썼으면 true
+     */
+    public boolean recordObservations(UUID guardian, UUID child, Supplier<Map<String, SeedObservation>> observations) {
+        if (!enabled) return false;
+        return writeRecord(guardian, child, () -> Map.copyOf(observations.get()),
+                (tx, counted) -> graph.writeObservations(tx, child, counted));
+    }
+
+    /**
+     * 담은 목표의 씨앗 가운데 장면 참고로 쓸 씨앗 하나를 고른다. 연습 목표 자신의 씨앗, 관찰이 적은 씨앗, 쉬는 기간 안의 씨앗은 빼고
+     * 관찰 횟수가 많은 순으로 고른다. 담은 목표의 씨앗은 권한을 확인한 뒤에 읽는다. 고를 씨앗이 없거나 조회가 예산을 넘기면 빈 값이다
+     * (참고 없이 장면을 만든다).
+     */
+    public Optional<ReferenceSeed> referenceSeed(UUID guardian, UUID child, String goalSeedId,
+            Supplier<Set<String>> eligibleSeedIds, Duration cooldown) {
+        if (!enabled) return Optional.empty();
+        return bounded(() -> chooseReference(guardian, child, goalSeedId, eligibleSeedIds, cooldown), Optional.empty());
+    }
+
+    private record Candidates(Set<String> eligible, Set<String> generated) {}
+
+    private Optional<ReferenceSeed> chooseReference(UUID guardian, UUID child, String goalSeedId,
+            Supplier<Set<String>> eligibleSeedIds, Duration cooldown) {
+        Candidates candidates = transaction(() -> {
+            access.requireAllowed(guardian, child);
+            if (!ready(child)) return null;
+            return new Candidates(Set.copyOf(eligibleSeedIds.get()),
+                    ledger.successful(child).stream().map(KnowledgeSeed::seedId).collect(java.util.stream.Collectors.toSet()));
+        });
+        if (candidates == null || candidates.eligible().isEmpty()) return Optional.empty();
+        // 그래프 조회는 보호자 잠금 밖에서 한다. 같은 보호자의 연습 저장이 그래프 응답을 기다리지 않게 한다.
+        Instant now = clock.now();
+        return graph.profiles(child).stream()
+                .filter(profile -> profile.seed().enabled())
+                .filter(profile -> profile.seed().origin() == KnowledgeSeed.Origin.POC
+                        || candidates.generated().contains(profile.seed().seedId()))
+                .filter(profile -> candidates.eligible().contains(profile.seed().seedId())
+                        && !profile.seed().seedId().equals(goalSeedId))
+                .filter(profile -> profile.observedCount() >= REFERENCE_MIN_OBSERVATIONS)
+                .filter(profile -> profile.lastReferencedAt() == null || !now.isBefore(profile.lastReferencedAt().plus(cooldown)))
+                .sorted(java.util.Comparator.comparingInt(SeedProfile::observedCount).reversed()
+                        .thenComparing(SeedProfile::lastObservedAt, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                        .thenComparing(profile -> profile.seed().seedId()))
+                .findFirst()
+                .map(profile -> new ReferenceSeed(profile.seed().seedId(), profile.seed().invariantSentence()));
+    }
+
+    private kr.mujoong.core.observability.EventLogger events;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void connectEvents(kr.mujoong.core.observability.EventLogger events) { this.events = events; }
+
+    /** 연습 장면을 저장한 뒤 참고로 쓴 씨앗의 시점을 남긴다. 연습 시작을 기다리게 하지 않으려고 따로 실행한다. */
+    public void requestReferenceMark(UUID guardian, UUID child, String seedId) {
+        if (!enabled) return;
+        Instant referencedAt = clock.now();
+        try {
+            executor.execute(() -> {
+                try { markReferenced(guardian, child, seedId, referencedAt); }
+                catch (RuntimeException failed) {
+                    // 남기지 못하면 다음 연습에서 같은 씨앗이 쉬지 않고 다시 참고될 수 있을 뿐이라 연습 결과는 바꾸지 않고 기록만 남긴다.
+                    if (events != null) events.appError(kr.mujoong.contract.log.EventLog.Component.CORE_MAINTENANCE, "ReferenceMarkFailed");
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException closed) {
+            // 종료 중에는 참고 시점을 남기지 않는다. 위와 같은 이유로 연습 결과에는 영향이 없다.
+        }
+    }
+
+    boolean markReferenced(UUID guardian, UUID child, String seedId, Instant referencedAt) {
+        return writeRecord(guardian, child, () -> Boolean.TRUE, (tx, ignored) -> graph.markReferenced(tx, child, seedId, referencedAt));
+    }
+
+    /**
+     * 권한 · 그래프 상태는 짧은 PostgreSQL 트랜잭션에서 확인하고, Neo4j 쓰기는 보호자 잠금 밖에서 한다. 쓰기는 MATCH만 쓰므로
+     * 확인 뒤 삭제가 끼어들어도 지운 아이 그래프를 되살리지 않는다. 생성 씨앗과 달리 원장을 거치지 않는 파생 기록이며,
+     * 결과가 불명확해도 아이 삭제(`deleteChild`)가 노드째 지운다.
+     */
+    private <T> boolean writeRecord(UUID guardian, UUID child, Supplier<T> prepare, java.util.function.BiConsumer<String, T> write) {
+        T prepared = transaction(() -> {
+            access.requireAllowed(guardian, child);
+            return ready(child) ? prepare.get() : null;
+        });
+        if (prepared == null) return false;
+        String tx = graph.begin();
+        try {
+            write.accept(tx, prepared);
+            graph.commit(tx);
+        } finally { graph.terminate(tx); }
+        return true;
+    }
+
+    /** 기본 씨앗이 현재 판으로 적재돼 있고, 삭제 · 초기화 · 복구 중이 아닌 아이 그래프만 기록을 읽고 쓴다. */
+    private boolean ready(UUID child) {
+        if (ledger.deletedChild(child)) return false;
+        var state = ledger.child(child);
+        return state.isPresent() && "ACTIVE".equals(state.get().state())
+                && catalog.version().equals(state.get().baseVersion())
+                && state.get().initializationTransactionId() == null && ledger.pending(child).isEmpty();
     }
 
     public void deleteChild(UUID guardian, UUID child) { delete(guardian, child, null); }

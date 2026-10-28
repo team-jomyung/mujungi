@@ -250,6 +250,7 @@ U8(계약 · 버전 리소스)이 더한 키다. 새 연습 흐름 키는 12절 
 | `mujoong.timing.conversation.goal-active-limit` | `10m` | realtime | 목표 하나의 진행 상한(U12) | FR4.5 |
 | `mujoong.timing.knowledge.graph-budget` | `2s` | core-api | 지식 그래프 조회 한 번의 상한. 넘기면 빈 응답(U15) | FR9.5 |
 | `mujoong.timing.knowledge.graph-initialization-budget` | `10s` | core-api | 시작 시 제약·교체 계획 준비 전체 마감. 일반 업무 요청2초와 분리 | 사용자 초기화 지시(2026-10-21) |
+| `mujoong.timing.knowledge.reference-cooldown` | `7d` | core-api | 연습 장면 참고로 쓴 씨앗을 다시 참고하지 않는 기간. 마지막 참고 시점부터 센다(`knowledge-graph.md` 참고 씨앗) | 사람 결정(2026-10-28) · 편차 KG-1028-a |
 
 초기화 전용 키는 Core 서버만 소비한다. 기본10초는 초기 구현값이며 일반 조회·쓰기·트랜잭션 요청과 JDBC 업무의 기존2초를 바꾸지 않는다. 준비 작업의 각 HTTP 요청은 전체 초기화 마감의 남은 시간 안에서만 기다린다. 실패·중단·만료 시 준비 상태를 열지 않고 시작 실패로 전파한다. 실패 후 알려진 트랜잭션 정리에는 일반 graph-budget을 전체 정리의 별도 상한으로 사용한다(기본 최대2초 추가). 따라서 준비10초와 실패 정리2초를 합친 네트워크 대기 상한은 기본12초다. 자동 재시도는 없다. 정상 계획 트랜잭션 종료는 초기화 마감 안에 포함된다.
 
