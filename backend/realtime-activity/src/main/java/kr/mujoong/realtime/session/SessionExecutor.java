@@ -1263,6 +1263,8 @@ public final class SessionExecutor {
     static final String REASON_TAIL_UNIT_DROPPED = "PracticeTailUnitDroppedAfterPlayback";
     /** FT-1023-e: 재생이 시작된 생성형 연습 발화의 남은 전사가 음성과 맞춰지지 못한 채 시한이 지나 나간 부분까지 재생됨으로 닫았다(INFO). */
     static final String REASON_TAIL_TEXT_UNALIGNED = "PracticeTailTextUnalignedAfterPlayback";
+    /** 수집 시한 뒤 추가 조각은 버리고, 이미 보낸 연습 음성의 검사 · 재생 종료를 기다린다. */
+    static final String REASON_COLLECTION_TIMEOUT_AFTER_PLAYBACK = "PracticeCollectionTimeoutAfterPlayback";
 
     /**
      * FT-1023-e: 단위별 경로로 나가던 생성형 연습 발화({@link #streamedPractice})가 이미 단위 하나라도 기기로 나갔으면, 그 발화의 남은 출력을 받지 않고
@@ -3090,6 +3092,9 @@ public final class SessionExecutor {
         else if (streamedPractice != null) {
             logOutputDiscard(null, null, GateDecision.DiscardReason.GATE_EMPTY,
                     DiscardDetail.PROVIDER_COLLECTION_TIMEOUT, streamedPractice);
+            // 단위별 송신 뒤에는 전체 구간 버퍼가 비어 있다. 이미 나간 음성도 같은 꼬리 복구로 닫아
+            // 출력 세대를 올려 재생을 끊거나, 들려준 발화를 실패로 다시 요청하지 않게 한다.
+            if (closeSentStreamedPractice(REASON_COLLECTION_TIMEOUT_AFTER_PLAYBACK)) return;
             practicePlayback(streamedPractice, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
         }
     }
