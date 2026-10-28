@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FreeTalkScreen } from "@/parent/features/free/FreeTalkScreen";
 import { SESSION_ID, deferred, errorResponse, jsonResponse } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
-import { renderParent, type ParentHarness, type RequestHandler } from "../../../support/parentHarness";
+import type { ParentHarness, RequestHandler } from "../../../support/parentHarness";
+import { renderParent } from "../../../support/readyActivityHarness";
 
 vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
 

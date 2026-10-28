@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { startFailureReason } from "../../common/activity/failure";
 import { useApiClient } from "../../common/api/queries";
 import { BottomTabBar, type TabKey } from "../../common/components/BottomTabBar";
-import { PARENT_ROUTES, goToLogin, routeForTab } from "../../common/navigation";
+import { PARENT_ROUTES, goToLogin } from "../../common/navigation";
 import type { GoalSelection } from "../../common/api/practice";
 import { practiceStartPort } from "./startPort";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "./copy";
@@ -16,6 +16,7 @@ import { MAX_PRACTICE_GOALS } from "./practiceStart";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useTiming } from "@/shared/timing/TimingProvider";
+import { useActivityEntry } from "../../common/activity/useActivityEntry";
 import "./practice.css";
 
 /** AC4.1.1/2/5–11/13. 추첨 순서는 Core가 고정하고 화면은 선택 ID만 전달한다. */
@@ -24,6 +25,7 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const api = useApiClient();
   const toast = useToast();
   const timing = useTiming();
+  const entry = useActivityEntry();
   const port = useMemo(() => practiceStartPort(api, timing.practiceStartRequestTimeoutMs), [api, timing.practiceStartRequestTimeoutMs]);
   const goals = usePracticeGoals();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -48,9 +50,9 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   });
 
   const navigate = (tab: TabKey) => {
-    if (tab === "practice") return;
-    goals.cancelPending();
-    router.push(routeForTab(tab));
+    if (tab === "practice" && entry.canStart) return;
+    goals.dismissUndo();
+    entry.navigate(tab);
   };
 
   const group = (items: readonly GoalSelection[], favorite: boolean) => items.length === 0 ? null : (
@@ -64,10 +66,11 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
           return (
             <li key={id} className="mj-practice__goal" data-testid={`goal-${id}`} data-selected={checked} aria-busy={busy}>
               <label className="mj-practice__select">
-                <input type="checkbox" checked={checked} disabled={startLocked || (MAX_PRACTICE_GOALS > 1 && !checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
+                <input type="checkbox" checked={checked} disabled={busy || (MAX_PRACTICE_GOALS > 1 && !checked && selectedCount >= MAX_PRACTICE_GOALS)} onChange={() => toggleSelected(id)} aria-label={PRACTICE_TEMP_COPY.select(goal.displayName)} />
                 <span className="mj-practice__text">
                   <span className="mj-practice__name">{goal.displayName}</span>
                   <span className="mj-practice__meta">{goalMeta(goal)}</span>
+                  {goals.deletingIds.has(id) ? <span role="status" className="mj-practice__meta">{PRACTICE_TEMP_COPY.deleting}</span> : null}
                 </span>
               </label>
               <button type="button" className="mj-practice__icon" aria-label={PRACTICE_TEMP_COPY.favorite(goal.displayName, goal.isFavorite)} aria-pressed={goal.isFavorite} disabled={busy} onClick={() => { void goals.toggleFavorite(goal); }}>
@@ -105,18 +108,19 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
             <h2>{PRACTICE_COPY.empty}</h2>
             <h3>{PRACTICE_COPY.howTo}</h3>
             <ol className="mj-practice__steps">{PRACTICE_COPY.steps.map((step) => <li key={step}>{step}</li>)}</ol>
-            <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.cancelPending}>{PRACTICE_COPY.goFree}</Link>
+            <Link className="mj-button mj-button--primary mj-button--block" href={PARENT_ROUTES.free} onClick={goals.dismissUndo}>{PRACTICE_COPY.goFree}</Link>
           </section>
         ) : <><p id="practice-selection-limit">{PRACTICE_COPY.selectionLimit}</p>{group(visible.filter((goal) => goal.isFavorite), true)}{group(visible.filter((goal) => !goal.isFavorite), false)}</>}
+        {entry.startMessage !== null ? <p className="mj-reason-card" role="status" data-testid="practice-readiness">{entry.startMessage}</p> : null}
         {goals.items !== undefined && (visible.length > 0 || startLocked) ? (
           <PracticeStartAction selected={[...selected]} owned={visible.map((goal) => goal.goalSelectionId)} port={port}
-            newKey={() => crypto.randomUUID()} blocked={goals.needsRecovery || goals.busyIds.size > 0 || goals.isFetching}
-            onLockedChange={setStartLocked} onSubmitting={() => { setShowReturnedFailure(false); goals.cancelPending(); }}
+            newKey={() => crypto.randomUUID()} blocked={!entry.canStart || goals.needsRecovery || goals.busyIds.size > 0 || goals.isFetching}
+            onLockedChange={setStartLocked} onSubmitting={() => { setShowReturnedFailure(false); goals.dismissUndo(); }}
             onRejected={(code) => { if (code === "UNAUTHENTICATED") goToLogin(router, toast); }}
             onAccepted={(sessionId) => router.push(PARENT_ROUTES.session(sessionId))} />
         ) : null}
       </main>
-      <BottomTabBar active="practice" lockMessage={null} onNavigate={navigate} onLockedPress={() => undefined} />
+      <BottomTabBar active="practice" lockMessage={entry.lockMessage} onNavigate={navigate} onLockedPress={entry.onLockedPress} />
     </div>
   );
 }

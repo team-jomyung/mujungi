@@ -25,7 +25,7 @@ export function PracticeStartAction({ selected, owned, port, newKey, onAccepted,
   const count = sending || unresolved ? requestedCount : ownedSelection(selected, owned).length;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function submit() {
-    if (running.current || outcome?.kind === "accepted" || (!unresolved && (count === 0 || count > MAX_PRACTICE_GOALS))) return;
+    if (running.current || outcome?.kind === "accepted" || (!unresolved && (count === 0 || count > MAX_PRACTICE_GOALS || blocked))) return;
     running.current = true;
     if (!unresolved) setRequestedCount(count);
     onSubmitting?.();
