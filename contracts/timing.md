@@ -186,7 +186,7 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.report.result-settle-wait` | `5m` | core-api | 접수부터 고른 활동의 결과 정리를 기다리는 상한(`ready-target`보다 짧아야 한다) | FT-1023-c |
 | `mujoong.timing.report.result-settle-poll` | `10s` | core-api | 정리를 기다리는 동안 다시 보는 간격 | FT-1023-c |
 | `mujoong.timing.report.unsaved-retention` | `24h` | core-api | 저장 안 된 READY · FAILED 보존 | FD-Q2 |
-| `mujoong.text-ai.result.request-timeout` | `20s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하) | FD-Q2 |
+| `mujoong.text-ai.result.request-timeout` | `40s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하). 20초에서 늘렸다 | FD-Q2 · FT-1027-i |
 | `mujoong.text-ai.result.temperature-judgment` | `0` | core-api | 재판정 온도 | ai-io 6.1 |
 | `mujoong.text-ai.result.temperature-generation` | `0.2` | core-api | 생성 온도 | ai-io 6.1 |
 | `mujoong.text-ai.result.prompt-version` | `v1` | core-api | 프롬프트 리소스 버전 | U6-J |
@@ -268,7 +268,11 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 
 ### 2026-10-21 실제 분석 호출 보완
 
-저장 대화의 구조화 응답이 medium 추론에서 10.6초, none에서 4.5초로 관찰됐다(서비스 수준 보장은 아님). Core의 결과 호출 한도는 20초, 순차 분석 작업 전체는 90초로 제한하며 작업 취소·재시도 횟수는 유지한다. 일반 Core 텍스트 호출은 10초이고 U10 상황 생성 전체 한도는 기존 15초를 유지한다. 결과 텍스트·목표 후보·상황 생성·상황 검토는 추론 none을 사용하되 입력 정리·출력 형식·출처·안전 분류 검사를 생략하지 않는다. 실시간 발화 판정·Jev 설정은 변경하지 않는다.
+저장 대화의 구조화 응답이 medium 추론에서 10.6초, none에서 4.5초로 관찰됐다(서비스 수준 보장은 아님). Core의 결과 호출 한도는 20초(2026-10-27 40초로 늘림, 아래 절), 순차 분석 작업 전체는 90초로 제한하며 작업 취소·재시도 횟수는 유지한다. 일반 Core 텍스트 호출은 10초이고 U10 상황 생성 전체 한도는 기존 15초를 유지한다. 결과 텍스트·목표 후보·상황 생성·상황 검토는 추론 none을 사용하되 입력 정리·출력 형식·출처·안전 분류 검사를 생략하지 않는다. 실시간 발화 판정·Jev 설정은 변경하지 않는다.
+
+### 2026-10-27 결과 호출 한도 40초 (FT-1027-i)
+
+목표 후보 추론을 `low`로 올리면서 긴 자유대화(56행)에서 호출이 14 ~ 15초까지 걸려 20초 한도의 여유가 5초 남짓이 됐다(실호출 · 합성 측정, 실기기 아님). `mujoong.text-ai.result.request-timeout`을 `40s`로 늘린다. 이 키는 결과 작업의 모든 AI 호출(구조화 · 결과 문장 · 목표 후보 · 재판정 · 2차 분류)에 같이 걸린다. 결과 시도 전체 상한 `result.attempt-timeout`(90초)과 재시도 횟수 · 지연은 그대로라, 자유대화 종료부터 결과가 정리될 때까지의 상한은 바뀌지 않는다. 연습 상황 생성 예산(`practice.scenario-request-timeout`)과 일반 호출 한도(`text-ai.request-timeout`)도 그대로다.
 
 ### 2026-10-22 연습 시작 대기 정합성 보완
 

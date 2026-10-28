@@ -35,6 +35,12 @@ public final class TranscriptWriter {
      */
     private StreamRow currentStream;
     private final List<StreamRow> endedStreams = new ArrayList<>();
+    /**
+     * 조용함으로 끝났다고 본 응답 묶음 행. 공급자는 응답 끝 사건을 주지 않아 조용 시간이 지나면 끝으로 보지만, 같은 응답의 마지막 조각이 그 뒤에
+     * 늦게 오기도 한다. 이어 붙일 수 있는 동안({@link #pauseStream} ~ {@link #closeResumable}) 행을 닫지 않고 두었다가, 그 사이 다음 출력 단위가
+     * 시작되면 같은 행에 다시 연다. 아이 입력 · 서버 지시 · 세대 올림 · 다른 AI 행이 오면 닫는다.
+     */
+    private StreamRow resumable;
     /** U13 BR5.5: 제브 검사를 기다리는 보관 행(최대 검사 중 1건 + 대기열 1칸). */
     private final List<Held> heldRows = new ArrayList<>();
 
@@ -55,6 +61,7 @@ public final class TranscriptWriter {
     public boolean childDelta(String itemId, String delta, Instant at) {
         ChildRow row = childRows.get(key(itemId));
         if (row == null) {
+            closeResumable();
             row = new ChildRow(++lastSeq, at);
             childRows.put(key(itemId), row);
         } else if (row.closed) {
@@ -78,6 +85,7 @@ public final class TranscriptWriter {
     public OptionalInt childFinal(String itemId, String transcript, Instant at, boolean reviewNeeded) {
         ChildRow row = childRows.get(key(itemId));
         if (row == null) {
+            closeResumable();
             row = new ChildRow(++lastSeq, at);
             childRows.put(key(itemId), row);
         }
@@ -96,6 +104,7 @@ public final class TranscriptWriter {
     /** 응답의 첫 출력 조각: AI 번호를 정하고 확정 전 칸(approved false)을 넣는다. 이미 열려 있으면 그 번호. */
     public int aiStart(Instant at) {
         if (openAi == null) {
+            closeResumable();
             openAi = new AiRow(++lastSeq, at);
             latency.aiItem(sessionId, openAi.seq);
             recorder.putTranscript(TranscriptEntry.partial(sessionId, openAi.seq, Speaker.AI, "", at));
@@ -118,6 +127,13 @@ public final class TranscriptWriter {
      * 나뉘어도 응답 하나는 번호 하나다.
      */
     public int aiStartStreaming(Instant at) {
+        if (currentStream == null && resumable != null) {
+            // 끝났다고 본 응답의 늦은 조각: 같은 행을 다시 연다(번호 · 시작 시각 그대로, DB 행은 아직 확정 전이다)
+            currentStream = resumable;
+            resumable = null;
+            currentStream.ended = false;
+            endedStreams.remove(currentStream);
+        }
         if (currentStream == null) {
             AiRow row = new AiRow(++lastSeq, at);
             currentStream = new StreamRow(row);
@@ -142,6 +158,7 @@ public final class TranscriptWriter {
      * @return 지금 닫았으면 닫은 번호, 아니면 빈 값
      */
     public OptionalInt endStream(Instant endedAt) {
+        closeResumable();
         StreamRow stream = currentStream;
         if (stream == null) {
             return OptionalInt.empty();
@@ -156,9 +173,48 @@ public final class TranscriptWriter {
         return settle(stream);
     }
 
-    /** 끝난 묶음 행의 검사 중인 단위가 모두 정리됐으면 닫는다. */
+    /**
+     * 지금 모으는 응답이 조용함으로 끝났다: {@link #endStream}과 같지만 행을 바로 닫지 않고 이어 붙일 수 있게 둔다. 이미 이어 붙일 수 있게 둔 행이
+     * 있으면 그것을 먼저 닫는다. 모으는 응답이 없으면 아무것도 하지 않는다.
+     */
+    public void pauseStream(Instant endedAt) {
+        StreamRow stream = currentStream;
+        if (stream == null) {
+            return;
+        }
+        closeResumable();
+        currentStream = null;
+        if (openAi == stream.row) {
+            openAi = null;
+        }
+        stream.ended = true;
+        stream.endedAt = endedAt;
+        endedStreams.add(stream);
+        resumable = stream;
+    }
+
+    /**
+     * 이어 붙일 수 있게 둔 행을 이제 닫는다(검사 중인 단위가 남았으면 마지막 단위가 정리될 때 닫힌다). 없으면 아무것도 하지 않는다.
+     *
+     * @return 지금 닫았으면 닫은 번호, 아니면 빈 값
+     */
+    public OptionalInt closeResumable() {
+        StreamRow stream = resumable;
+        if (stream == null) {
+            return OptionalInt.empty();
+        }
+        resumable = null;
+        return settle(stream);
+    }
+
+    /** 이어 붙일 수 있게 둔 행이 있는가. */
+    public boolean hasResumable() {
+        return resumable != null;
+    }
+
+    /** 끝난 묶음 행의 검사 중인 단위가 모두 정리됐으면 닫는다. 이어 붙일 수 있게 둔 행은 닫지 않는다. */
     private OptionalInt settle(StreamRow stream) {
-        if (!stream.ended || stream.pending > 0 || stream.written) {
+        if (!stream.ended || stream.pending > 0 || stream.written || stream == resumable) {
             return OptionalInt.empty();
         }
         stream.written = true;
@@ -257,6 +313,7 @@ public final class TranscriptWriter {
 
     public void awaitApprovedPlayback(UUID playbackId, String text, Instant at) {
         if (pendingPlayback.containsKey(playbackId)) return;
+        closeResumable();
         AiRow row = new AiRow(++lastSeq, at);
         Held held = new Held(row, null);
         heldRows.add(held);
@@ -299,6 +356,7 @@ public final class TranscriptWriter {
     /** 종료 · 취소 때 열린 행을 모두 닫는다: 아이 조각은 지금 텍스트로 FINAL · true, AI 행(보관 행 포함)은 FINAL · false(fail-closed). */
     public void closeAll(Instant at) {
         pendingPlayback.clear();
+        closeResumable();
         for (ChildRow row : childRows.values()) {
             if (!row.closed) {
                 row.closed = true;
@@ -326,6 +384,7 @@ public final class TranscriptWriter {
     public OptionalInt approvedLine(String text, Instant at) {
         Objects.requireNonNull(text, "text");
         Objects.requireNonNull(at, "at");
+        closeResumable();
         int seq = ++lastSeq;
         boolean accepted = recorder.putTranscript(TranscriptEntry.finalized(sessionId, seq, Speaker.AI, text, true, at,
                 at));
