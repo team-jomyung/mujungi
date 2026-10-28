@@ -730,6 +730,53 @@ mj exec postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -X -h "$(hostname -
 - 관리자의 활동 상세 조회(대화 원문)는 사건 줄 `ADMIN_RECORD_VIEWED`(component `core-api/AdminQuery`)로 남는다. `ownerHash`는 활동,
   `viewerHash`는 관리자의 해시이고 원문 · id 원문은 없다.
 
+### 10.2 관리자 등록 · 회수 (JIRA-292) [ECS demo]
+
+ECS demo는 DB가 사설 서브넷의 RDS라서 위 `mj exec postgres`를 쓸 수 없다. ECS 인스턴스를 거치는 SSM 포트 포워딩 터널을 열고,
+테이블 소유자 `mujoong_owner`로 접속해 같은 SQL을 실행한다. 읽기 전용 `mujoong_backup`으로는 등록할 수 없다.
+관리자 화면이 실제 API를 부르려면 web의 `MUJOONG_ADMIN_API_ENABLED=true`가 필요하다(`infra/terraform/ecs_services.tf`).
+
+**창 1: 터널**(작업이 끝날 때까지 켜 두고, 끝나면 Ctrl+C). `Waiting for connections...`가 나오면 준비된 것이다.
+
+```powershell
+$adminRegion = 'ap-northeast-2'
+$adminInstance = aws ec2 describe-instances --region $adminRegion --filters Name=tag:Name,Values=mujungi-ecs Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].InstanceId' --output text
+$adminDbHost = aws rds describe-db-instances --region $adminRegion --db-instance-identifier mujungi-db --query 'DBInstances[0].Endpoint.Address' --output text
+aws ssm start-session --region $adminRegion --target $adminInstance --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters "host=$adminDbHost,portNumber=5432,localPortNumber=15432"
+```
+
+**창 2: 접속.** 비밀번호는 화면에 출력하지 않고 클립보드로만 옮긴다. DB 도구(DBeaver 등)에 `localhost:15432`, DB `mujoong`,
+사용자 `mujoong_owner`, SSL `require`로 붙여 넣고, 비밀번호 저장은 끈다. 접속 뒤 클립보드를 비운다.
+
+```powershell
+aws ssm get-parameter --region ap-northeast-2 --name /mujoong/db/DB_OWNER_PASSWORD --with-decryption --query Parameter.Value --output text | Set-Clipboard
+# 접속 확인 뒤
+Set-Clipboard -Value $null
+```
+
+**보호자 id 찾기.** `core.core_guardian`과 `core.core_social_account`에는 이메일이 없다. 대상자가 보호자 화면에서 구글 로그인을 한 직후
+아래 조회의 맨 위 행을 대상자 본인과 시각으로 확인한다. 다른 사람이 같은 시각에 로그인했을 수 있으니 시각을 꼭 대조한다.
+
+```sql
+select g.id, g.created_at, g.updated_at
+from core.core_guardian g
+join core.core_social_account s on s.guardian_id = g.id
+order by greatest(g.created_at, g.updated_at) desc
+limit 5;
+```
+
+**등록 · 회수 SQL**은 10.1과 같다. 이미 있는 행이면 `on conflict`가 상태만 `ACTIVE`로 되돌린다. 자동 커밋이 꺼진 도구에서는 실행 뒤 커밋한다.
+
+```sql
+insert into core.core_admin_account (guardian_id, status, created_at, updated_at)
+values ('<보호자 id>', 'ACTIVE', now(), now())
+on conflict (guardian_id) do update set status = 'ACTIVE', updated_at = now();
+
+update core.core_admin_account set status = 'REVOKED', updated_at = now() where guardian_id = '<보호자 id>';
+```
+
+V13이 적용됐는지는 `select version, success from flyway.core_schema_history order by installed_rank desc limit 3;`로 확인한다.
+
 ## 11. 백업 · 복원 (infra-spec 4.4 · reliability-design 2.12)
 
 백업 트리거 4종은 같은 스크립트(`/opt/mujoong/backup/backup.sh`)를 `flock`으로 겹침 없이 부른다: 정기 03:00 KST(backup 컨테이너의
@@ -867,7 +914,7 @@ KEEP=1 bash scripts/verify.sh         # 끝에 스택만 남긴다(생성 비밀
 
 기존 회원·활동 표 변경 없이 Realtime Flyway V9가 `realtime_ai_usage`를 만든다. 수집은 기본 꺼짐(`MUJOONG_AI_USAGE_ENABLED=false`)이며 활성화하려는 Realtime 프로세스에만 `true`를 넣는다. 호스트 `render-env`는 같은 이름의 선택 SSM 파라미터를 읽고, 없으면 `false`로 `realtime.env`에 쓴다. Core·웹에는 넣지 않는다. 이 문서 추가 자체가 설정 활성화나 배포를 뜻하지 않는다.
 
-ECS demo는 `infra/terraform/ecs_services.tf`의 realtime `environment`에 같은 키를 기본 `false`로 둔다. 켤 때는 이 값을 `true`로 변경하고 Terraform plan을 검토한 뒤 apply한다. 서비스의 `task_definition`은 Terraform에서 변경을 무시하고 CD가 관리하므로, apply만으로 실행 중인 태스크에 반영되지는 않는다. 다음 CD 배포(`.github/workflows/deploy.yml`)가 family의 최신 ACTIVE 태스크 정의에서 이미지만 바꿔 배포할 때 설정이 반영된다. apply와 CD를 동시에 실행하지 않고 순서대로 진행한다. 끌 때도 `false` 변경 → Terraform apply → CD 배포 순서다.
+ECS demo는 `infra/terraform/ecs_services.tf`의 realtime `environment`에 같은 키를 둔다. JIRA-292부터 관리자 비용 화면 집계를 위해 `true`다. 켤 때는 이 값을 `true`로 변경하고 Terraform plan을 검토한 뒤 apply한다. 서비스의 `task_definition`은 Terraform에서 변경을 무시하고 CD가 관리하므로, apply만으로 실행 중인 태스크에 반영되지는 않는다. 다음 CD 배포(`.github/workflows/deploy.yml`)가 family의 최신 ACTIVE 태스크 정의에서 이미지만 바꿔 배포할 때 설정이 반영된다. apply와 CD를 동시에 실행하지 않고 순서대로 진행한다. 끌 때도 `false` 변경 → Terraform apply → CD 배포 순서다.
 
 배포 뒤에는 최신 family 리비전이 아니라 **실행 중인 각 realtime 태스크가 참조하는 리비전**을 확인한다. 다음 조회는 API 키나 다른 환경변수를 출력하지 않고 수집 스위치만 보여 준다(대상 AWS 계정·프로필을 먼저 확인).
 
@@ -929,7 +976,7 @@ DB 지연·불가, 사용량 큐 가득 참, 비정상 연결 종료, 애플리�
 
 - **로컬 실키 스택**(`scripts/live/up.sh`, 127.0.0.1:9443): `compose.live.yml`이 키 파일(`MUJOONG_LIVE_ENV_FILE`)을 core-api에도 넘긴다. 그 파일에 `MUJOONG_CORE_AI_USAGE_ENABLED=true` 한 줄을 넣고 스택을 다시 올린다. 값은 비밀이 아니지만 키 파일 다른 값은 출력하지 않는다.
 - **호스트 `render-env`**: 같은 이름의 선택 SSM 파라미터를 읽고, 없으면 `false`로 `core-api.env`에만 쓴다. `true`·`false` 밖의 값은 거절한다.
-- **ECS demo**: `infra/terraform/ecs_services.tf`의 core-api `environment`에 기본 `false`로 둔다. 켜고 끄는 순서와 실행 중 태스크 확인은 18절과 같고, 서비스 이름 `mujoong-core-api` · 컨테이너 이름 `core-api` · 키 `MUJOONG_CORE_AI_USAGE_ENABLED`로 바꿔 조회한다.
+- **ECS demo**: `infra/terraform/ecs_services.tf`의 core-api `environment`에 둔다. JIRA-292부터 관리자 비용 화면 집계를 위해 `true`다. 켜고 끄는 순서와 실행 중 태스크 확인은 18절과 같고, 서비스 이름 `mujoong-core-api` · 컨테이너 이름 `core-api` · 키 `MUJOONG_CORE_AI_USAGE_ENABLED`로 바꿔 조회한다.
 
 실호출 없이(가짜 공급자) 수집 · 큐 · 저장 · 삭제 · 경계를 확인하려면 `backend`에서:
 

@@ -42,7 +42,8 @@ resource "aws_ecs_task_definition" "neo4j" {
       retries     = 6
       startPeriod = 60
     }
-    linuxParameters = { capabilities = { drop = ["ALL"] } }
+    # AWS가 저장하는 모양(add = [])과 맞춰 plan마다 태스크 정의 · 서비스가 교체되지 않게 한다(JIRA-292)
+    linuxParameters = { capabilities = { add = [], drop = ["ALL"] } }
     logConfiguration = {
       logDriver = "awslogs"
       options = {
