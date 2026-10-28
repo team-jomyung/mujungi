@@ -81,7 +81,7 @@ export function fetchGoalSelections(api: ApiClient, signal?: AbortSignal): Promi
   return api.request({ method: "GET", path: COLLECTION, parse: parseGoalSelections, csrf: false, signal });
 }
 
-/** Future screen27 uses the same selection resource; registering a candidate does not select it. */
+/** Explicit add for legacy/manual candidates; validated free-talk goals are also saved by result delivery. */
 export function selectGoal(api: ApiClient, recommendationId: string): Promise<GoalSelection> {
   return api.request({ method: "POST", path: COLLECTION, body: { recommendationId }, parse: parseGoalSelection, csrf: true });
 }

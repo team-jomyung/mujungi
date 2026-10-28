@@ -40,6 +40,20 @@ class HomeEventsIT {
                         assertThat(a.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:home-changed");
                         assertThat(b.lines.poll(200, TimeUnit.MILLISECONDS)).isNull();
                         assertThat(a.data.poll(5, TimeUnit.SECONDS)).isEqualTo("data:{}");
+                        // The same LISTEN connection routes goal invalidations after commit, never on rollback.
+                        db.inTx(t->{
+                            db.jdbc().query("select pg_notify('mujoong_goal_selections_changed',:g)",java.util.Map.of("g",owner.toString()),rs->{});
+                            try { assertThat(a.lines.poll(200, TimeUnit.MILLISECONDS)).isNull(); }
+                            catch (InterruptedException e) { throw new RuntimeException(e); }
+                            return null;
+                        });
+                        assertThat(a.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:goal-selections-changed");
+                        assertThat(b.lines.poll(200, TimeUnit.MILLISECONDS)).isNull();
+                        db.inTx(t->{
+                            db.jdbc().query("select pg_notify('mujoong_goal_selections_changed',:g)",java.util.Map.of("g",owner.toString()),rs->{});
+                            t.setRollbackOnly();return null;
+                        });
+                        assertThat(a.lines.poll(200, TimeUnit.MILLISECONDS)).isNull();
                         // Heartbeats follow the injected monotonic clock, not wall-clock sleep.
                         app.clock().advance(Duration.ofSeconds(10));
                         assertThat(a.lines.poll(5, TimeUnit.SECONDS)).isEqualTo("event:heartbeat");

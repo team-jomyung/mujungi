@@ -10,8 +10,8 @@ import { PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 
 /** Preparation and records screens share the existing home SSE invalidation and server verdict. */
-export function useActivityEntry() {
-  const home = useHomeQuery(true);
+export function useActivityEntry(onGoalsChanged?: () => void) {
+  const home = useHomeQuery(true, onGoalsChanged);
   const router = useRouter();
   const toast = useToast();
   const { data, error } = home;

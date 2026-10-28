@@ -34,6 +34,34 @@ class CandidateSeedReplayIT {
     CandidateSeedDelivery.Pending pending(){return CandidateSeedDelivery.Pending.of(List.of(new GoalCandidateRepository.Draft("물어보기","합성놀이","전달",new FourElements("놀이","친구","참여","말하기"),"NONE","합성근거",List.of(new GoalCandidateRepository.Evidence(1,"같이 할래")),new StructureSignature("PRODUCE","참여 의도를 상대가 이해하도록 표현한다","상대의 의도 1층","YES","YES"))));}
     void deliver(UUID id){delivery.deliver(guardian,child,session,id,pending());}
     @Test void durableReplayDoesNotDuplicateCandidate(){deliver(result);UUID handle=goals.candidates(child,session).getFirst().id();deliver(result);assertThat(goals.candidates(child,session)).hasSize(1);assertThat(goals.candidates(child,session).getFirst().id()).isEqualTo(handle);}
+    @Test void freeTalkDeliveryAutomaticallySavesCurrentVersionAndReplayPreservesIt(){
+        when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("seed:S1","REUSED"));
+        deliver(result);
+        var saved=goals.list(guardian).getFirst();
+        assertThat(goals.list(guardian)).hasSize(1);
+        var pinned=goals.saved(child,saved.id()).orElseThrow();
+        assertThat(pinned.candidateVersion()).isEqualTo(2);
+        assertThat(pinned.skillRef()).isEqualTo("seed:S1");
+        goals.favorite(saved.id(),true);
+        deliver(result);
+        assertThat(goals.list(guardian)).hasSize(1);
+        var replayed=goals.list(guardian).getFirst();
+        assertThat(replayed.id()).isEqualTo(saved.id());
+        assertThat(replayed.sortOrder()).isEqualTo(saved.sortOrder());
+        assertThat(replayed.isFavorite()).isTrue();
+        assertThat(goals.saved(child,saved.id()).orElseThrow()).isEqualTo(pinned);
+    }
+    @Test void replayNeverAutomaticallyRestoresDeletedGoalButExplicitUndoStillWorks(){
+        deliver(result);var saved=goals.list(guardian).getFirst();
+        goals.delete(saved.id(),clock.now(),clock.now().plusSeconds(60));
+        deliver(result);assertThat(goals.list(guardian)).isEmpty();
+        goals.restore(saved.id());assertThat(goals.list(guardian)).hasSize(1);
+        deliver(result);assertThat(goals.list(guardian)).hasSize(1);
+    }
+    @Test void practiceDeliveryDoesNotAutomaticallySaveGoals(){
+        db.jdbc().update("update core.core_activity_record set activity_type='PRACTICE' where session_id=:s",Map.of("s",session));
+        deliver(result);assertThat(goals.candidates(child,session)).hasSize(1);assertThat(goals.list(guardian)).isEmpty();
+    }
     @Test void staleResultCannotRegister(){UUID old=result;publish();assertThatThrownBy(()->deliver(old)).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(goals.candidates(child,session)).isEmpty();}
     @Test void replacementInvalidatesOldCandidatesButKeepsPinnedSelection(){deliver(result);var old=goals.candidates(child,session).getFirst();UUID saved=db.inTx(t->goals.select(guardian,old,clock.now()));UUID latest=publish();deliver(latest);assertThat(goals.candidates(child,session)).hasSize(1);assertThat(goals.version(child,old.id())).isEmpty();assertThat(goals.saved(child,saved).orElseThrow().candidateVersion()).isEqualTo(1);}
     @Test void lateOldPendingCannotReviveOldCandidates(){UUID old=result;deliver(old);UUID latest=publish();deliver(latest);UUID handle=goals.candidates(child,session).getFirst().id();assertThatThrownBy(()->deliver(old)).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);assertThat(goals.candidates(child,session)).hasSize(1);assertThat(goals.candidates(child,session).getFirst().id()).isEqualTo(handle);}
