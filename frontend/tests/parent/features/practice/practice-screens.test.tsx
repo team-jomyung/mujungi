@@ -7,7 +7,8 @@ import ParentPracticePage from "@/app/parent/practice/page";
 import { LiveScreen } from "@/parent/features/live/LiveScreen";
 import { SESSION_ID, OTHER_SESSION_ID, deferred, errorResponse, homeBody, jsonResponse, liveViewBody } from "../../../support/fixtures";
 import { resetRouter, router } from "../../../support/nextNavigation";
-import { renderParent, type RequestHandler } from "../../../support/parentHarness";
+import type { RequestHandler } from "../../../support/parentHarness";
+import { renderParent } from "../../../support/readyActivityHarness";
 import { G1, G2, GOALS, PATH, RESTORE_UNTIL } from "../../../support/practiceFixtures";
 
 vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
