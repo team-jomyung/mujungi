@@ -12,9 +12,7 @@ import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
 import { useTiming } from "@/shared/timing/TimingProvider";
 
-interface PendingDeletion { readonly goal: GoalSelection; toastId?: number }
-
-/** Screen18 owns unsent deletion. The shared focus-aware toast is the only undo clock. */
+/** Deletion is sent immediately; only server acknowledgement removes a row. Undo restores it on the server. */
 export function usePracticeGoals() {
   const api = useApiClient();
   const client = useQueryClient();
@@ -22,22 +20,24 @@ export function usePracticeGoals() {
   const toast = useToast();
   const timing = useTiming();
   const mounted = useRef(true);
-  const pending = useRef<PendingDeletion | null>(null);
+  const undoToastId = useRef<number | undefined>(undefined);
+  const confirmedDeleted = useRef(new Set<string>());
   const locks = useRef(new Set<string>());
-  const recovery = useRef(new Map<string, GoalSelection>());
+  const recovery = useRef(new Map<string, { goal: GoalSelection; undo: boolean }>());
   const recovering = useRef(new Set<string>());
   const favoriteEpoch = useRef(new Map<string, number>());
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [needsRecovery, setNeedsRecovery] = useState(false);
-  const [hiddenId, setHiddenId] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(new Set());
   const query = useQuery({ queryKey: goalSelectionQueryKey, queryFn: ({ signal }) => fetchGoalSelections(api, signal), staleTime: 0 });
   const { refetch } = query;
 
   const writeRows = useCallback((update: (rows: readonly GoalSelection[]) => GoalSelection[]) => {
-    client.setQueryData<GoalSelection[]>(goalSelectionQueryKey, (rows) => sortGoals(update(rows ?? [])));
+    client.setQueryData<GoalSelection[]>(goalSelectionQueryKey, (rows) => sortGoals(update(rows ?? []).filter(row => !confirmedDeleted.current.has(row.goalSelectionId))));
   }, [client]);
 
   const putRow = useCallback((goal: GoalSelection) => {
+    confirmedDeleted.current.delete(goal.goalSelectionId);
     writeRows((rows) => [...rows.filter((row) => row.goalSelectionId !== goal.goalSelectionId), goal]);
   }, [writeRows]);
 
@@ -55,31 +55,31 @@ export function usePracticeGoals() {
     return true;
   }, [router, toast]);
 
-  const cancelPending = useCallback(() => {
-    const previous = pending.current;
-    pending.current = null;
-    if (mounted.current) setHiddenId(null);
-    if (previous?.toastId !== undefined) toast.dismiss(previous.toastId);
+  const dismissUndo = useCallback(() => {
+    // Navigation or another notification can close undo, but cannot cancel a requested deletion.
+    const previous = undoToastId.current;
+    undoToastId.current = undefined;
+    if (previous !== undefined) toast.dismiss(previous);
   }, [toast]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      const previous = pending.current;
-      pending.current = null;
-      if (previous?.toastId !== undefined) toast.dismiss(previous.toastId);
+      const previous = undoToastId.current;
+      undoToastId.current = undefined;
+      if (previous !== undefined) toast.dismiss(previous);
     };
   }, [toast]);
 
   const refresh = useCallback(() => {
-    cancelPending();
+    dismissUndo();
     if (locks.current.size === 0) {
       void client.cancelQueries({ queryKey: goalSelectionQueryKey }).then(() => {
         if (mounted.current && locks.current.size === 0) void refetch();
       });
     }
-  }, [cancelPending, client, refetch]);
+  }, [dismissUndo, client, refetch]);
 
   useEffect(() => {
     if (!query.isFetching) return;
@@ -107,7 +107,7 @@ export function usePracticeGoals() {
     });
   }, [writeRows]);
 
-  const recoverDeletion = useCallback(async function recover(goal: GoalSelection): Promise<void> {
+  const recoverDeletion = useCallback(async function recover(goal: GoalSelection, undo = false): Promise<void> {
     const id = goal.goalSelectionId;
     if (recovering.current.has(id)) return;
     recovering.current.add(id);
@@ -115,10 +115,12 @@ export function usePracticeGoals() {
     try {
       const rows = await fetchGoalSelections(api);
       if (rows.some((row) => row.goalSelectionId === id)) {
+        confirmedDeleted.current.delete(id);
         reconcileRows(rows, id);
       } else {
         try {
           const restored = await restoreGoal(api, id);
+          confirmedDeleted.current.delete(id);
           reconcileRows([...rows, restored], id);
         } catch (error) {
           if (error instanceof ApiError && (error.status === 410 || error.status === 404)) {
@@ -131,17 +133,19 @@ export function usePracticeGoals() {
         }
       }
       busy(id, false);
-      if (mounted.current) toast.show({ message: PRACTICE_TEMP_COPY.deleteFailed, kind: "error" });
+      if (mounted.current) toast.show(undo
+        ? { message: PRACTICE_TEMP_COPY.restored(goal.displayName) }
+        : { message: PRACTICE_TEMP_COPY.deleteFailed, kind: "error" });
     } catch (error) {
       if (authenticationFailed(error)) { busy(id, false); return; }
       // Keep a provisional row disabled until a later read proves whether compensation succeeded.
       putRow(goal);
-      recovery.current.set(id, goal);
+      recovery.current.set(id, { goal, undo });
       if (mounted.current) setNeedsRecovery(true);
       if (mounted.current) toast.show({
         message: PRACTICE_TEMP_COPY.verifyFailed,
         kind: "error",
-        action: { label: PROPOSED_COPY.retry, onPress: () => { void recover(goal); } },
+        action: { label: PROPOSED_COPY.retry, onPress: () => { void recover(goal, undo); } },
       });
     } finally {
       recovering.current.delete(id);
@@ -149,19 +153,52 @@ export function usePracticeGoals() {
   }, [api, authenticationFailed, busy, putRow, reconcileRows, toast]);
 
   const retryRecovery = useCallback(() => {
-    for (const goal of recovery.current.values()) void recoverDeletion(goal);
+    for (const { goal, undo } of recovery.current.values()) void recoverDeletion(goal, undo);
   }, [recoverDeletion]);
+
+  const undoDeletion = useCallback(async (goal: GoalSelection) => {
+    const id = goal.goalSelectionId;
+    if (locks.current.has(id)) return;
+    busy(id, true);
+    try {
+      const restored = await restoreGoal(api, id);
+      await client.cancelQueries({ queryKey: goalSelectionQueryKey });
+      putRow(restored);
+      busy(id, false);
+      void client.invalidateQueries({ queryKey: goalSelectionQueryKey, refetchType: "none" });
+      if (mounted.current) toast.show({ message: PRACTICE_TEMP_COPY.restored(goal.displayName) });
+    } catch (error) {
+      if (authenticationFailed(error)) { busy(id, false); return; }
+      if (!(error instanceof ApiError) || error.isDeliveryUnknown || error.kind === "invalidResponse" || (error.status !== null && error.status >= 500)) {
+        await recoverDeletion(goal, true);
+      } else {
+        busy(id, false);
+        if (mounted.current) toast.show({
+          message: error.status === 410 || error.status === 404 ? PRACTICE_TEMP_COPY.restoreUnavailable : PRACTICE_TEMP_COPY.restoreFailed,
+          kind: "error",
+        });
+      }
+    }
+  }, [api, authenticationFailed, busy, client, putRow, recoverDeletion, toast]);
 
   const commitDeletion = useCallback(async (goal: GoalSelection) => {
     const id = goal.goalSelectionId;
+    if (locks.current.has(id)) return;
     busy(id, true);
-    await client.cancelQueries({ queryKey: goalSelectionQueryKey });
-    writeRows((rows) => rows.filter((row) => row.goalSelectionId !== id));
+    if (mounted.current) setDeletingIds((ids) => new Set([...ids, id]));
     try {
+      await client.cancelQueries({ queryKey: goalSelectionQueryKey });
       await deleteGoal(api, id);
+      await client.cancelQueries({ queryKey: goalSelectionQueryKey });
+      confirmedDeleted.current.add(id);
+      writeRows((rows) => rows.filter((row) => row.goalSelectionId !== id));
       busy(id, false);
       // Re-entering the screen reads server truth. No refetch can overwrite concurrent writes.
       void client.invalidateQueries({ queryKey: goalSelectionQueryKey, refetchType: "none" });
+      if (mounted.current) undoToastId.current = toast.show({
+        message: PRACTICE_TEMP_COPY.deleted(goal.displayName),
+        action: { label: PRACTICE_COPY.undo, onPress: () => { void undoDeletion(goal); } },
+      });
     } catch (error) {
       putRow(goal);
       if (authenticationFailed(error)) { busy(id, false); return; }
@@ -172,26 +209,16 @@ export function usePracticeGoals() {
         busy(id, false);
         if (mounted.current) toast.show({ message: PRACTICE_TEMP_COPY.deleteFailed, kind: "error" });
       }
+    } finally {
+      if (mounted.current) setDeletingIds((ids) => { const next = new Set(ids); next.delete(id); return next; });
     }
-  }, [api, authenticationFailed, busy, client, putRow, recoverDeletion, toast, writeRows]);
+  }, [api, authenticationFailed, busy, client, putRow, recoverDeletion, toast, undoDeletion, writeRows]);
 
   const scheduleDelete = useCallback((goal: GoalSelection) => {
     if (locks.current.has(goal.goalSelectionId)) return;
-    cancelPending();
-    const next: PendingDeletion = { goal };
-    pending.current = next;
-    setHiddenId(goal.goalSelectionId);
-    next.toastId = toast.show({
-      message: PRACTICE_TEMP_COPY.deleted(goal.displayName),
-      action: { label: PRACTICE_COPY.undo, onPress: cancelPending },
-      onClose: (reason) => {
-        if (pending.current !== next) return;
-        pending.current = null;
-        if (mounted.current) setHiddenId(null);
-        if (reason === "expired" && mounted.current) void commitDeletion(goal);
-      },
-    });
-  }, [cancelPending, commitDeletion, toast]);
+    dismissUndo();
+    void commitDeletion(goal);
+  }, [dismissUndo, commitDeletion]);
 
   const toggleFavorite = useCallback(async (goal: GoalSelection) => {
     const id = goal.goalSelectionId;
@@ -219,5 +246,5 @@ export function usePracticeGoals() {
     }
   }, [api, authenticationFailed, busy, client, putRow, toast]);
 
-  return { items: query.data?.filter((goal) => goal.goalSelectionId !== hiddenId), busyIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, toggleFavorite, scheduleDelete, cancelPending };
+  return { items: query.data, busyIds, deletingIds, needsRecovery, retryRecovery, isFetching: query.isFetching, hasError: query.isError, refresh, toggleFavorite, scheduleDelete, dismissUndo };
 }
