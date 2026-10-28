@@ -122,9 +122,9 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
           <p id="practice-favorite-limit" className="mj-practice__meta">{PRACTICE_COPY.favoriteLimit}</p>
           {group(favorites, true)}{group(pageItems, false)}
           {savedPageCount > 1 ? <nav className="mj-practice__pagination" aria-label={PRACTICE_COPY.pages}>
-            <button type="button" className="mj-button" disabled={currentSavedPage === 0 || startLocked} onClick={() => setSavedPage(currentSavedPage - 1)}>{PRACTICE_COPY.previousPage}</button>
+            <button type="button" disabled={currentSavedPage === 0 || startLocked} onClick={() => setSavedPage(currentSavedPage - 1)}>{PRACTICE_COPY.previousPage}</button>
             <span role="status">{PRACTICE_COPY.pageCount(currentSavedPage + 1, savedPageCount, saved.length)}</span>
-            <button type="button" className="mj-button" disabled={currentSavedPage + 1 >= savedPageCount || startLocked} onClick={() => setSavedPage(currentSavedPage + 1)}>{PRACTICE_COPY.nextPage}</button>
+            <button type="button" disabled={currentSavedPage + 1 >= savedPageCount || startLocked} onClick={() => setSavedPage(currentSavedPage + 1)}>{PRACTICE_COPY.nextPage}</button>
           </nav> : null}
         </>}
         {entry.startMessage !== null ? <p className="mj-reason-card" role="status" data-testid="practice-readiness">{entry.startMessage}</p> : null}
