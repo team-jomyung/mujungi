@@ -158,6 +158,19 @@ export interface OutputBeginMessage {
   readonly type: "OUTPUT_BEGIN";
   readonly sessionId: string;
   readonly playbackId: string;
+  /** 게이트를 통과한 이 말의 확정 글(기기 자막, 선택). 없거나 형식이 틀리면 null이고 자막 없이 재생한다. */
+  readonly text?: string | null;
+}
+
+/** OUTPUT_BEGIN.text 최대 글자 수(ws-messages.schema.json). */
+export const OUTPUT_TEXT_MAX_CHARS = 500;
+
+function readSubtitle(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const text = value.trim();
+  return text.length > 0 && [...text].length <= OUTPUT_TEXT_MAX_CHARS ? text : null;
 }
 
 export interface OutputEndMessage {
@@ -290,7 +303,7 @@ export function parseServerMessage(envelope: InboundEnvelope): ServerMessage | n
       if (sessionId === null || !isUuid(playbackId)) {
         return null;
       }
-      return { type: "OUTPUT_BEGIN", sessionId, playbackId };
+      return { type: "OUTPUT_BEGIN", sessionId, playbackId, text: readSubtitle(payload.text) };
     }
     case "OUTPUT_END": {
       const { playbackId } = payload;

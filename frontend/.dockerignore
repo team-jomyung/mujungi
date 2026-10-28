@@ -6,6 +6,8 @@
 !.next/static
 !public/fonts/pretendard/PretendardVariable.woff2
 !public/fonts/pretendard/LICENSE.txt
+!public/brand/mujoong-character.png
+!public/models/Explorer_A_Web.meshopt.glb
 .next/standalone/.env*
 .next/standalone/**/.env*
 .next/standalone/.next/cache

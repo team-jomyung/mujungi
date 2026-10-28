@@ -1,0 +1,77 @@
+/*
+ * 무중 보호자 웹 덮개 「말랑 파스텔」 (docs/ui/toss-design.md). 기존 화면 CSS 다음에 불러와 생김새만 바꾼다.
+ * 따뜻한 크림 바탕 + 코랄 주 색 + 큰 곡률 카드. 구조 · 접근성(터치 44px · 초점 2px · 상태 색은 점 · 배경)은 그대로 둔다.
+ * 되돌리려면 app/parent/layout.tsx의 import 한 줄을 지운다.
+ */
+.mj-dialog-backdrop,.mj-sheet-backdrop{background-color:rgb(0 23 51 / 30%)}
+.mj-dialog{border-radius:24px;box-shadow:0 16px 40px rgb(0 0 0 / 12%);padding:28px 20px 20px}
+.mj-dialog__title{font-size:1.25rem;font-weight:700;text-align:left}
+.mj-sheet{border:none;border-radius:24px 24px 0 0}
+.mj-input,.mj-textarea,.mj-code-cell{border:1.5px solid transparent;border-radius:14px;background-color:var(--v-fill)}
+.mj-input:focus,.mj-textarea:focus,.mj-code-cell:focus{border-color:var(--color-brand-primary);background-color:#fff;outline:none}
+.mj-code-cell--invalid,.mj-input--invalid{border-color:var(--color-action-danger)}
+.mj-chip{border:1.5px solid transparent;background-color:var(--v-fill);color:var(--color-text-secondary);font-weight:500}
+.mj-chip--checked{border-color:var(--color-brand-primary);background-color:var(--color-fixed-expression);color:var(--color-brand-primary);font-weight:600}
+.mj-error-card,.mj-reason-card{border:none;border-radius:16px}
+.mj-status-line{border-radius:12px;background-color:var(--v-fill)}
+.mj-bubble{border:none;border-radius:20px;padding:10px 14px}
+.mj-bubble--ai{background-color:var(--v-fill);border-bottom-left-radius:6px}
+.mj-bubble--child{border-bottom-right-radius:6px}
+.mj-segmented{border-radius:12px;background:var(--v-fill)}
+.mj-button{min-height:56px;padding:14px 20px;border:none;border-radius:16px;font-size:1.0625rem;font-weight:600;transition:transform .12s ease}
+.mj-button:not(:disabled):active{transform:scale(.97)}
+.mj-button:disabled{opacity:1;background-color:var(--v-fill);color:#8b95a1}
+.mj-button--secondary{background-color:var(--color-fixed-expression);color:var(--color-brand-primary)}
+.mj-button--danger{background-color:var(--color-surface-danger);color:var(--color-action-danger)}
+.mj-parent button:not([class]){border:none;border-radius:12px;background:var(--v-fill);color:var(--color-text-secondary);font-weight:600}
+.mj-link-button{font-weight:600}
+.mj-screen__body>.mj-button--block:last-child,.mj-screen__body form>.mj-button--block:last-child{position:sticky;bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:5;margin-top:24px;box-shadow:0 0 0 12px var(--v-bg)}
+.mj-parent{--v-bg:#fff8f1;--v-fill:#fff1e6;--color-brand-primary:#ff6b4a;--color-fixed-expression:#ffe9e2;--color-border-selected:#ffc2b3;background:#fff8f1}
+.mj-header{padding:28px 22px 14px}
+.mj-header>h1,.mj-header__title{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;color:#3d2a22}
+.mj-header>p,.mj-header__eyebrow,.mj-header__meta{color:#9a7f72}
+.mj-screen__body{padding:0 18px 24px;gap:14px}
+.mj-card{padding:22px;border:none;border-radius:28px;background:#fff;box-shadow:0 6px 20px rgb(255 120 80 / 10%)}
+.mj-card__heading{font-size:.9375rem;font-weight:800;color:#ff6b4a}
+.mj-child-section{background:linear-gradient(135deg,#fff 0%,#fff3ec 100%)}
+.mj-device-card__status{font-size:1.25rem}
+.mj-card.mj-verdict-card{border:none;border-radius:22px;box-shadow:none}
+.mj-button{border-radius:22px;font-weight:700}
+.mj-button--primary{box-shadow:0 8px 18px rgb(255 107 74 / 30%)}
+.mj-chip{border-radius:999px}
+.mj-input,.mj-textarea{background:#fff;border-color:#ffe2d4}
+.mj-field__label{color:#3d2a22;font-weight:700}
+.mj-tabbar{border-top:none;border-radius:24px 24px 0 0;box-shadow:0 -6px 24px rgb(255 120 80 / 10%)}
+.mj-tabbar__tab{color:#c4a99c}
+.mj-tabbar__tab--active{color:#ff6b4a;font-weight:700}
+.mj-tabbar__icon{width:24px;height:24px;border-radius:50%;border-width:2px}
+.mj-tabbar__tab--active .mj-tabbar__icon{background:#ffe9e2}
+/* 로그인: 브랜드 · 소개 · 시작 단추를 가운데에 모은다 */
+.mj-login__body{justify-content:center}
+.mj-login__brand{margin:0;font-size:2.5rem}
+.mj-login__subtitle{padding:0 0 20px;border:none;background:transparent;text-align:center;font-weight:600;color:#9a7f72}
+.mj-login__body>.mj-button{margin-top:0;position:static;box-shadow:0 8px 18px rgb(255 107 74 / 30%)}
+/* ① 대비 보강: 단추 면은 진한 코랄, 글자 · 링크는 더 진한 코랄(흰 바탕 대비 4.5:1 이상) */
+.mj-parent{--color-brand-primary:#c8432a}
+.mj-button--primary{background-color:#d9472a;box-shadow:0 8px 18px rgb(217 71 42 / 28%)}
+.mj-login__brand{color:#e5502f}
+/* ② 탭 아이콘: 둥근 선 아이콘(마스크), 선택 탭은 코랄 채움 배경 */
+.mj-tabbar__icon{width:26px;height:26px;border:none;border-radius:0;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
+.mj-tabbar__tab--active .mj-tabbar__icon{background:currentColor}
+.mj-tabbar__icon--home{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z'/%3E%3C/svg%3E")}
+.mj-tabbar__icon--free{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-5 4V6a1 1 0 0 1 1-1z'/%3E%3Ccircle cx='9' cy='11' r='.6'/%3E%3Ccircle cx='12.5' cy='11' r='.6'/%3E%3Ccircle cx='16' cy='11' r='.6'/%3E%3C/svg%3E")}
+.mj-tabbar__icon--practice{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1-4.5-4.2 6.1-.8z'/%3E%3C/svg%3E")}
+.mj-tabbar__icon--records{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='16' rx='3'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E")}
+.mj-tabbar__tab--active{position:relative}
+.mj-tabbar__tab--active::before{content:"";position:absolute;top:6px;width:52px;height:34px;border-radius:17px;background:#ffe9e2;z-index:-1}
+.mj-tabbar__list{isolation:isolate}
+/* ③ 로그인 캐릭터: 브랜드 위에 무중 오리 캐릭터 */
+.mj-login__brand::before{content:"";display:block;width:148px;height:148px;margin:0 auto 18px;border-radius:50%;background:#f3e3d2 url("/brand/mujoong-character.png") center/cover;box-shadow:0 10px 30px rgb(255 120 80 / 22%),0 0 0 6px #fff}
+/* ④ 정보 위계: 라벨은 작게 · 값은 크고 굵게 */
+.mj-card__heading{margin-bottom:6px;font-size:.8125rem;font-weight:700;letter-spacing:.02em}
+.mj-child-section__line,.mj-activity-card__status{margin:0 0 4px;font-size:1.375rem;font-weight:800;letter-spacing:-.02em;color:#3d2a22}
+.mj-device-card__status{font-size:1.375rem;font-weight:800}
+.mj-activity-card__reason{color:#9a7f72}
+/* ⑤ 빈 상태 꾸밈: 활동 없음 카드에 그림 자리 + 옅은 배경 */
+.mj-activity-card[data-state="none"]{position:relative;padding-right:110px;background:linear-gradient(135deg,#fff 40%,#fff1e6 100%)}
+.mj-activity-card[data-state="none"]::after{content:"";position:absolute;right:18px;top:50%;width:76px;height:76px;transform:translateY(-50%);border-radius:50%;background:#f3e3d2 url("/brand/mujoong-character.png") center/cover;box-shadow:0 0 0 4px #fff}
