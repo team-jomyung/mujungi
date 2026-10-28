@@ -89,6 +89,13 @@ public class GoalCandidateRepository {
     public Optional<GoalSelection> selection(UUID guardian,UUID id){return jdbc.query(SELECTION+"where s.guardian_id=:g and s.id=:id",Map.of("g",guardian,"id",id),this::selection).stream().findFirst();}
     public List<GoalSelection> list(UUID guardian){return jdbc.query(SELECTION+"where s.guardian_id=:g and s.status='ACTIVE' order by s.is_favorite desc,s.sort_order,s.id",Map.of("g",guardian),this::selection);}
     public Optional<GoalSelection> activeSelection(UUID child,UUID candidate){return jdbc.query(SELECTION+"where s.child_id=:child and s.candidate_id=:candidate and s.status='ACTIVE'",Map.of("child",child,"candidate",candidate),this::selection).stream().findFirst();}
+    /** Called under the guardian write lock. Automatic delivery never revives a deleted selection. */
+    public boolean selectGenerated(UUID guardian,Version version,Instant now){
+        Integer count=jdbc.queryForObject("select count(*) from core.core_saved_goal where guardian_id=:g and child_id=:c and candidate_id=:candidate",Map.of("g",guardian,"c",version.childId(),"candidate",version.candidateId()),Integer.class);
+        if(count!=null&&count>0)return false;
+        select(guardian,version,now);
+        return true;
+    }
     public UUID select(UUID guardian,Version version,Instant now){
         var existing=activeSelection(version.childId(),version.candidateId());if(existing.isPresent())return existing.get().id();
         UUID id=UUID.randomUUID();
