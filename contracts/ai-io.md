@@ -250,6 +250,25 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 전사, 검증된 구조화(자유대화) 또는 장면 칩(연습), ACTIVE 정의 목록(behaviorKey · behaviorVersion · displayName · coreFunction)을 입력한다. 출력 `{ "candidates": [{"behaviorKey":"…", "behaviorVersion":1, "reasonText":"…", "evidence":[{"utteranceSeq":1,"quote":"…","kind":"CHILD_RECALL"}]}] }`에서 근거 인용 · ACTIVE 정의 · 금지 표현을 서버가 확인한 최대 3개만 등록한다. 근거 없는 후보와 보호자 입력만 근거인 후보는 버린다. 지시: 관찰된 아이 회상 발화만 근거로 쓰고 의도 · 감정을 단정하지 않는다.
 
+**현재 지시문(2026-10-27, `prompts/goal/goal-candidates.v2.txt`, 판 `goal-candidates.v2`) [편차 FT-1027-g].** 위 U6-J 초안 뒤 입출력은 `ai-goal-candidate-output.schema.json`(displayName · displayEvidence · targetExpression · fourElements · skillRef · evidence · reasonText · structureSignature)으로 바뀌었고, 후보 선정 기준은 다음과 같다.
+- 후보는 **관찰된 지원 필요**에서 만든다: 아이가 이해하기 어렵거나 어떻게 말해야 할지 모르겠다고 밝힌 경우, 대화 맥락상 필요한 의사소통이 해결되지 않았고 그 원인을 감정 · 의도 · 성격 · 기술 장애로 추측하지 않고 설명할 수 있는 경우, 명시적인 도움을 받은 뒤에야 해당 기능을 쓴 경우(도움 전 어려움 · 도움 요청 근거가 함께 있어야 함). 한 장면의 근거로도 그 장면에 한정해 제안할 수 있지만 지속적인 결함으로 일반화하지 않는다.
+- 이미 적절하게 쓴 표현만 있으면 **빈 배열**이다(v1의 '이미 잘한 표현을 다른 상황에서 다시 써 보기' 후보는 만들지 않는다). 잘한 기록은 강점 · 도움 후 변화의 맥락으로만 참고한다.
+- 어려움으로 보지 않는 것: 짧은 답 · 생략 · 비격식 표현, 상대 확인으로 자연스럽게 해결된 대화, 의견 차이 · 적절한 거절 · 중단 · 도움 요청 · 역할극 속 질문, AI의 부자연스러운 질문 · 부족한 안내 · 음성 인식 · 재생 · 연결 문제 · 판정 지연으로 생긴 혼란(원인이 구분되지 않으면 제외), 행동을 쓸 기회가 없었다는 사실.
+- 근거 인용 규칙(CHILD 발화 전체를 seq와 함께 글자 그대로) · 진단 · 원인 단정 · 감정 단정 금지 · 출력 계약 · 구조 서명 규칙은 v1과 같다. 서버 검사(인용 일치 · 금지 표현 2차 분류)도 그대로다.
+- 근거 발화는 evidence의 utteranceSeq로만 잇고, reasonText · displayEvidence에는 seq 번호나 다른 숫자를 쓰지 않는다(시점은 말로). 서버 숫자 검사(`NumberGuard`)가 숫자 섞인 후보를 버리기 때문이다(2026-10-27 진돗개 자유대화 측정에서 유일한 후보가 사유 칸의 seq 번호로 버려짐).
+- 이전 판 `goal-candidates.v1.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 두 판의 결과를 구분한다.
+
+**후보 탈락 진단 로그(`GOAL_CANDIDATE_DROPPED`, 2026-10-27).** 모델이 낸 후보가 서버 검사에서 빠지면 core-api `Maintenance` 컴포넌트가 후보마다 INFO 한 줄을 남긴다(병합 없음, `ownerHash`는 보호자). 모델이 0개를 냈으면 줄이 없으므로, 후보가 없는 결과가 모델 판단인지 서버 탈락인지를 가를 수 있다. 후보 이름 · 인용 · 사유 글 · 전사는 담지 않는다(R-F14). 정본은 `EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다.
+
+| 속성 | 형식 | 값 |
+|---|---|---|
+| `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v2`) |
+| `candidateIndex` · `candidatesProposed` | NUMBER | 모델 출력에서 몇 번째(0부터) 후보인지, 모델이 낸 후보 수 |
+| `dropReason` | ENUM | `GoalCandidateValidator`: `LENGTH` · `SKILL_REF_UNKNOWN` · `NO_EVIDENCE` · `QUOTE_MISMATCH` · `FORBIDDEN_DICTIONARY` · `NUMBER_GUARD` · `DUPLICATE` · `OVER_LIMIT`(남길 수 있는 3개를 넘음). `OutputChecker`: 1차 `CHECK_EMPTY` · `CHECK_QUOTE` · `CHECK_NUMBER` · `CHECK_DICTIONARY`, 2차 분류 위반 `CHECK_CLASSIFIER` |
+| `dropField` | ENUM | 처음 걸린 칸: `DISPLAY_NAME` · `DISPLAY_EVIDENCE` · `TARGET_EXPRESSION` · `REASON_TEXT` · `SKILL_REF` · `SITUATION` · `PARTNER` · `INTENT` · `EXPRESSION` · `EVIDENCE` · `NONE` |
+
+검사 기준 · 순서 · 남기는 후보는 바꾸지 않았다. 진단 줄은 검사가 끝난 뒤 쓰기만 한다.
+
 ### 6.9 U6 호출 예산과 생활 팁
 
 결과 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 레거시 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, 생성 후보를 임의 behaviorKey로 바꾸지 않는다. title · condition · content · limitation에 1차 금지 사전을 적용한다.
@@ -409,7 +428,8 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 - **Decisions 경로(realtime 진행 중 판정의 유일한 경로) [편차 FT-1023-d]:** `POST {base-url}/decisions`. core Responses 호출과 같은 규칙(주소 재확인 · 리다이렉트 · 프록시 · 응답 상한 · 시한 · 보내기 전 정리 · 요청 스키마 검증 · 감사 한 줄(10.8))을 지나고 본문 모양과 2xx 응답 검증만 다르다.
   - 요청: `model`(`mujoong.luna.model`) · `input`(사용자 메시지 하나, 파트 `{"type":"input_json","data":<정리된 판정 입력>}`) · `questions`(`choice` 질문 한 개: `name` `judgment`, `instructions` = 판정 질문 지시문 `judgment/prompt-service-v3.txt`(응답 방식과 "아이의 가장 마지막 말(childUtterance) 하나만 판정한다" 포함) + 그 지점 질문, `choices` = 요청 선택지(판 순서) + 판의 선택지 뜻을 `description`으로). 데이터는 질문 지시문에 넣지 않는다(지시와 데이터 분리). `store` · `temperature` · `reasoning` · `max_output_tokens`는 Decisions에 없는 매개변수라 보내지 않는다(보존을 요청으로 끌 수 없어 10.2 R-F15 확인 기록 대상이다). 판정 기록 `promptVersion`은 `prompt-service-v3`이다. 이전 판 `prompt-service-v2`(Responses 출력 형식)는 이력으로 자원에 남는다.
   - 응답 검증(새 사유 코드 없음): 비 2xx는 아래 표와 같다. 2xx에서 JSON이 아니면 `SERVER_ERROR`, 질문 이름이 맞는 답이 없으면 `EMPTY_OUTPUT`(이름 없는 거절만 있으면 `REFUSED`), 같은 이름 답이 여럿이면 `SCHEMA_INVALID`, `type: refusal`이면 `REFUSED`, `model`이 없으면 `MODEL_MISSING`, 그 밖에 `type`이 `choice`가 아님 · `choice`가 보낸 선택지 밖 · `probabilities`가 보낸 선택지를 모두 덮지 않음(밖 · 중복 · 숫자 아님 · 0 ~ 1 밖 포함) · 고른 값의 확률이 가장 높지 않음(같으면 허용)이면 `SCHEMA_INVALID`다.
-  - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류다. Decisions 장애 · 지연 때 대신 부를 다른 끝점은 없고 그 판정은 보류로 끝난다.
+  - 판정: 확률 내림차순 1 · 2순위(같으면 공급자가 고른 값, 그다음 판 순서)를 검증기(하한 `min-confidence` → `LOW_CONFIDENCE`, 최소 차이 `min-margin` → `LOW_MARGIN`, 같으면 확정)에 넘긴다. 운영 기본값은 둘 다 `0`이라 확신 부족 보류 없이 1순위를 그대로 확정한다(이전 0.6 · 0.15, 2026-10-27 사람 결정 [편차 FT-1027-c]). 확률 범위 · 선택지 밖 · 중복 검증과 아래 실패 보류는 그대로다. 응답의 `confidence`는 쓰지 않는다(판정 규칙은 선택지 확률 기준이고 confidence는 정의가 다른 값). 판독 불가 입력은 공급자 없이 `UNREADABLE_INPUT`, 실패는 `TIMEOUT` · `SCHEMA_INVALID` · `PROVIDER_ERROR` 보류다. Decisions 장애 · 지연 때 대신 부를 다른 끝점은 없고 그 판정은 보류로 끝난다.
+  - 예열(JIRA-282): 세션 첫 판정이 처음 도는 코드 · 새 연결 비용으로 시한을 넘지 않게, realtime은 앱 기동 뒤(ApplicationReady)와 세션 시작 신호를 기기에 보낸 직후 판정 경로를 예열한다. 합성 입력으로 정리 · 요청 스키마 검증 · 본문 조립을 한 번 돌리고(보내지 않음) 같은 호스트 `GET {base-url}/models`를 **키 없이** 한 번 보낸다(판정 · 과금 · 데이터 · 아동 정보 없음, 응답 상태는 보지 않음). 주소 규칙(10.3)을 어기면 보내지 않고, 연결 시한은 `mujoong.timing.judgment.live-budget`이며 기다리지 않는다. 판정 시도가 아니라 `LUNA_CALL`을 남기지 않고, 실패해도 판정 흐름 · 시한은 그대로다.
 - **보내기 전 정리:** 모든 깊이에서 10.2 금지 키(+ core 결과 게이트웨이의 `audioRefs` · `audioRefsJson` · `interests` 등)를 지우고, 호출자가 준 별칭 표로 아이 이름을 바꾸며, 이메일 · 휴대전화 모양 값을 '연락처'로 가린다. 남으면 · 요청 스키마(`ai-judgment-request`)에 맞지 않으면 부르지 않고 `FORBIDDEN_INPUT`이다. UUID → '참조N'과 복원은 지금 `ResultTextGateway`가 맡는다.
   - 금지 키는 대소문자와 `_` · `-`를 가리지 않고 비교한다(`child_name` · `Child-Id` · `api_key` · `guardian-id`도 지운다). 정리 뒤 안전망은 이 비교를 다시 쓰지 않는 독립 검사로, 글자 · 숫자 밖 문자를 모두 뺀 꼴(예: `child.name`)까지 보고 남으면 `FORBIDDEN_INPUT`이다.
   - 별칭은 긴 이름부터(길이가 같으면 사전순) 한 번만 훑으며 바꾼다. 이름끼리 포함 관계(예: '민수'와 '수')여도 결과가 별칭 표 순서에 기대지 않고, 바꿔 넣은 별칭을 짧은 이름이 다시 바꾸지 않는다. 빈 이름은 무시한다.
@@ -516,7 +536,7 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 
 ### 10.15 Jev 출력 단위별 검사 (v3)
 
-시간 정보가 있는 `session.output_transcript.delta` 하나를 출력 단위로 삼는다. 음성에는 개별 시간 정보가 없으므로 세션 PCM 누적 바이트 시계(24kHz PCM16 모노, 48바이트/ms)로 해당 전사의 `end_ms`까지 정확히 분리한다. 각 단위가 완성되는 즉시 1차 게이트 → 비동기 Jev → 송신 직전 권한 확인 → 기기 송신을 수행한다. 전체 발화 종료나 추가 무음 대기를 요구하지 않는다. 하나의 음성 프레임이 전사 경계를 넘으면 바이트 단위로 나누며, 전사가 없는 꼬리는 송신하지 않는다.
+시간 정보가 있는 `session.output_transcript.delta`를 출력 단위로 삼되, **어절 경계까지 이어 붙인다** [편차 FT-1027-h]: 글이 공백 · 문장부호로 끝나거나 다음 조각이 공백 · 문장부호로 시작할 때까지 다음 조각을 붙이고(끝 위치는 마지막으로 붙인 조각의 끝), 아직 경계가 아니면 다음 조각을 기다린다. 응답이 조용해지면 남은 낱말을 그대로 낸다. 경계 없이 40자에 닿으면 그대로 낸다. 공급자 조각은 단어 중간에서 끊겨("개념" → "개" | "념") 조각 하나를 따로 검사하면 제브가 욕설로 오판했다(2026-10-27 실키: "기본 개" PASS 확률 0.47 ~ 0.52). 음성에는 개별 시간 정보가 없으므로 세션 PCM 누적 바이트 시계(24kHz PCM16 모노, 48바이트/ms)로 해당 전사의 `end_ms`까지 정확히 분리한다. 각 단위가 완성되는 즉시 1차 게이트 → 비동기 Jev → 송신 직전 권한 확인 → 기기 송신을 수행한다. 전체 발화 종료나 추가 무음 대기를 요구하지 않는다. 하나의 음성 프레임이 전사 경계를 넘으면 바이트 단위로 나누며, 전사가 없는 꼬리는 송신하지 않는다.
 
 검사는 출력 순서대로 진행하며, 앞 단위의 판정 동안 최대 128개 단위를 보관한다(추가 대기 음성 상한은 기존 구간 상한 960,000바이트). Jev에는 현재 조각과 직전에 통과한 출력의 마지막 64자만 전달하여 조각 경계에 걸친 욕설을 판단한다. 아동의 대화 맥락은 이 경로에 보내지 않는다. BLOCK·REVIEW·검사 실패·정렬 실패·대기열 초과는 남은 응답을 무효화한다. 기존의 한 차례 재지시와 끼어들기·종료·연결 변경에 대한 권한 검사는 유지한다.
 
@@ -581,11 +601,15 @@ J1/J6의 고정 질문·선택지는 `judgment-service-v1`, 공통 지시문은 
 | `practice-system.v1.txt` | realtime `practice/practice-system.v1.txt` | 연습 세션의 `session.start` 지시문에 아이 정보 역할 문장 뒤로 원문 그대로 한 번 싣는다(`PracticeSystemPrompt`). 턴마다 보내는 500자 지시에는 넣지 않는다. 연습 세션은 자유대화의 참여 뒤 첫 질문 문장(`JOIN_FIRST_QUESTION`)을 싣지 않는다 |
 | `turn-instructions.v1.txt` | realtime `PracticeInstructions` | 기존 턴 지시를 ROLE_REPLY · ROLE_CLARIFY · INPUT_CONFIRM · OFFER_COACH · COACH_HINT · COACH_EXAMPLE · RESUME_ROLE · OFFER_VARIANT · CLOSE 문구로 바꿨다. 목표명을 읽지 않고, 역할 전환에 목소리 변화를 약속하지 않으며, 발화마다 '음,'을 붙이지 않는다. 500자 상한은 그대로다 |
 | `generation.v3.txt` · `review.v2.txt` | core `prompts/scenario/` | 상황 생성 · 검토 판을 `scenario-generation.v3` · `scenario-review.v2`로 올렸다. 생성 · 검토 스키마 키와 사유 코드는 그대로다. 시작 패키지 `practice-scenario.schema.json`의 판 값은 저장된 옛 대본 때문에 옛 판과 새 판을 모두 받는다 |
+| `generation.v4.txt` | core `prompts/scenario/` | 상황 생성 판을 `scenario-generation.v4`로 올렸다(2026-10-27, 편차 FT-1027-d · FT-1027-e). ① 여는 말(`openingLine`)은 기회를 열지 않는 장면 속 가벼운 말로, 시작 안내에서 말한 활동 · 대상 하나를 구체적으로 가리키고 기회 문장과 다른 문장이다(유도 대화 뒤 기회 문장). ② 목표 유형 안내 보강: 상대 응답 상태 확인(멈춤은 기회 문장에서만, 선행 질문은 시작 안내에서) · 놓친 말 다시 듣기(기회 문장은 핵심이 흐리거나 끊긴 말, 놓칠 내용을 미리 말하지 않음). 스키마 키 · 사유 코드 · 길이 상한은 그대로다. 검토 판도 `scenario-review.v3`로 올려 유도 대화를 알게 했다: 첫 말과 기회 문장이 다르고 기회 문장이 짧은 대화 뒤에 나오는 것을 정상으로 보고, 그것만으로 장면 불완전 · 목표 불일치로 거절하지 않는다(v2는 '별도 여는 말은 꼭 필요할 때만' · '기회 문장을 고정 순서로 재생하도록 계획하지 않음'이라 유도 대본을 거절했다). 시작 패키지 판 값은 생성 v2 ~ v4 · 검토 v1 ~ v3을 모두 받는다 |
 
 **바뀐 진행 규칙.**
 - 여는 말(`openingLine`)이 장면의 첫 상대 말이다. 여는 말이 있으면 그것만 들려주고 아이의 대답을 기회 문장 대답(J2)으로 바로 판정한다. 기회 문장(`opportunitySentence`)을 이어 강제로 읽지 않는다. 여는 말과 기회 문장은 같은 문장이어도 된다(서버 검사 거절 없음). 여는 말이 없는 옛 대본은 지금처럼 기회 문장으로 시작한다.
 - 대화형 연습(`flexibleDialogue`)에서 판정 보류 · 장애는 아이 말을 못 들은 것으로 다루지 않는다. '잘 못 들었어' 확인 없이 상대 역할로 대화를 잇는다(ROLE_REPLY). 확인 질문(INPUT_CONFIRM)은 전사 자체가 불명확할 때만 한 번 쓰고, 두 번째에는 도움 제안으로 넘기지 않고 대화를 잇는다(사실 `TRANSCRIPT_FAILED`는 남긴다).
-- 목표 달성(J2 `FULL`) 뒤의 상대 답은 지금 상호작용을 정리하는 답(`peerSettle`)이다: 아이의 제안 · 요청을 받아들여 그 결과로 짧게 잇고 새 주제 · 새 질문을 꺼내지 않는다. 정리 답은 장면당 2번(`SETTLE_REPLY_MAX`)까지이고, 그 뒤 아이 말에는 대화 정리 판정(J3)과 관계없이 마무리 답(`peerCompletion`)으로 장면을 닫는다. 목표 달성 뒤 J3 보류 · 장애는 '정리됨'으로 보고 바로 마무리 답으로 닫는다(2026-10-24 실키 사례: 목표 달성 뒤 J3가 9번 중 6번 보류돼 잡담이 보호자 종료까지 이어졌다). 장면 결과(목표 달성 시점)는 그대로다.
+- 목표 달성(J2 `FULL`) 뒤의 상대 답은 지금 상호작용을 정리하는 답(`peerSettle`)이다: 아이의 제안 · 요청을 받아들여 그 결과로 짧게 잇고 새 주제 · 새 질문을 꺼내지 않는다. 아이가 질문했으면 얼버무리지 않고 장면에 어울리는 구체적인 답을 바로 한다(장면 자료에 없는 것은 상대가 자연스럽게 정해도 된다, 2026-10-27 실키 — "어떤 이야기?"에 답을 피해 아이가 되물었다). 정리 답은 장면당 2번(`SETTLE_REPLY_MAX`)까지이고, 그 뒤 아이 말에는 대화 정리 판정(J3)과 관계없이 마무리 답(`peerCompletion`)으로 장면을 닫는다. 목표 달성 뒤 J3 보류 · 장애는 '정리됨'으로 보고 바로 마무리 답으로 닫는다(2026-10-24 실키 사례: 목표 달성 뒤 J3가 9번 중 6번 보류돼 잡담이 보호자 종료까지 이어졌다). 장면 결과(목표 달성 시점)는 그대로다.
+- 연습 무응답 시계(`no-response`)가 아이가 말하는 중(실행부 입력 전사 묶음이 열려 확정 전)에 만료되면 재촉하지 않고 다시 건다. 그 말이 확정되면 판정이 시계를 끈다(2026-10-27 실키 — 말하는 도중 재촉 발화가 나가고 그 말은 18초 뒤 `RESPONSE_NOT_READY`로 보류됐다). 확장점은 이를 읽기 전용 질의 `PracticeOutput.childSpeaking()`으로 안다.
+- 목표 달성 뒤 정리 판정(J3)은 결과가 무엇이든(정리됨 `DELIVERED`가 아니면 여전히 부족 · 판독 불가 · 도움 등) 정리 답 상한(2번)까지만 잇고, 정리됨이거나 상한에 닿으면 마무리 답으로 닫는다. 도움 뒤 정답(J5 `FULL`)이면 친구 역할로 돌아가 대화를 다시 열지 않고 마무리 답 하나로 아이의 마지막 말에 답하며 닫는다. 마무리 답(`peerCompletion`)도 질문에는 얼버무리지 않고 구체적으로 답한다(2026-10-27 실키 — 도움 뒤 정답 후 처음 기회 문장을 다시 꺼내 대화가 2분 더 이어졌고, 확신 부족 보류를 없앤 뒤 J3가 늘 확정돼 판독 불가 확인 답이 상한을 빠져나갔다).
+- 유도 대화 [편차 FT-1027-e]: 장면의 첫 말(`openingLine`)이 기회 문장과 다르면 첫 말은 장면 속 가벼운 말이고, 아이 대답 2번(무응답 만료도 한 번으로 센다)까지 상대가 장면 안에서 대화를 잇는다(생성 발화 `peerLeadIn`, 장면 자료의 숨은 사실 · 다음 대사는 말하지 않는다). 그 뒤 상대가 기회 문장(승인 발화)을 말하고 이후 판정 · 도움 · 정리는 지금과 같다. 유도 중 대답도 J2로 판정해 `FULL`이면 그대로 목표 달성으로 인정하고, `HELP`는 도움으로, 판독 불가는 확인 질문으로 가며, 그 밖의 결과(일부 전달 · 무관 · 상황 이해 못함)는 교정 없이 유도를 한 걸음 잇는다. 첫 말이 없거나 기회 문장과 같은 옛 대본은 지금처럼 첫 말이 곧 기회다.
 
 **아직 연결하지 않은 것.** 묶음의 판정 계약 `practice-assessment.v1.txt`(대화 관련성 · 목표 근거 · 지원 · 참여를 따로 돌려주는 JSON)는 지금 진행 중 판정이 쓰는 Decisions API의 선택지 하나 고르기 형식과 맞지 않아, 판정 방식 결정 뒤 따로 적용한다. 출력 검토 `practice-output-review.v1.txt`는 묶음 스스로 제브 대체 배포본이 아니라고 적었다. 낭독 중 아이 질문이 들어올 때의 출력 중지 · 발화 보존, 도움 뒤 `expectsReply` 메타데이터, 기록 단계 구분도 아직 서버 동작이 없다. `dialogue-examples.txt` · `regression-cases.jsonl`은 수동 회귀 검수 자료로 둔다.
 

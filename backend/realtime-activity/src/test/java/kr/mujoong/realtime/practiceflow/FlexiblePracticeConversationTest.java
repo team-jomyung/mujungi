@@ -91,7 +91,8 @@ class FlexiblePracticeConversationTest {
     void helpedPerformanceIsNotDescribedAsIndependentSuccess() {
         Harness h=dialogue();h.child("도와줘");h.result("J2","HELP");
         h.announcedNotice(Playback.COMPLETED);h.played();h.child("파란 상자를 줘");h.result("J5","FULL");
-        h.announcedNotice(Playback.COMPLETED);h.played();h.child("고마워");h.result("J3","DELIVERED");h.played();
+        // 도움 뒤 정답이면 친구로 돌아가 마무리 답 하나로 닫는다(대화를 다시 열지 않는다, 2026-10-27 실키)
+        h.announcedNotice(Playback.COMPLETED);h.played();
         assertThat(h.out.lastSlot().text()).contains("도움을 받은 뒤 네 말로 해 봤어");
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
     }
@@ -199,6 +200,8 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.lastSlot().generated()).isTrue();
         // 목표 달성 뒤 상대 답은 지금 상호작용을 정리한다: 새 주제 · 새 질문으로 다시 열지 않는다
         assertThat(h.out.lastSlot().text()).contains("받아들이고 그 결과로 짧게 이어가", "새 주제나 새 질문을 꺼내지 말고");
+        // 아이의 질문에는 얼버무리지 않고 구체적으로 답한다(2026-10-27 실키: "어떤 이야기?"에 답을 피해 아이가 되물었다)
+        assertThat(h.out.lastSlot().text()).contains("얼버무리지 말고", "구체적인 답을 바로 해");
         assertThat(h.recorder.only().endedAt()).isNull();
     }
 
@@ -218,6 +221,18 @@ class FlexiblePracticeConversationTest {
         assertThat(h.played()).isEqualTo(Signal.LAST_GOAL);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(h.recorder.factKinds(h.recorder.only())).doesNotContain(FactKind.REASK_RESOLVED);
+    }
+
+    /** 2026-10-27 실키: 목표 달성 뒤 판독 불가 · 도움 같은 정리 판정 결과도 확인 질문 · 도움으로 새지 않고 정리 답 상한에 센다. */
+    @Test
+    void afterTheGoalIsAchievedEveryClosureResultCountsTowardTheSettleCap() {
+        Harness h = dialogue(); h.child("다른 놀이 할까?"); h.result("J2", "FULL"); h.played();
+        h.child("뭐라고"); h.result("J3", "UNREADABLE");
+        assertThat(h.ext.state().sub()).as("확인 질문이 아니라 정리 답").isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
+        h.played();
+        h.child("도와줘"); assertThat(h.result("J3", "HELP")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).as("상한에 닿으면 마무리 답").isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.out.announces).as("도움으로 새지 않는다").isEmpty();
     }
 
     /** 2026-10-24 실키 사례: 목표 달성 뒤 정리 판정이 끝내 안 나와 잡담이 목표 시간 상한까지 이어졌다. 정리 답은 두 번까지만 한다. */
@@ -341,7 +356,7 @@ class FlexiblePracticeConversationTest {
         return h;
     }
 
-    // scenario-generation.v3 · practice-system.v1: 여는 말이 목표 기회를 바로 연다. 기회 문장을 이어 강제로 읽지 않고 아이의 대답을 그대로 판정한다
+    // 유도 대화(2026-10-27): 첫 말은 장면 속 가벼운 말이고 아이 대답 2번 뒤 기회 문장을 낸다. 그 전 대답도 J2로 판정해 목표 달성이면 그대로 인정한다
 
     @Test
     void theOpeningLineIsTheFirstPartnerLineAndTheChildsAnswerIsJudgedWithoutAForcedOpportunitySentence() {
@@ -359,13 +374,63 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.slots).noneMatch(slot -> OPPORTUNITY_LINE.equals(slot.text()));
     }
 
+    /**
+     * 유도 대화(2026-10-27 사람 결정): 첫 말이 기회 문장과 다르면 아이 대답 2번(무응답 만료도 한 번으로 센다)까지 장면 속 대화를 잇고 그 뒤 기회 문장을
+     * 낸다. 이전 설계(첫 말에 대답이 없으면 생각할 시간 · 기회 문장은 강제로 읽지 않음, FT-1024-f)를 대체한다.
+     */
     @Test
-    void noAnswerToTheOpeningGetsTheUsualTimeToThinkInsteadOfTheScriptedOpportunitySentence() {
+    void noAnswerToTheOpeningCountsAsALeadInTurnAndTheOpportunityFollowsAfterTwo() {
         Harness h=toOpening(opening());h.played();
         assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.NONE);
-        assertThat(h.out.lastSlot().text()).contains("생각할 시간");
-        assertThat(h.out.slots).noneMatch(slot -> OPPORTUNITY_LINE.equals(slot.text()));
+        assertThat(h.out.lastSlot().generated()).isTrue();
+        assertThat(h.out.lastSlot().text()).contains("지금 함께 하는 활동 이야기를 자연스럽게 이어가", "아직 말하지 마");
+        h.played();
+        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.NONE);
+        assertThat(h.out.lastSlot().text()).as("두 번째에는 승인된 기회 문장").isEqualTo(OPPORTUNITY_LINE);
+        assertThat(h.out.lastSlot().generated()).isFalse();
         assertThat(h.recorder.only().endedAt()).isNull();
+    }
+
+    @Test
+    void twoLeadInAnswersThatAreNotTheGoalLeadToTheOpportunityAndTheNextAnswerIsJudged() {
+        Harness h=toOpening(opening());h.played();
+        h.child("응, 나도 상자 보러 왔어");assertThat(h.out.lastJudgment().point()).isEqualTo(JudgmentPoint.J2);
+        assertThat(h.result("J2","PARTIAL")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).as("유도 중 일부 전달은 교정하지 않고 대화를 잇는다").isEqualTo(FlowState.Sub.DIALOGUE_REPLY);
+        assertThat(h.out.lastSlot().text()).contains("아직 말하지 마");
+        h.played();h.child("상자 예쁘다");h.result("J2","IRRELEVANT");
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.OPPORTUNITY_LINE);
+        assertThat(h.out.lastSlot().text()).isEqualTo(OPPORTUNITY_LINE);
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        int judged=h.out.judgments.size();
+        h.child("그거 줄래?");
+        assertThat(h.out.judgments).hasSize(judged+1);
+        assertThat(h.result("J2","PARTIAL")).isEqualTo(Signal.NONE);
+        assertThat(h.ext.state().sub()).as("기회 뒤 일부 전달은 이전처럼 확인 질문").isEqualTo(FlowState.Sub.CLARIFICATION_REPLY);
+    }
+
+    @Test
+    void theGoalDoneDuringTheLeadInIsAcceptedWithoutTheOpportunitySentence() {
+        Harness h=toOpening(opening());h.played();
+        h.child("그거 줘, 나도 쓰고 싶어");h.result("J2","FULL");
+        assertThat(h.out.slots).noneMatch(slot -> OPPORTUNITY_LINE.equals(slot.text()));
+        assertThat(h.out.lastSlot().text()).as("목표 달성 뒤 정리 답").contains("받아들이고 그 결과로 짧게 이어가");
+        h.played();h.child("고마워");h.result("J3","DELIVERED");h.played();
+        assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+    }
+
+    @Test
+    void noResponseExpiringWhileTheChildIsSpeakingWaitsInsteadOfPrompting() {
+        Harness h=toOpening(opening());h.played();int slots=h.out.slots.size();
+        h.out.speaking=true;
+        assertThat(h.advance(Duration.ofSeconds(10))).isEqualTo(Signal.NONE);
+        assertThat(h.out.slots).as("말하는 중에는 재촉하지 않는다").hasSize(slots);
+        assertThat(h.out.timers).as("다시 기다린다").containsKey("no-response");
+        h.out.speaking=false;
+        h.child("응, 나도 상자 보러 왔어");
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.out.slots).hasSize(slots);
     }
 
     @Test
@@ -445,8 +510,12 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.announces).containsExactly("COACH", "PEER");
         h.announcedNotice(Playback.COMPLETED);
         assertThat(h.out.lastSlot().generated()).isTrue();
-        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
-        h.played(); h.child("좋아"); h.result("J3", "DELIVERED"); h.played();
+        // 도움 뒤 정답: 친구의 마무리 답으로 아이의 마지막 말에 답하며 닫는다. 처음 기회를 다시 열지 않는다(2026-10-27 실키)
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.SCENE_WRAP);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PEER_REPLY);
+        assertThat(h.out.lastSlot().text()).contains("직접 답하며 이 상호작용을 마무리해", "얼버무리지 말고");
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.GOAL_RECAP);
         assertThat(h.recorder.only().liveTiming()).isEqualTo(LiveTiming.AFTER_HELP);
     }
 

@@ -75,6 +75,8 @@ public enum AttrKey {
     AUDIO_BYTES("audioBytes", ValueType.NUMBER, null),
     AUDIO_STAGE("audioStage", ValueType.ENUM, Set.of("DRAINING", "DRAIN_TIMEOUT", "REQUEST_QUEUED", "REQUEST_SENT",
             "SEND_TIMEOUT", "FIRST_OUTPUT_TIMEOUT", "COLLECTING", "COLLECTION_TIMEOUT", "PLAYBACK_QUEUED", "PLAYING", "PLAYBACK_ENDED", "PLAYBACK_TIMEOUT")),
+    /** 연습 출력 대기를 가장 오래 막은 사유(진단, JIRA-282 후속). NONE은 기다리지 않았다는 뜻이다. */
+    DRAIN_BLOCKER("drainBlocker", ValueType.ENUM, Set.of("OUTPUT_FLOWING", "OUTPUT_PENDING", "CHILD_INPUT_OPEN", "NONE")),
     TRANSCRIPT_CHARS("transcriptChars", ValueType.NUMBER, null),
     EXPECTED_CHARS("expectedChars", ValueType.NUMBER, null),
     GENERATED_SPEECH("generatedSpeech", ValueType.BOOLEAN, null),
@@ -151,6 +153,14 @@ public enum AttrKey {
     SENT_FIELDS("sentFields", ValueType.NAME_LIST, null),
     LATENCY_MS("latencyMs", ValueType.NUMBER, null),
     LUNA_STATE("lunaState", ValueType.ENUM, Set.of("ENABLED", "DISABLED_NO_KEY", "DISABLED_SWITCH_OFF")),
+    // GOAL_CANDIDATE_DROPPED (FT-1027-g 후속). 후보 이름 · 인용 · 사유 글은 담지 않고 몇 번째 후보가 어느 검사의 어느 칸에서 빠졌는지만 남긴다
+    CANDIDATE_INDEX("candidateIndex", ValueType.NUMBER, null),
+    CANDIDATES_PROPOSED("candidatesProposed", ValueType.NUMBER, null),
+    DROP_REASON("dropReason", ValueType.ENUM, Set.of("LENGTH", "SKILL_REF_UNKNOWN", "NO_EVIDENCE", "QUOTE_MISMATCH",
+            "FORBIDDEN_DICTIONARY", "NUMBER_GUARD", "DUPLICATE", "OVER_LIMIT", "CHECK_EMPTY", "CHECK_QUOTE", "CHECK_NUMBER",
+            "CHECK_DICTIONARY", "CHECK_CLASSIFIER")),
+    DROP_FIELD("dropField", ValueType.ENUM, Set.of("DISPLAY_NAME", "DISPLAY_EVIDENCE", "TARGET_EXPRESSION", "REASON_TEXT",
+            "SKILL_REF", "SITUATION", "PARTNER", "INTENT", "EXPRESSION", "EVIDENCE", "NONE")),
     // ADMIN_RECORD_VIEWED(JIRA-280): 열람한 관리자의 ownerHash(OwnerHasher 12자 16진). 관리자 id 원문은 싣지 않는다
     VIEWER_HASH("viewerHash", ValueType.LABEL, null);
 

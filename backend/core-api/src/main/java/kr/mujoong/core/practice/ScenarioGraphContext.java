@@ -29,6 +29,8 @@ public final class ScenarioGraphContext {
         private final ScenarioDeadline deadline;
         private Duration remaining=budget;
         private boolean unavailable;
+        /** 그래프 읽기 자체가 실패했다(예외 · 시간 초과 · 예산 소진). 거짓이면서 unavailable이면 읽기는 정상이고 결과만 비었다. */
+        private boolean readFailed;
         private final java.util.Map<VariantPlanner.Context,Optional<VariantPlanner.Plan>> plans=new java.util.HashMap<>();
         private final Optional<ChildKnowledgeService.SkillContext> context;
         private Session(UUID guardian,UUID child,String skill,List<VariantPlanner.Exposure> history,ScenarioDeadline deadline){
@@ -37,6 +39,8 @@ public final class ScenarioGraphContext {
         }
         public Optional<ChildKnowledgeService.SkillContext> context(){return context;}
         public boolean fallbackRequired(){return unavailable;}
+        /** 그래프는 정상으로 읽혔고 변형 계획만 없어 대체가 필요한가(JIRA-283). 읽기 실패면 거짓이다. */
+        public boolean planMissingOnly(){return unavailable&&!readFailed;}
         public String graphVersion(){return context.map(ChildKnowledgeService.SkillContext::graphVersion).orElse(null);}
         public Optional<VariantPlanner.Plan> plan(Scene base){
             if(context.isEmpty()||!validBase(base)||base.preservation()==null)return Optional.empty();
@@ -50,10 +54,13 @@ public final class ScenarioGraphContext {
                     &&seed.preservationRule().equals(p.preservationRule());
         }
         private <T>Optional<T> read(java.util.concurrent.Callable<Optional<T>> operation){
-            if(remaining.isNegative()||remaining.isZero()){unavailable=true;return Optional.empty();}
+            if(remaining.isNegative()||remaining.isZero()){unavailable=true;readFailed=true;return Optional.empty();}
             long start=clock.monotonicNanos();
-            try{var result=deadline.call(executor,remaining,operation);if(clock.elapsedSince(start).compareTo(remaining)>=0||result.isEmpty()){unavailable=true;return Optional.empty();}return result;}
-            catch(RuntimeException failure){deadline.check();unavailable=true;return Optional.empty();}
+            try{var result=deadline.call(executor,remaining,operation);
+                if(clock.elapsedSince(start).compareTo(remaining)>=0){unavailable=true;readFailed=true;return Optional.empty();}
+                if(result.isEmpty()){unavailable=true;return Optional.empty();}
+                return result;}
+            catch(RuntimeException failure){deadline.check();unavailable=true;readFailed=true;return Optional.empty();}
             finally{remaining=remaining.minus(clock.elapsedSince(start));}
         }
         @Override public boolean valid(Scene base,Scene variant){

@@ -103,7 +103,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 사건 코드 20종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP, JIRA-280: ADMIN_RECORD_VIEWED). 코드마다 기본 수준 · 허용 attrs
+ * 사건 코드 23종(OD-2: 요구 문서 15종 + APP_ERROR · QUEUE_PRESSURE, U9 SD6: LUNA_CALL · LUNA_STARTUP, 연습 진단 2종, 목표 후보 진단 GOAL_CANDIDATE_DROPPED, JIRA-280: ADMIN_RECORD_VIEWED). 코드마다 기본 수준 · 허용 attrs
  * 키 · 병합 대상 여부를 정한다. 허용 표에 없는 키는 쓸 수 없다({@link EventLog}가 막는다). LUNA_CALL은 시도마다 한 줄이어야 해서(BR6.1)
  * 병합하지 않는다.
  */
@@ -119,7 +119,8 @@ public enum EventCode {
             EnumSet.of(SEQ, SPEAKER, T_TRANSCRIPT_FINAL, T_VIEW_ITEM_READY, T_VIEW_ITEM_FIRST_SERVED)),
     PLAYBACK_MARK_STOPPED(Level.INFO, false, false,
             EnumSet.of(STOP_CAUSE, T_DEVICE_OBSERVED, T_SERVER_RECV, CLOCK_OFFSET_MS, RTT_MS)),
-    PRACTICE_AUDIO_STAGE(Level.INFO, false, false, EnumSet.of(AttrKey.AUDIO_STAGE, OUTPUT_GENERATION, PRACTICE_PHASE, PRACTICE_SUB)),
+    PRACTICE_AUDIO_STAGE(Level.INFO, false, false, EnumSet.of(AttrKey.AUDIO_STAGE, OUTPUT_GENERATION, PRACTICE_PHASE, PRACTICE_SUB,
+            AttrKey.DURATION_MS, AttrKey.DRAIN_BLOCKER)),
     OUTPUT_DISCARDED(Level.INFO, false, false, EnumSet.of(SEQ, DISCARD_REASON, DISCARD_DETAIL,
             OUTPUT_GENERATION, DEVICE_GENERATION, CURRENT_DEVICE_GENERATION, SEGMENT_COMPLETE, AUDIO_BYTES,
             TRANSCRIPT_CHARS, EXPECTED_CHARS, GENERATED_SPEECH, PRACTICE_PHASE, PRACTICE_SUB,
@@ -144,6 +145,9 @@ public enum EventCode {
     LUNA_CALL(Level.INFO, false, false, EnumSet.of(
             LUNA_PURPOSE, LUNA_OUTCOME, MODEL, RESPONSE_MODEL, PROMPT_VERSION, SENT_FIELDS, LATENCY_MS, ATTEMPT)),
     LUNA_STARTUP(Level.INFO, false, false, EnumSet.of(LUNA_STATE)),
+    /** 목표 후보가 서버 검사에서 빠진 이유(진단, FT-1027-g 후속). 후보마다 한 줄이며 원문은 없다. */
+    GOAL_CANDIDATE_DROPPED(Level.INFO, false, false, EnumSet.of(PROMPT_VERSION, AttrKey.CANDIDATE_INDEX,
+            AttrKey.CANDIDATES_PROPOSED, AttrKey.DROP_REASON, AttrKey.DROP_FIELD)),
     /**
      * JIRA-280: 관리자가 활동 상세(대화 원문)를 열람했다. ownerHash는 활동, viewerHash는 열람한 관리자의 해시다. 열람마다 한 줄이어야 해서
      * 병합하지 않고 보안 사건 상한도 받지 않는다. 원문 · 아이 이름은 싣지 않는다.

@@ -267,10 +267,10 @@ export class DeviceSimulator {
   }
 
   /**
-   * 0x01 입력 프레임을 count장 20ms 간격으로 보낸다(합성 톤). 이 묶음 본문의 SHA-256을 돌려준다.
+   * 0x01 입력 프레임을 count장 20ms 간격으로 보낸다(합성 톤, 또는 payloadAt(i)가 주는 PCM 본문). 이 묶음 본문의 SHA-256을 돌려준다.
    * @returns {Promise<{frames: number, bytes: number, sha256: string, firstSeq: number, lastSeq: number}>}
    */
-  async sendInputFrames(count, { intervalMs = INPUT_FRAME_MS } = {}) {
+  async sendInputFrames(count, { intervalMs = INPUT_FRAME_MS, payloadAt = null } = {}) {
     const hash = new RunningHash();
     let firstSeq = null;
     let lastSeq = null;
@@ -279,7 +279,8 @@ export class DeviceSimulator {
       if (!this.isOpen) {
         throw new Error("입력 프레임을 보내는 중 연결이 닫혔다");
       }
-      const payload = synthesizeInputPayload(this.#inputIndex);
+      // payloadAt(i)가 있으면 그 PCM 본문(960바이트)을 보낸다(실키 합성 음성 시험용). 없으면 지금처럼 합성 톤
+      const payload = payloadAt ? payloadAt(i) : synthesizeInputPayload(this.#inputIndex);
       this.#inputIndex += 1;
       this.#frameSeq = nextFrameSeq(this.#frameSeq);
       if (firstSeq === null) {

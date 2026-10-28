@@ -46,6 +46,7 @@ public final class DecisionsJudgeClient implements JudgeClient {
     private final JudgeOutcomeValidator validator;
     private final MujoongClock clock;
     private final Map<JudgmentPoint, String> instructions = new EnumMap<>(JudgmentPoint.class);
+    private Runnable warmUp = () -> { };
 
     /**
      * @param decisions 보통 {@code RealtimeLunaClient::decide}. 시험에서는 루프백 대역에 붙은 클라이언트를 쓴다
@@ -58,6 +59,16 @@ public final class DecisionsJudgeClient implements JudgeClient {
     public static DecisionsJudgeClient withUsage(DecisionCall decisions, JudgmentPrompt prompt,
             JudgeOutcomeValidator validator, MujoongClock clock) {
         return new DecisionsJudgeClient(decisions, prompt, validator, clock);
+    }
+
+    /**
+     * @param warmUp 공급자 연결 예열(보통 {@code RealtimeLunaClient::warmUp}). 기다리지 않고 부르며 던져도 판정에 영향을 주지 않는다
+     */
+    public static DecisionsJudgeClient withUsage(DecisionCall decisions, Runnable warmUp, JudgmentPrompt prompt,
+            JudgeOutcomeValidator validator, MujoongClock clock) {
+        DecisionsJudgeClient client = new DecisionsJudgeClient(decisions, prompt, validator, clock);
+        client.warmUp = Objects.requireNonNull(warmUp, "warmUp");
+        return client;
     }
 
     private static DecisionCall adapt(BiFunction<LunaRequest, LunaDecisionQuestion, CompletionStage<LunaDecision>> decisions) {
@@ -79,6 +90,15 @@ public final class DecisionsJudgeClient implements JudgeClient {
     @Override
     public boolean available() {
         return true;
+    }
+
+    @Override
+    public void warmUp() {
+        try {
+            warmUp.run();
+        } catch (RuntimeException ignored) {
+            // 예열은 최선 노력이다: 실패하면 첫 판정이 연결을 새로 맺을 뿐 판정 결과는 같다
+        }
     }
 
     @Override
