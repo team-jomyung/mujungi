@@ -110,6 +110,7 @@ public class GoalCandidateRepository {
     private Optional<SavedGoalReader.SavedGoalView> snapshot(UUID child,UUID selection,boolean active){
         return jdbc.query(SELECTION+"where s.child_id=:child and s.id=:id"+(active?" and s.status='ACTIVE'":""),Map.of("child",child,"id",selection),(r,n)->new SavedGoalReader.SavedGoalView(uuid(r,"id"),child,SavedGoalReader.SavedGoalView.Kind.CANDIDATE,r.getString("candidate_id"),r.getInt("version"),r.getString("target_expression"),json.read(r.getString("four_elements_json"),FourElements.class),r.getString("skill_ref"),null,null)).stream().findFirst();
     }
+    public void requireFavoriteCapacity(UUID guardian){GoalFavoriteLimit.requireCapacity(jdbc,guardian);}
     public void favorite(UUID id,boolean favorite){jdbc.update("update core.core_saved_goal set is_favorite=:f where id=:id",Map.of("id",id,"f",favorite));}
     public void delete(UUID id,Instant now,Instant until){jdbc.update("update core.core_saved_goal set status='DELETED',deleted_at=:now,restore_until=:until where id=:id and status='ACTIVE'",instant(at(now).addValue("id",id),"until",until));}
     public void restore(UUID id){jdbc.update("update core.core_saved_goal set status='ACTIVE',deleted_at=null,restore_until=null where id=:id",Map.of("id",id));}

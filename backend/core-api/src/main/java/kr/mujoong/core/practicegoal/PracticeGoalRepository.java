@@ -16,6 +16,7 @@ import org.springframework.stereotype.Repository;
 public class PracticeGoalRepository {
     private final NamedParameterJdbcTemplate jdbc;
     public PracticeGoalRepository(NamedParameterJdbcTemplate jdbc) { this.jdbc=jdbc; }
+    public void requireFavoriteCapacity(UUID guardian){GoalFavoriteLimit.requireCapacity(jdbc,guardian);}
     public record PreparationMetadata(String displayName,boolean favorite,long sortOrder) {}
     /** U10: 두 목표 저장 종류의 표시·순위 읽기는 목표 소유 저장소에 둔다. */
     public Optional<PreparationMetadata> preparationMetadata(UUID guardian,UUID child,UUID selection){

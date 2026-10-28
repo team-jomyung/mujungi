@@ -37,13 +37,14 @@ public class GeneratedGoalService {
         return selection.filter(s->owner.childId().equals(s.childId()));
     }
     public List<GoalSelection> list(UUID guardian){var owner=accounts.requireActive(guardian,false);requireConsent(guardian);return repository.list(guardian).stream().filter(s->owner.childId().equals(s.childId())).toList();}
-    public GoalSelection favorite(UUID guardian,UUID id,boolean favorite){return write(guardian,o->{var s=owned(guardian,id);if(!s.active())missing();repository.favorite(id,favorite);return owned(guardian,id);});}
+    public GoalSelection favorite(UUID guardian,UUID id,boolean favorite){return write(guardian,o->{var s=owned(guardian,id);if(!s.active())missing();if(favorite&&!s.isFavorite())repository.requireFavoriteCapacity(guardian);repository.favorite(id,favorite);return owned(guardian,id);});}
     public Instant delete(UUID guardian,UUID id,java.time.Duration window){return write(guardian,o->{var s=owned(guardian,id);if(!s.active())return s.restoreUntil();Instant now=clock.now(),until=now.plus(window);repository.delete(id,now,until);return until;});}
     public GoalSelection restore(UUID guardian,UUID id){return write(guardian,o->{
         var s=owned(guardian,id);if(s.active())return s;
         if(!clock.now().isBefore(s.restoreUntil()))throw CoreApiException.of(ErrorCode.RESTORE_EXPIRED);
         var v=repository.version(o.childId(),s.recommendationId()).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
         if(repository.activeSelection(o.childId(),v.candidateId()).isPresent())throw CoreApiException.of(ErrorCode.ALREADY_SELECTED);
+        if(s.isFavorite())repository.requireFavoriteCapacity(guardian);
         repository.restore(id);return owned(guardian,id);
     });}
     private GoalSelection owned(UUID guardian,UUID id){return repository.selection(guardian,id).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));}

@@ -58,6 +58,24 @@ class PracticeCoreIT {
     private static void error(Runnable action,ErrorCode code){
         assertThatThrownBy(action::run).isInstanceOfSatisfying(CoreApiException.class,e->assertThat(e.code()).isEqualTo(code));
     }
+    @Test void legacyFavoritesCountGeneratedGoalsAndProtectRestoreAndReadding(){
+        var f=family();
+        var generated=new kr.mujoong.core.practicegoal.GoalCandidateRepository(db.jdbc());
+        for(int i=0;i<4;i++){
+            var draft=new kr.mujoong.core.practicegoal.GoalCandidateRepository.Draft("합성목표","합성장면","전달",new kr.mujoong.core.practicegoal.FourElements("놀이","친구","참여","말하기"),"NONE","합성근거",List.of(),null);
+            var v=generated.register(f.childId(),UUID.randomUUID(),"synthetic-"+i,draft,clock.now());
+            UUID id=db.inTx(t->generated.select(f.guardianId(),v,clock.now()));generated.favorite(id,true);
+        }
+        var fifth=add(f,"ACCEPT_STOP");var sixth=add(f,"ASK_TO_JOIN");
+        service.favorite(f.guardianId(),fifth.goalSelectionId(),true);
+        error(()->service.favorite(f.guardianId(),sixth.goalSelectionId(),true),ErrorCode.FAVORITE_LIMIT_REACHED);
+        service.delete(f.guardianId(),fifth.goalSelectionId());service.favorite(f.guardianId(),sixth.goalSelectionId(),true);
+        error(()->service.restore(f.guardianId(),fifth.goalSelectionId()),ErrorCode.FAVORITE_LIMIT_REACHED);
+        error(()->service.add(f.guardianId(),repository.find(f.guardianId(),fifth.goalSelectionId()).orElseThrow().recommendationId()),ErrorCode.FAVORITE_LIMIT_REACHED);
+        service.favorite(f.guardianId(),sixth.goalSelectionId(),false);
+        assertThat(service.restore(f.guardianId(),fifth.goalSelectionId()).isFavorite()).isTrue();
+        var other=family();assertThat(service.favorite(other.guardianId(),add(other,"ACCEPT_STOP").goalSelectionId(),true).isFavorite()).isTrue();
+    }
     @Test void candidateRegistrationIsIdempotentAndDoesNotAutomaticallySelect(){
         var f=family();UUID session=UUID.randomUUID();
         UUID first=candidate(f,session,"ACCEPT_STOP");
