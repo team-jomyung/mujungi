@@ -15,7 +15,7 @@
 |---|---|
 | `INCOMPLETE_SEGMENT` | 구간이 첫 조각부터 끝까지 모였다는 근거가 없음 |
 | `EMPTY_TRANSCRIPT` / `MISSING_AUDIO` / `INVALID_PCM_LENGTH` | 전사 없음 / 음성 없음 / PCM 길이 오류 |
-| `APPROVED_TEXT_MISMATCH` | 승인 대본과 생성 전사가 다름 |
+| `APPROVED_TEXT_MISMATCH` | 승인 대본과 생성 전사가 다르고 제브로 검사할 수 없음(제브 꺼짐 · ACTIVE 아님). 제브가 있으면 버리지 않고 제브 검사로 넘긴다(FT-1028-e) |
 | `FORBIDDEN_PATTERN` | 서버 금지 표현 사전에서 일치 |
 | `NO_OPEN_PRACTICE_SLOT` | 연습이 제어 중인데 해당 출력 슬롯이 없음 |
 | `INPUT_SUPERSEDED_UNPLAYED` | 아이의 새 발화 때문에 재생 전 출력을 취소 |

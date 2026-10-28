@@ -520,8 +520,9 @@ class GuardrailExecutorTest {
         assertThat(practice.link.outputs()).hasSize(1);
     }
 
+    /** FT-1028-e: 연습이 출력을 쥔 동안 승인 원문과 달라진 낭독은 원문 일치로 건너뛰지 못하고 제브 검사를 거친다. 막히면 내지 않는다. */
     @Test
-    void whilePracticeControlsTheOutputAChangedTextIsStillDiscardedAsAGatePatternWithoutCallingTheChecker() {
+    void whilePracticeControlsTheOutputAChangedTextMustPassTheCheckerBeforePlaying() {
         SessionHarness practice = practiceHarness();
         FakeGuardrailClient practiceGuard = practice.guard;
         practice.activate();
@@ -529,9 +530,11 @@ class GuardrailExecutorTest {
         practice.speak("내 차례야. 이렇게 말해 봐.", 4800);
         practice.advance(Duration.ofMillis(801));
 
-        assertThat(practiceGuard.count()).isZero();
+        assertThat(practiceGuard.count()).isEqualTo(1);
         assertThat(practice.link.outputs()).isEmpty();
-        assertThat(practice.metrics.count("mujoong.gate.discard", "reason", "gate_pattern")).isEqualTo(1.0);
+        practiceGuard.block();
+        practice.drain();
+        assertThat(practice.link.outputs()).isEmpty();
     }
 
     private static SessionHarness practiceHarness() {
