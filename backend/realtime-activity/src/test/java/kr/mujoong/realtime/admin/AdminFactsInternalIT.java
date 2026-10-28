@@ -115,6 +115,10 @@ class AdminFactsInternalIT {
 
     @Test
     void usageSumsOnlyMeasuredRowsAndKeepsTheUnmeasuredCallVisible() {
+        // 입력 · 출력은 알지만 캐시 읽기를 모르는 판정 호출
+        env.db.inTransaction(() -> new AiUsageRepository(env.db.jdbc()).write(new AiUsageRecord(UUID.randomUUID(),
+                AiUsageRecord.Source.LUNA, session, UUID.randomUUID(), null, "synthetic-4", "gpt-6-luna", 50L, 5L, null, 0L, null,
+                AiUsageRecord.Status.COMPLETE, 1, AT.plusSeconds(55)), id -> true));
         Reply reply = post(USAGE, "{\"sessionIds\":[\"" + session + "\"]}");
 
         assertThat(reply.status()).isEqualTo(200);
@@ -122,13 +126,16 @@ class AdminFactsInternalIT {
         Map<String, JsonNode> bySource = new java.util.HashMap<>();
         reply.json().get("usage").forEach(row -> bySource.put(row.get("source").asString(), row));
         JsonNode luna = bySource.get("LUNA");
-        assertThat(luna.get("calls").asInt()).isEqualTo(3);
-        assertThat(luna.get("measuredCalls").asInt()).isEqualTo(1);
-        assertThat(luna.get("knownCalls").asInt()).as("입력만 아는 호출도 안다").isEqualTo(2);
-        assertThat(luna.get("inputTokens").asLong()).as("표시용: 입력만 아는 호출의 40 포함").isEqualTo(140);
-        assertThat(luna.get("measuredInputTokens").asLong()).as("금액용: 입력 · 출력 모두 아는 호출만").isEqualTo(100);
-        assertThat(luna.get("measuredOutputTokens").asLong()).isEqualTo(20);
+        assertThat(luna.get("calls").asInt()).isEqualTo(4);
+        assertThat(luna.get("measuredCalls").asInt()).isEqualTo(2);
+        assertThat(luna.get("knownCalls").asInt()).as("입력만 아는 호출도 안다").isEqualTo(3);
+        assertThat(luna.get("cacheUnknownCalls").asInt()).as("측정된 호출 가운데 캐시 읽기를 모르는 호출").isEqualTo(1);
+        assertThat(luna.get("inputTokens").asLong()).as("표시용: 입력만 아는 호출의 40 포함").isEqualTo(190);
+        assertThat(luna.get("measuredInputTokens").asLong()).as("금액용: 입력 · 출력 모두 아는 호출만").isEqualTo(150);
+        assertThat(luna.get("measuredOutputTokens").asLong()).isEqualTo(25);
         assertThat(luna.get("cachedInputTokens").asLong()).isEqualTo(10);
+        assertThat(luna.get("measuredCachedInputTokens").asLong()).as("모르는 캐시는 0으로 더한다").isEqualTo(10);
+        assertThat(bySource.get("VOICE").get("cacheUnknownCalls").asInt()).isZero();
         assertThat(bySource.get("VOICE").get("voiceSeconds").asDouble()).isEqualTo(120.0);
         assertThat(bySource.get("VOICE").has("inputTokens")).isFalse();
     }

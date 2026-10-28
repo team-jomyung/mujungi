@@ -221,7 +221,8 @@ paths:
       description: |
         본문은 sessionIds(활동 상세, 관측 시각 제한 없음) 또는 from · to(비용 목록, 관측 시각 [from, to)) 둘 중 하나다. 둘 다
         있거나 둘 다 없으면 400. 표시용 토큰 · 초 합은 필드마다 아는 값을 더하고, 금액 계산용 합(measured*)은 측정된 행만 더한다.
-        금액을 계산하지 못한 행은 calls − measuredCalls로 드러난다(0으로 채우지 않는다). 음성은 VOICE(초), 진행 중 판정은 LUNA(Decisions 토큰)이고 캐시 쓰기 토큰은 표에 없다.
+        금액을 계산하지 못한 행은 calls − measuredCalls로 드러난다(0으로 채우지 않는다). cacheUnknownCalls는 측정된 LUNA 행 가운데 캐시 읽기
+        토큰이 없는 행 수다(JIRA-287, Core가 수집 상태를 PARTIAL로 표시). 음성은 VOICE(초), 진행 중 판정은 LUNA(Decisions 토큰)이고 캐시 쓰기 토큰은 표에 없다.
       servers:
         - url: http://realtime:8081
       x-unit: JIRA-280
@@ -239,8 +240,8 @@ paths:
               schema: { $ref: "schemas/internal-admin-usage-response.schema.json" }
               example:
                 usage:
-                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: VOICE, model: gpt-live-1, calls: 1, measuredCalls: 1, knownCalls: 1, completeCalls: 0, voiceSeconds: 312.4, lastObservedAt: "2026-10-27T01:05:12Z" }
-                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: LUNA, model: gpt-6-luna, calls: 7, measuredCalls: 6, knownCalls: 7, completeCalls: 6, inputTokens: 5500, outputTokens: 60, cachedInputTokens: 1200, reasoningTokens: 0, measuredInputTokens: 5400, measuredOutputTokens: 60, measuredCachedInputTokens: 1200, lastObservedAt: "2026-10-27T01:04:40Z" }
+                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: VOICE, model: gpt-live-1, calls: 1, measuredCalls: 1, knownCalls: 1, completeCalls: 0, cacheUnknownCalls: 0, voiceSeconds: 312.4, lastObservedAt: "2026-10-27T01:05:12Z" }
+                  - { sessionId: 00000000-0000-4000-8000-000000000020, source: LUNA, model: gpt-6-luna, calls: 7, measuredCalls: 6, knownCalls: 7, completeCalls: 6, cacheUnknownCalls: 0, inputTokens: 5500, outputTokens: 60, cachedInputTokens: 1200, reasoningTokens: 0, measuredInputTokens: 5400, measuredOutputTokens: 60, measuredCachedInputTokens: 1200, lastObservedAt: "2026-10-27T01:04:40Z" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/InternalError" }

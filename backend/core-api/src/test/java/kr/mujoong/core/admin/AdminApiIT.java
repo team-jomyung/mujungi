@@ -255,6 +255,8 @@ class AdminApiIT {
 
     @Test
     void costsAreUsdStringsAndTheRealtimeOutageIsAnErrorNotZero() {
+        // 서버 재시작 실패 활동의 결과 문장 호출: 입력 · 출력은 알지만 캐시 읽기를 모름
+        coreUsage(restartFailed, guardian, "RESULT_TEXT", 2_000L, 400L, null);
         Map<String, Object> body = ok("GET /api/admin/costs", "/api/admin/costs" + range() + "&guardianId=" + guardian);
         @SuppressWarnings("unchecked")
         Map<String, Object> page = (Map<String, Object>) body.get("activities");
@@ -266,6 +268,16 @@ class AdminApiIT {
         // 음성 300초 = 300 ÷ 60 × 0.05
         assertThat(items.get(freeTalk.toString())).containsEntry("estimatedUsd", "0.25").containsEntry("status", "COMPLETE");
         assertThat(body.get("otherCosts")).as("필터가 있으면 활동 외 항목은 싣지 않는다").isEqualTo(List.of());
+        // (2,000 × 0.10 + 400 × 0.50) ÷ 1,000,000: 모르는 캐시 읽기는 0으로 계산하되 완결로 보이지 않는다
+        assertThat(items.get(restartFailed.toString())).containsEntry("estimatedUsd", "0.0004").containsEntry("status", "PARTIAL");
+        assertThat(page).as("사용량이 없는 기간 안 활동 2건도 목록에 든다").containsEntry("total", 5);
+        for (UUID silent : List.of(neverStarted, declined)) {
+            assertThat(items.get(silent.toString())).containsEntry("status", "NOT_COLLECTED").containsEntry("category", "ACTIVITY")
+                    .containsEntry("estimatedUsd", null).containsEntry("inputTokens", null);
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> totals = (Map<String, Object>) body.get("totals");
+        assertThat(totals).as("미수집 활동은 합계를 바꾸지 않는다").containsEntry("activityUsd", "0.252832");
 
         Map<String, Object> detail = ok("GET /api/admin/costs/{costId}", "/api/admin/costs/" + practice);
         assertThat(detail).containsEntry("estimatedUsd", "0.002432");
@@ -401,9 +413,9 @@ class AdminApiIT {
         return """
                 {"usage":[
                   {"sessionId":"%s","source":"VOICE","model":"gpt-live-1","calls":1,"measuredCalls":1,"knownCalls":1,
-                   "completeCalls":1,"voiceSeconds":300.0,"lastObservedAt":"2019-05-14T03:05:00Z"},
+                   "completeCalls":1,"cacheUnknownCalls":0,"voiceSeconds":300.0,"lastObservedAt":"2019-05-14T03:05:00Z"},
                   {"sessionId":"%s","source":"LUNA","model":"gpt-6-luna","calls":4,"measuredCalls":3,"knownCalls":4,
-                   "completeCalls":3,"inputTokens":5500,"outputTokens":60,"cachedInputTokens":1200,"reasoningTokens":0,
+                   "completeCalls":3,"cacheUnknownCalls":0,"inputTokens":5500,"outputTokens":60,"cachedInputTokens":1200,"reasoningTokens":0,
                    "measuredInputTokens":5400,"measuredOutputTokens":60,"measuredCachedInputTokens":1200,
                    "lastObservedAt":"2019-05-14T03:15:00Z"}]}
                 """.formatted(freeTalk, practice);
@@ -525,14 +537,19 @@ class AdminApiIT {
     }
 
     private void coreUsage(UUID session, UUID owner, String purpose, long input, long outputTokens) {
+        coreUsage(session, owner, purpose, input, outputTokens, 0L);
+    }
+
+    private void coreUsage(UUID session, UUID owner, String purpose, long input, long outputTokens, Long cached) {
         db.jdbc().update("""
                 insert into core.core_ai_usage (id, call_id, attempt_no, purpose, guardian_id, session_id, prompt_version, model,
                     outcome, input_tokens, output_tokens, cached_input_tokens, cache_write_tokens, reasoning_tokens,
                     capture_status, observed_at, created_at)
-                values (:id, :call, 1, :purpose, :guardian, :session, 'admin-it', 'gpt-6-luna', 'OK', :input, :output, 0, 0, 0,
+                values (:id, :call, 1, :purpose, :guardian, :session, 'admin-it', 'gpt-6-luna', 'OK', :input, :output, :cached, 0, 0,
                         'COMPLETE', :observed, :t)
                 """, params().addValue("id", UUID.randomUUID()).addValue("call", UUID.randomUUID()).addValue("purpose", purpose)
                 .addValue("guardian", owner).addValue("session", session).addValue("input", input).addValue("output", outputTokens)
+                .addValue("cached", cached, java.sql.Types.BIGINT)
                 .addValue("observed", ClockParams.timestamptz(NOON.plusSeconds(500))));
     }
 
