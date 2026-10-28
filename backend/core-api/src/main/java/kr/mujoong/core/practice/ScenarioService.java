@@ -64,7 +64,7 @@ public class ScenarioService {
                     new ScenarioGraphContext(graph,executor,clock,knowledgeTiming.graphBudget()),repository,executor,
                     properties.timing().practice().scenarioHistoryTimeout(),json)
                     // 담은 목표 저장소가 없는 좁은 실행 환경에서는 참고 씨앗 없이 지금처럼 만든다.
-                    .references(goals.map(saved->new ReferenceSeedSelector(graph,saved::activeSavedSkillRefs,executor,
+                    .references(goals.map(saved->new ReferenceSeedSelector(graph,saved::practicedSkillRefs,executor,
                             knowledgeTiming.graphBudget(),knowledgeTiming.referenceCooldown())).orElse(null));
         }
     }

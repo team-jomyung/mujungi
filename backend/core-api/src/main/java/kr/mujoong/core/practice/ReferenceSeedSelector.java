@@ -11,7 +11,7 @@ import kr.mujoong.core.knowledge.ChildKnowledgeService;
 import kr.mujoong.core.knowledge.ChildKnowledgeService.ReferenceSeed;
 
 /**
- * 연습 장면을 처음 만들 때 담은 목표의 씨앗 가운데 아이가 자유대화에서 자주 막힌 씨앗 하나를 소재 참고로 고른다.
+ * 연습 장면을 처음 만들 때 보호자가 연습에 고른 적 있는 목표의 씨앗 가운데 아이가 자유대화에서 자주 막힌 씨앗 하나를 소재 참고로 고른다.
  * 고르지 못하면(후보 없음 · 쉬는 기간 · 조회 실패 · 예산 초과) 지금처럼 참고 없이 만든다. 연습 시작을 막지 않는다.
  */
 public final class ReferenceSeedSelector {
@@ -33,7 +33,7 @@ public final class ReferenceSeedSelector {
     public Optional<ReferenceSeed> select(UUID guardian, UUID child, String goalSkillRef, ScenarioDeadline deadline) {
         if (!knowledge.enabled()) return Optional.empty();
         try {
-            // 담은 목표는 그래프 서비스가 권한을 확인한 뒤에 읽는다.
+            // 후보 목표는 그래프 서비스가 권한을 확인한 뒤에 읽는다.
             return deadline.call(executor, deadline.limit(budget),
                     () -> knowledge.referenceSeed(guardian, child, goalSkillRef, () -> savedSkillRefs.apply(child), cooldown));
         } catch (RuntimeException failure) {

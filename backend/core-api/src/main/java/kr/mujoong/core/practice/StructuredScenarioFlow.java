@@ -69,7 +69,7 @@ public final class StructuredScenarioFlow {
                 "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
                 "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
         payload.put("baseOnly",true); // 첫 BASE의 실제 좌표를 받은 뒤에만 변형 계획을 정한다.
-        // 처음 만드는 장면에만 아이가 자주 막힌 다른 담은 목표의 씨앗 하나를 소재 참고로 준다. 불변 문장만 주고 보존 조건은 주지 않는다.
+        // 처음 만드는 장면에만 아이가 자주 막힌, 연습에 고른 적 있는 다른 목표의 씨앗 하나를 소재 참고로 준다. 불변 문장만 주고 보존 조건은 주지 않는다.
         // 목표 씨앗 조회가 이미 실패한 그래프에는 다시 묻지 않는다.
         var reference=previous==null&&references!=null&&!knowledge.fallbackRequired()
                 ?references.select(session.guardianId(),session.childId(),original.skillRef(),deadline)
