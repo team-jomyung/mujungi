@@ -21,7 +21,12 @@ public final class ScenarioScriptGenerator {
         public Input{payload=Map.copyOf(payload);aliases=Map.copyOf(aliases);}
         @Override public String toString(){return "ScenarioGenerationInput[redacted]";}
     }
-    public record Result(GeneratedScenario legacy,ScenarioRepository.Details details){}
+    /** reference는 이 장면 입력에 넣은 참고 씨앗이다(없으면 null). 장면을 저장한 뒤에만 참고 시점을 남기려고 함께 돌려준다. */
+    public record Result(GeneratedScenario legacy,ScenarioRepository.Details details,
+            kr.mujoong.core.knowledge.ChildKnowledgeService.ReferenceSeed reference){
+        public Result(GeneratedScenario legacy,ScenarioRepository.Details details){this(legacy,details,null);}
+        Result withReference(kr.mujoong.core.knowledge.ChildKnowledgeService.ReferenceSeed seed){return new Result(legacy,details,seed);}
+    }
     private final ScenarioScriptProvider provider;
     private final ScenarioScriptValidation validation;
     private final TextAiProperties timing;
@@ -171,7 +176,8 @@ public final class ScenarioScriptGenerator {
         return approved(approved.script(),approved.model(),approved.reviewModel(),approved.input(),budget,deadline);
     }
     private Input withoutGraph(Input input){
-        var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.put("baseOnly",true);
+        // 그래프 없이 만들 때는 참고 씨앗도 빼서 지금까지의 그래프 없는 장면과 같게 한다(유일한 불변 문장으로 오해되지 않게).
+        var payload=new LinkedHashMap<>(input.payload());payload.remove("structureContext");payload.remove("variantPlan");payload.remove("referenceContext");payload.put("baseOnly",true);
         var r=input.rules();
         return new Input(payload,input.aliases(),new ScenarioScriptValidation.Rules(r.relation(),r.opportunity(),r.targetExpression(),r.originalNames(),r.sourceText(),r.seen(),(a,b)->false),false,input.goalContextJson());
     }

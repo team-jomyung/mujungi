@@ -51,6 +51,28 @@ public class GoalCandidateRepository {
     public Optional<Version> current(UUID child,UUID candidate){return jdbc.query(VERSION+"and v.child_id=:child and c.id=:id and v.version=c.current_version",Map.of("child",child,"id",candidate),this::version).stream().findFirst();}
     public List<Version> candidates(UUID child,UUID session){return jdbc.query(VERSION+"and v.child_id=:child and c.source_session_id=:session and v.version=c.current_version order by c.created_at,c.id",Map.of("child",child,"session",session),this::version);}
     public boolean fromResult(UUID candidate,UUID result){return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from core.core_goal_candidate where id=:id and source_key like :prefix)",Map.of("id",candidate,"prefix",result+":%"),Boolean.class));}
+    /** 자유대화에서 나온 현재 후보의 씨앗 태그별 횟수와 마지막 시각. 연습에서 나온 후보는 세지 않는다(참고 씨앗이 스스로를 키우지 않게). */
+    public Map<String,kr.mujoong.core.knowledge.SeedObservation> freeTalkSkillObservations(UUID child){
+        Map<String,kr.mujoong.core.knowledge.SeedObservation> result=new LinkedHashMap<>();
+        jdbc.query("""
+            select v.skill_ref,count(*) as observed,max(c.created_at) as last_observed
+              from core.core_goal_candidate c
+              join core.core_goal_candidate_version v on v.candidate_id=c.id and v.child_id=c.child_id and v.version=c.current_version
+              join core.core_activity_record r on r.session_id=c.source_session_id and r.child_id=c.child_id
+             where c.child_id=:child and c.status='ACTIVE' and r.activity_type='FREE_TALK' and v.skill_ref like 'seed:%'
+             group by v.skill_ref order by v.skill_ref
+            """,Map.of("child",child),(org.springframework.jdbc.core.RowCallbackHandler)r->result.put(r.getString("skill_ref"),
+                new kr.mujoong.core.knowledge.SeedObservation(r.getInt("observed"),r.getObject("last_observed",java.time.OffsetDateTime.class).toInstant())));
+        return Map.copyOf(result);
+    }
+    /** 보호자가 지금 담아 둔 목표들의 씨앗 태그. 장면 참고 씨앗은 이 안에서만 고른다. */
+    public Set<String> activeSavedSkillRefs(UUID child){
+        return Set.copyOf(jdbc.queryForList("""
+            select distinct v.skill_ref from core.core_saved_goal s
+              join core.core_goal_candidate_version v on v.id=s.candidate_version_id and v.candidate_id=s.candidate_id and v.child_id=s.child_id
+             where s.child_id=:child and s.status='ACTIVE' and v.skill_ref like 'seed:%'
+            """,Map.of("child",child),String.class));
+    }
     public void invalidatePrevious(UUID child,UUID session,UUID result){jdbc.update("update core.core_goal_candidate set status='INVALIDATED' where child_id=:child and source_session_id=:session and source_key not like :prefix",Map.of("child",child,"session",session,"prefix",result+":%"));}
     public Optional<Version> linkSeed(Version expected,String seed,Instant now){
         var p=Map.of("id",expected.candidateId(),"child",expected.childId(),"version",expected.version());

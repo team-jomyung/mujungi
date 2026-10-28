@@ -27,6 +27,9 @@ public final class StructuredScenarioFlow {
         this.generator=generator;this.privacy=privacy;this.sanitizer=sanitizer;this.graph=graph;this.repository=repository;
         this.executor=executor;this.historyTimeout=historyTimeout;this.json=json;
     }
+    private ReferenceSeedSelector references;
+    /** 참고 씨앗을 고를 수 있을 때만 연결한다. 없으면 지금처럼 참고 없이 만든다. */
+    public StructuredScenarioFlow references(ReferenceSeedSelector references){this.references=references;return this;}
     public ScenarioScriptGenerator.Result generate(PracticeSessionContextPort.SessionContext session,
             PracticeSessionContextPort.GoalSnapshot goal,BehaviorDefinition definition,ScenarioRepository.Stored previous,
             PracticeAccountPort.AccountContext account,Instant started,ScenarioDeadline deadline){
@@ -66,6 +69,12 @@ public final class StructuredScenarioFlow {
                 "skillRef",seed.seedId(),"signature",seed.signature(),"invariantSentence",seed.invariantSentence(),
                 "preservationRule",seed.preservationRule(),"relationship",seed.relationship(),"situation",seed.situation()));});
         payload.put("baseOnly",true); // 첫 BASE의 실제 좌표를 받은 뒤에만 변형 계획을 정한다.
+        // 처음 만드는 장면에만 아이가 자주 막힌 다른 담은 목표의 씨앗 하나를 소재 참고로 준다. 불변 문장만 주고 보존 조건은 주지 않는다.
+        // 목표 씨앗 조회가 이미 실패한 그래프에는 다시 묻지 않는다.
+        var reference=previous==null&&references!=null&&!knowledge.fallbackRequired()
+                ?references.select(session.guardianId(),session.childId(),original.skillRef(),deadline)
+                :java.util.Optional.<kr.mujoong.core.knowledge.ChildKnowledgeService.ReferenceSeed>empty();
+        reference.ifPresent(seed->payload.put("referenceContext",Map.of("invariantSentence",seed.invariantSentence())));
         var clean=sanitizer.sanitize(payload,aliases.aliases(),LunaPurpose.SCENARIO_GENERATION).payload();
         String cleanOpportunity=(String)clean.get("opportunityCondition"),cleanRelation=(String)clean.get("relation");
         String sourceText=null;
@@ -73,8 +82,15 @@ public final class StructuredScenarioFlow {
         var duplicate=new java.util.concurrent.atomic.AtomicBoolean();
         var rules=new ScenarioScriptValidation.Rules(cleanRelation,cleanOpportunity,cleanGoal.targetExpression(),aliases.originalNames(),
                 sourceText,fingerprint->{boolean seen=repository.seen(session.childId(),fingerprint);if(seen)duplicate.set(true);return seen;},knowledge);
-        try{return generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
+        ScenarioScriptGenerator.Result result;
+        try{result=generator.generate(new ScenarioScriptGenerator.Input(clean,aliases.aliases(),rules,knowledge.context().isPresent(),json.write(cleanGoal)),deadline);}
         catch(ScenarioScriptGenerator.ContentExhausted exhausted){exhausted.retryableDuplicate=duplicate.get();throw exhausted;}
+        // 참고 시점은 장면을 저장한 뒤 referenceUsed에서 남긴다. 생성 중 그래프가 실패해 참고를 뺀 드문 경우도 쉬는 기간은 시작된다(참고가 드물어질 뿐이다).
+        return result!=null&&reference.isPresent()?result.withReference(reference.get()):result;
+    }
+    /** 저장까지 끝난 장면에 참고 씨앗이 들어갔으면 그 시점을 남긴다. */
+    public void referenceUsed(java.util.UUID guardian,java.util.UUID child,ScenarioScriptGenerator.Result saved){
+        if(references!=null&&saved!=null&&saved.reference()!=null)references.used(guardian,child,saved.reference());
     }
     static String graphRelation(String relation,String seedRelationship){
         if(seedRelationship==null||kr.mujoong.core.knowledge.KnowledgeSeed.RELATIONSHIPS.contains(relation))return relation;

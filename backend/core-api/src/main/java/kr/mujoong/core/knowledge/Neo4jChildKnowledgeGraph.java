@@ -18,8 +18,9 @@ import kr.mujoong.contract.time.MujoongClock;
 /** BR2·BR5: Neo4j 5 명시적 HTTP 트랜잭션. 재전송/자동 커밋은 사용하지 않는다. */
 public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
     private static final String BASE_VERSION = "MERGE (v:U15GraphVersion {version:$version}) ON CREATE SET v.digest=$digest RETURN v.digest";
+    // 새 카탈로그에 없는 기본 씨앗만 지운다. 남는 씨앗은 LOAD_BASE의 MERGE가 내용만 바꾸므로 관찰 · 참고 기록이 재초기화에도 유지된다.
     private static final String REPLACE_BASE = "MATCH (v:U15GraphVersion {version:$version,digest:$digest}) "
-            + "WITH v MATCH (s:U15Seed {childId:$child,origin:'POC'}) DETACH DELETE s";
+            + "WITH v MATCH (s:U15Seed {childId:$child,origin:'POC'}) WHERE NOT s.seedId IN [item IN $seeds | item.id] DETACH DELETE s";
     private static final String LOAD_BASE = "MATCH (v:U15GraphVersion {version:$version,digest:$digest}) "
             + "WITH v UNWIND $seeds AS item MERGE (s:U15Seed {childId:$child,seedId:item.id}) "
             + "SET s.origin=item.origin,s.enabled=item.enabled,s.payload=item.payload";
@@ -133,6 +134,38 @@ public final class Neo4jChildKnowledgeGraph implements ChildKnowledgeGraphPort {
         } finally {
             if (!terminate(tx)) throw new IllegalStateException("Graph read transaction unresolved");
         }
+    }
+
+    @Override public List<SeedProfile> profiles(UUID child) {
+        String tx = begin();
+        try {
+            var rows = statement(tx, "MATCH (s:U15Seed {childId:$child}) WHERE s.enabled=true RETURN s.payload,"
+                    + "coalesce(s.observedCount,0),s.lastObservedAt,s.lastReferencedAt ORDER BY s.seedId",
+                    Map.of("child", child.toString()));
+            return rows.stream().map(row -> new SeedProfile(json.read(String.valueOf(row.get(0)), KnowledgeSeed.class),
+                    ((Number) row.get(1)).intValue(), instant(row.get(2)), instant(row.get(3)))).toList();
+        } finally {
+            if (!terminate(tx)) throw new IllegalStateException("Graph read transaction unresolved");
+        }
+    }
+
+    private static Instant instant(Object value) { return value == null ? null : Instant.parse(String.valueOf(value)); }
+
+    @Override public void writeObservations(String tx, UUID child, Map<String, SeedObservation> observations) {
+        var counts = new java.util.HashMap<String, Object>();
+        var last = new java.util.HashMap<String, Object>();
+        observations.forEach((seedId, observation) -> {
+            counts.put(seedId, observation.count());
+            last.put(seedId, observation.lastObservedAt().toString());
+        });
+        // MATCH만 쓰므로 삭제와 겹쳐도 지워진 씨앗을 다시 만들지 않는다. 목록에 없는 씨앗은 0회 · 시각 없음으로 돌아간다.
+        statement(tx, "MATCH (s:U15Seed {childId:$child}) SET s.observedCount=coalesce($counts[s.seedId],0),"
+                + "s.lastObservedAt=$last[s.seedId]", Map.of("child", child.toString(), "counts", counts, "last", last));
+    }
+
+    @Override public void markReferenced(String tx, UUID child, String seedId, Instant referencedAt) {
+        statement(tx, "MATCH (s:U15Seed {childId:$child,seedId:$id}) SET s.lastReferencedAt=$at",
+                Map.of("child", child.toString(), "id", seedId, "at", referencedAt.toString()));
     }
 
     @Override public void replaceBase(String tx, UUID child, SeedCatalog catalog) {

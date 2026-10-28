@@ -44,6 +44,19 @@ public class CandidateSeedDelivery {
             return List.copyOf(versions);
         });
         for(var version:registered)generate(guardian,child,session,result,version);
+        recordObservations(guardian,child);
+    }
+    private kr.mujoong.core.knowledge.ChildKnowledgeService knowledge;
+    @org.springframework.beans.factory.annotation.Autowired
+    void connectKnowledge(kr.mujoong.core.knowledge.ChildKnowledgeService knowledge){this.knowledge=knowledge;}
+    /** 새 씨앗 연결까지 끝난 뒤 자유대화 태그 횟수를 아이 그래프에 다시 쓴다. 다음 결과 작업이 전체를 다시 세므로 실패해도 따라잡는다. */
+    private void recordObservations(UUID guardian,UUID child){
+        if(knowledge==null)return;
+        try{knowledge.recordObservations(guardian,child,()->repository.freeTalkSkillObservations(child));}
+        catch(RuntimeException failed){
+            // 관찰 횟수는 장면 참고용 보조 기록이다. 결과 상태와 후보 등록은 바꾸지 않는다.
+            events.appError(EventLog.Component.CORE_MAINTENANCE,"SkillObservationSyncFailed");
+        }
     }
     private void generate(UUID guardian,UUID child,UUID session,UUID result,GoalCandidateRepository.Version version){
         var draft=version.content();if(!"NONE".equals(draft.skillRef())||draft.structureSignature()==null)return;
