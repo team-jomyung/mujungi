@@ -261,12 +261,16 @@ aws ssm put-parameter --name /mujoong/demo/GHCR_PULL_USER --type String --value 
      `lunaState=DISABLED_SWITCH_OFF`다.
   4. realtime Luna를 켜려면 1번 확인 기록 뒤에 demo 설정의 `mujoong.luna.enabled`를 `true`로 바꾸고(기본 `false`) 배포한 다음 realtime의
      `lunaState=ENABLED`를 확인한다(U11 계약 편차 (U11-c)). 확인 기록 없이는 바꾸지 않는다.
+     ECS demo는 `infra/terraform/ecs_services.tf`의 realtime `environment`에 `MUJOONG_LUNA_ENABLED=true`로 둔다(JIRA-297). 반영 순서는 18절과 같다:
+     Terraform plan 검토 → apply → CD 배포(`deploy.yml`이 최신 ACTIVE 태스크 정의에서 이미지만 바꾼다). apply만으로는 실행 중인 태스크가 바뀌지 않는다.
+     꺼져 있으면 연습대화의 진행 판정이 모두 보류로 처리돼 도움 · 다시 설명 · 장면 마무리로 넘어가지 않고 상대 역할 대화만 이어진다.
   5. (FT-1023-d) realtime 진행 중 판정은 Decisions API(`{base-url}/decisions`) 한 길뿐이고 끝점을 고르는 설정은 없다. 그래서 4번에서
      `mujoong.luna.enabled`를 켜는 순간 실제 아동 판정 입력(정리된 최소 필드)이 Decisions 끝점으로 나간다. **4번 전에 위 확인 기록에 Decisions
      끝점 확인(보존 · 데이터 사용 조건, `store` 매개변수 없음)을 남긴 뒤에만** 켠다(체크 항목 · 표 비고 'Decisions 끝점 확인'). 켠 뒤
      `LUNA_CALL`의 `promptVersion`이 `prompt-service-v3`인지 확인한다. Decisions가 느리거나 실패하면 대신 부를 끝점이 없어 판정은 보류로 끝난다
      (`LUNA_CALL` `lunaOutcome` · 판정 기록 `abstainReason`으로 본다).
-  - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). 키를 비우는 길은
+  - **롤백:** realtime Luna는 `mujoong.luna.enabled`를 `false`로 되돌려 같은 SHA로 `DEPLOY`하면 꺼진다(`DISABLED_SWITCH_OFF`). ECS demo는
+    `MUJOONG_LUNA_ENABLED`를 `false`로 바꿔 Terraform apply → CD 배포 순서다. 키를 비우는 길은
     demo realtime이 기동을 거부하므로(GPT-Live 키 필수, U11 BR12.2) 쓰지 않는다. core-api Luna는 지금처럼 키만으로 켜져 키가 있는 동안 꺼지지
     않는다. 어댑터가 꺼지면 지금과 같은 실패 경로라 데이터 변경 · 마이그레이션 되돌림이 없다. 재기동만으로는 컨테이너 환경이 갱신되지 않으므로
     쓰지 않는다.
