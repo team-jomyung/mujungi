@@ -275,6 +275,8 @@ resource "aws_ecs_task_definition" "realtime" {
       { name = "SPRING_DATASOURCE_URL", value = local.jdbc_url_demo },
       { name = "SPRING_DATASOURCE_USERNAME", value = "realtime_app" },
       { name = "MUJOONG_AI_USAGE_ENABLED", value = "true" }, # JIRA-292 관리자 비용 화면 집계
+      # JIRA-297 연습대화 진행 판정(Luna). 없으면 기본 false라 도움 · 마무리로 넘어가지 않는다. 켜기 전 RUNBOOK 단계 4 R-F15(Decisions 끝점) 확인
+      { name = "MUJOONG_LUNA_ENABLED", value = "true" },
       { name = "MUJOONG_INTERNALHTTP_COREBASEURL", value = "http://172.17.0.1:8080" },
       { name = "MUJOONG_SECURITY_ALLOWED_ORIGIN", value = local.cloudfront_origin },
       { name = "SERVER_TOMCAT_REMOTEIP_INTERNALPROXIES", value = "^172\\.17\\.0\\.1$" },
