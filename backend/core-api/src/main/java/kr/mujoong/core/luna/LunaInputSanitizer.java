@@ -74,17 +74,9 @@ public final class LunaInputSanitizer {
         return new SanitizedInput(cleaned, new ArrayList<>(cleaned.keySet()));
     }
 
-    /** U10 Q1-A: 두 상황 목적의 최상위 interests만 허용한다. 일반 API·중첩·다른 목적 금지는 그대로다. */
+    /** 목적에 관계없이 같은 개인정보 제거 규칙을 적용한다. 연습 생성 · 검토도 관심사를 보내지 않는다. */
     public SanitizedInput sanitize(Map<String,Object> input,Map<String,String> aliases,LunaPurpose purpose) {
-        var general=sanitize(input,aliases);
-        if(purpose!=LunaPurpose.SCENARIO_GENERATION&&purpose!=LunaPurpose.SCENARIO_REVIEW)return general;
-        if(!(input.get("interests") instanceof Collection<?> values))return general;
-        var strings=values.stream().filter(String.class::isInstance).map(String.class::cast)
-                .filter(s->!s.isBlank()&&s.length()<=80&&s.matches("[\\p{L}\\p{N} _-]+"))
-                .limit(10).toList();
-        var masked=sanitize(Map.of("values",strings),aliases).payload().get("values");
-        var clean=new LinkedHashMap<>(general.payload());clean.put("interests",masked);
-        return new SanitizedInput(clean,new ArrayList<>(clean.keySet()));
+        return sanitize(input,aliases);
     }
 
     /**

@@ -22,6 +22,27 @@ class ScenarioGenerationTest {
         when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
         run();assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH");
     }
+    /** FT-1028-c: 거절 사유마다 걸린 점검 항목 · 필드를 고정 코드로 남긴다. */
+    @Test void reviewFindingsAreRecordedAsFixedCodes(){
+        var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
+        var finding=new ScenarioReview.Finding("GOAL_MISMATCH","OPPORTUNITY","opportunitySentence");
+        when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("REJECT",List.of("GOAL_MISMATCH"),List.of(finding)),"fake-review"),approve());
+        run();
+        assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH","ScenarioReviewFinding_GOAL_MISMATCH_OPPORTUNITY_opportunitySentence");
+    }
+    /** FT-1028-c: 직전 라운드만큼 시간이 남지 않으면 검토를 끝낼 수 없는 생성 호출을 쓰지 않는다. */
+    @Test void aRoundThatCannotFinishBeforeTheDeadlineIsNotStarted(){
+        var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
+        when(provider.review(any())).thenAnswer(c->{clock.advance(Duration.ofSeconds(5));return reject("INCOMPLETE_SCENE");});
+        assertThatThrownBy(this::run).isInstanceOf(ScenarioScriptGenerator.ContentExhausted.class);
+        verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());
+        assertThat(codes).contains("ScenarioBudgetInsufficient");
+    }
+    @Test void aRoundThatFitsTheRemainingBudgetStillRuns(){
+        when(provider.review(any())).thenAnswer(c->{clock.advance(Duration.ofSeconds(4));return reject("INCOMPLETE_SCENE");}).thenAnswer(c->{clock.advance(Duration.ofSeconds(4));return reject("INCOMPLETE_SCENE");}).thenReturn(approve());
+        assertThat(run().details().generation().calls()).isEqualTo(6);
+        verify(provider,times(3)).generate(any());
+    }
     @Test void brokenDiagnosticSinkCannotChangeApprovedGeneration(){
         generator.diagnostics(code->{throw new IllegalStateException("unavailable");});
         when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());

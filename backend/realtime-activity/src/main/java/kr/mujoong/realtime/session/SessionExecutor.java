@@ -592,6 +592,8 @@ public final class SessionExecutor {
     private boolean streamedPracticeSent;
     /** 조각 단위로 내보내는 승인 낭독(B1)에서 지금까지 원문 앞부분으로 확인하고 보낸 전사. 응답이 끝나면 원문 전체와 대조한다. */
     private final StringBuilder streamedApprovedText = new StringBuilder();
+    /** FT-1028-e: 원문과 다르게 읽혀 제브 검사로 넘긴 승인 낭독. 응답 끝 · 슬롯 닫기에서 원문 불일치로 재요청하지 않는다. */
+    private kr.mujoong.realtime.voice.PracticeSpeech divergedApprovedReading;
     private final java.util.ArrayDeque<PracticeSessionExtension.ExtensionEvent> pausedPracticeEvents = new java.util.ArrayDeque<>();
     private Instant practicePauseStartedAt;
     private record PracticePause(Instant from, Instant to) { }
@@ -1263,6 +1265,8 @@ public final class SessionExecutor {
     static final String REASON_TAIL_UNIT_DROPPED = "PracticeTailUnitDroppedAfterPlayback";
     /** FT-1023-e: 재생이 시작된 생성형 연습 발화의 남은 전사가 음성과 맞춰지지 못한 채 시한이 지나 나간 부분까지 재생됨으로 닫았다(INFO). */
     static final String REASON_TAIL_TEXT_UNALIGNED = "PracticeTailTextUnalignedAfterPlayback";
+    /** 수집 시한 뒤 추가 조각은 버리고, 이미 보낸 연습 음성의 검사 · 재생 종료를 기다린다. */
+    static final String REASON_COLLECTION_TIMEOUT_AFTER_PLAYBACK = "PracticeCollectionTimeoutAfterPlayback";
 
     /**
      * FT-1023-e: 단위별 경로로 나가던 생성형 연습 발화({@link #streamedPractice})가 이미 단위 하나라도 기기로 나갔으면, 그 발화의 남은 출력을 받지 않고
@@ -1302,6 +1306,33 @@ public final class SessionExecutor {
         } else {
             practicePlayback(rejectedSpeech, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
         }
+    }
+
+    /** FT-1028-e: 승인 낭독이 원문과 다르게 읽혔지만 제브(연습 모드)가 ALLOW해 낸 단위가 있다(INFO, 원문 없음). */
+    static final String REASON_APPROVED_TEXT_DIVERGED = "PracticeApprovedTextDivergedChecked";
+
+    /**
+     * FT-1028-e: 승인 낭독 단위가 원문과 다르면 버리지 않고 생성형 발화처럼 제브(연습 모드) 검사로 넘긴다. ALLOW한 단위만 recheck → send로 나가고,
+     * 막히면 제브의 기존 막힘 처리를 따른다. 원문 일치만으로 제브를 건너뛰는 길은 그대로다. 제브가 꺼져 있거나 ACTIVE가 아니면 검사할 수 없으므로
+     * 거짓을 돌려 기존처럼 폐기한다(fail-closed).
+     */
+    private boolean checkDivergedApprovedReading(SegmentBuffer.Sealed sealed, kr.mujoong.realtime.voice.PracticeSpeech speech,
+            boolean punctuationOnly, boolean streaming) {
+        if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) return false;
+        if (!speech.equals(divergedApprovedReading)) {
+            divergedApprovedReading = speech;
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_TEXT_DIVERGED, EventCode.Level.INFO);
+        }
+        if (punctuationOnly) {
+            releasePunctuationOnly(sealed, practiceGuardrailMode(speech), speech.correlationId());
+            return true;
+        }
+        try {
+            guardrail.begin(sealed, practiceGuardrailMode(speech), speech.correlationId(), streaming);
+        } catch (RuntimeException e) {
+            guardrail.onBeginFailed(sealed, e);
+        }
+        return true;
     }
 
     private void stopPracticeProgress() {
@@ -2028,7 +2059,7 @@ public final class SessionExecutor {
     private void closeGeneratedSlot(UUID correlationId, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback fact) {
         var slot = pendingPracticeSpeech;
         // B1: 단위별 경로로 나가던 승인 낭독도 같은 길로 닫는다(경로가 깨지면 재생 실패)
-        if (slot == null || (!slot.generated() && !slot.equals(streamedPractice))
+        if (slot == null || (!slot.generated() && !slot.equals(streamedPractice) && !slot.equals(divergedApprovedReading))
                 || (correlationId != null && !slot.correlationId().equals(correlationId))) {
             return;
         }
@@ -2998,7 +3029,7 @@ public final class SessionExecutor {
                     }
                     var approved = streamedPractice;
                     if (approved != null && !approved.generated() && approved.equals(pendingPracticeSpeech)
-                            && !approved.matches(streamedApprovedText.toString())) {
+                            && !approved.equals(divergedApprovedReading) && !approved.matches(streamedApprovedText.toString())) {
                         // B1: 응답이 원문 끝까지 오지 않았다. 나간 부분이 있으면 거기까지 재생됨으로, 없으면 원문 불일치로 재요청 길로 보낸다
                         if (streamedPracticeSent) {
                             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_TAIL_MISSING,
@@ -3090,6 +3121,9 @@ public final class SessionExecutor {
         else if (streamedPractice != null) {
             logOutputDiscard(null, null, GateDecision.DiscardReason.GATE_EMPTY,
                     DiscardDetail.PROVIDER_COLLECTION_TIMEOUT, streamedPractice);
+            // 단위별 송신 뒤에는 전체 구간 버퍼가 비어 있다. 이미 나간 음성도 같은 꼬리 복구로 닫아
+            // 출력 세대를 올려 재생을 끊거나, 들려준 발화를 실패로 다시 요청하지 않게 한다.
+            if (closeSentStreamedPractice(REASON_COLLECTION_TIMEOUT_AFTER_PLAYBACK)) return;
             practicePlayback(streamedPractice, kr.mujoong.realtime.practicelegacy.PracticePorts.Playback.FAILED);
         }
     }
@@ -3727,6 +3761,7 @@ public final class SessionExecutor {
                     recheckAndSend(sealed, null, true);
                     return;
                 }
+                if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, inspection.punctuationOnly(), streaming)) return;
                 var rejectedSpeech = pendingPracticeSpeech;
                 guardrail.onDiscardedBeforeCheck();
                 recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true, DiscardDetail.APPROVED_TEXT_MISMATCH);
@@ -3737,6 +3772,7 @@ public final class SessionExecutor {
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
                 if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
+                    if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, inspection.punctuationOnly(), streaming)) return;
                     var rejectedSpeech = pendingPracticeSpeech;
                     guardrail.onDiscardedBeforeCheck();
                     recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true,

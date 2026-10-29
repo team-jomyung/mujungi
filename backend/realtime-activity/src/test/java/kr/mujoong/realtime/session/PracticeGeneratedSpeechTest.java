@@ -108,8 +108,9 @@ class PracticeGeneratedSpeechTest {
         assertThat(h.link.outputs()).isEmpty();assertThat(guard.count()).isZero();
     }
 
+    /** FT-1028-e: 제브가 없어 다르게 읽힌 승인 낭독을 검사할 수 없으면 지금처럼 원문 불일치로 버린다(fail-closed). */
     @Test void approvedMismatchIsDistinctFromAForbiddenPattern() {
-        start(true);
+        start(false);
         extension.recovery = true;
         PracticeSpeech speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 1,
                 "친구", "나는 블록 놀이를 하고 싶어.", PracticeSpeech.ReadingCue.SCENE);
@@ -120,7 +121,7 @@ class PracticeGeneratedSpeechTest {
                 .containsEntry("discardDetail", "APPROVED_TEXT_MISMATCH")
                 .containsEntry("generatedSpeech", false)
                 .containsKey("expectedChars");
-        assertThat(guard.count()).isZero(); assertThat(h.link.outputs()).isEmpty();
+        assertThat(h.link.outputs()).isEmpty();
         assertThat(extension.mismatches).singleElement().satisfies(event -> {
             assertThat(event.correlationId()).isEqualTo(speech.correlationId());
             assertThat(event.value()).isEqualTo(speech);
@@ -150,30 +151,46 @@ class PracticeGeneratedSpeechTest {
         assertThat(guard.count()).isZero();
     }
 
+    /** FT-1028-e: 원문과 다르게 읽힌 승인 낭독 단위는 버리지 않고 제브(연습 모드)에 묻고, ALLOW한 것만 낸다. */
     @Test
-    void anApprovedMismatchBeforePlaybackUsesReadingRecoveryAndSendsNothing() {
+    void anApprovedMismatchBeforePlaybackIsCheckedByJevAndPlaysOnlyOnAllow() {
         var speech = startApprovedStream();
         approvedUnit("나는 카드 ", 0);
-        assertThat(h.link.outputs()).isEmpty();
-        assertThat(guard.count()).isZero();
-        assertThat(extension.mismatches).singleElement()
-                .satisfies(event -> assertThat(event.correlationId()).isEqualTo(speech.correlationId()));
+        assertThat(h.link.outputs()).as("검사 전에는 내지 않는다").isEmpty();
+        assertThat(guard.count()).isEqualTo(1);
+        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        guard.allow(); h.drain();
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(extension.mismatches).as("재요청하지 않는다").isEmpty();
         assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        assertThat(h.logs.events(kr.mujoong.contract.log.EventCode.APP_ERROR).stream().map(kr.mujoong.testsupport.log.LogCapture::attrs))
+                .anySatisfy(attrs -> assertThat(attrs).containsEntry("errorKind", SessionExecutor.REASON_APPROVED_TEXT_DIVERGED));
     }
 
     @Test
-    void anApprovedMismatchAfterPlaybackDiscardsTheTailWithoutReplayingThePrefix() {
+    void aBlockedDivergedApprovedUnitIsNotPlayed() {
+        startApprovedStream();
+        approvedUnit("나는 카드 ", 0);
+        guard.block(); h.drain();
+        assertThat(h.link.outputs()).isEmpty();
+    }
+
+    /** FT-1028-e: 앞부분이 나간 뒤 원문과 달라진 뒤 단위도 제브가 ALLOW하면 이어서 내고, 모든 재생이 끝나면 COMPLETED 한 번으로 닫는다. */
+    @Test
+    void anApprovedMismatchAfterPlaybackIsCheckedByJevAndTheTailPlaysOnAllow() {
         var speech = startApprovedStream();
         approvedUnit("나는 블록 ", 0);
         approvedUnit("놀이가 싫어.", 1);
         approvedUnit("더 해봐.", 2);
-        assertThat(h.link.outputs()).hasSize(1);
-        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
-        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(h.link.outputs()).as("원문과 같은 앞 단위만 먼저 나간다").hasSize(1);
+        assertThat(guard.count()).isEqualTo(1);
+        guard.allow(); h.drain();
+        while (guard.calls().stream().anyMatch(c -> !c.future().isDone())) { guard.allow(); h.drain(); }
+        assertThat(h.link.outputs()).hasSizeGreaterThan(1);
+        for (var out : List.copyOf(h.link.outputs())) mark(out.playbackId(), PlaybackMark.Status.COMPLETED);
         h.advance(Duration.ofMillis(801));
         assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
         assertThat(extension.mismatches).isEmpty();
-        assertThat(guard.count()).isZero();
     }
 
     @Test
@@ -518,14 +535,12 @@ class PracticeGeneratedSpeechTest {
         h.drain();
         h.speak(" 들고 있어. 다른 말을 덧붙였어.",4800);
         h.advance(Duration.ofMillis(801));
+        // FT-1028-e: 원문과 달라진 낭독은 제브 검사 없이 재생되지 않는다. 제브가 막으면 끝까지 내지 않는다
         assertThat(h.link.outputs()).isEmpty();
         assertThat(extension.endFacts(slot)).isEmpty();
-        assertThat(extension.mismatches).singleElement().satisfies(event -> {
-            assertThat(event.kind()).isEqualTo(PracticeSessionExtension.ExtensionEvent.Kind.ASYNC_RESULT);
-            assertThat(event.correlationId()).isEqualTo(slot);
-            assertThat(((PracticeSpeech)event.value()).text()).isEqualTo("친구가 공을 들고 있어.");
-        });
-        assertThat(guard.count()).isZero();
+        assertThat(guard.count()).isEqualTo(1);
+        guard.block(); h.drain();
+        assertThat(h.link.outputs()).isEmpty();
     }
 
     @Test

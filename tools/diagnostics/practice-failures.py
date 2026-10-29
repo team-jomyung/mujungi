@@ -22,6 +22,11 @@ REVIEWS = {
 ALLOWED = PROVIDER | {"ScenarioRule_" + x for x in RULES} | {"ScenarioReview_" + x for x in REVIEWS}
 ALLOWED |= {"ScenarioValidation_INVALID_BASE", "ScenarioValidation_INVALID_VARIANT"}
 ALLOWED |= {"ScenarioProvider_" + x for x in ("CONTENT", "TRANSIENT", "PERMANENT")}
+ALLOWED |= {"ScenarioBudgetInsufficient", "ScenarioGraphFallback_PLAN_EMPTY", "ScenarioGraphFallback_READ_FAILED"}
+CHECKS = {"INTRODUCTION", "OPENING_LINK", "OPPORTUNITY", "GOAL_SPECIFIC", "COACH_MATERIAL", "STRUCTURE", "HISTORY", "SAFETY"}
+FIELDS = {"sceneDescription", "spokenIntroduction", "openingLine", "opportunitySentence", "reexplanation", "focusPoints",
+          "expressionExamples", "preservation", "scene"}
+ALLOWED |= {"ScenarioReviewFinding_" + r + "_" + c + "_" + f for r in REVIEWS - {"REJECT", "UNCERTAIN"} for c in CHECKS for f in FIELDS}
 
 
 def main():

@@ -28,6 +28,19 @@ import org.mockito.ArgumentCaptor;
     }
     @Test void emptyExposureIsExplicitEmptyList(){f.legacy.service.generate(f.legacy.original());var c=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider).generate(c.capture());assertThat(history(c.getValue())).isEmpty();}
     @Test void profileReadFailureDoesNotCallSupplier(){when(f.privacy.require(any(),any())).thenThrow(new IllegalStateException("synthetic unavailable"));assertThatThrownBy(()->f.legacy.service.generate(f.legacy.original())).isInstanceOf(IllegalStateException.class);verifyNoInteractions(f.provider);}
-    @Test void callsUseSanitizedGoalHistoryAndInterests(){f.legacy.service.generate(f.legacy.original());var c=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider).generate(c.capture());verify(f.provider).review(c.capture());assertThat(c.getAllValues()).allSatisfy(v->{assertThat(kr.mujoong.contract.json.JsonCodec.shared().write(v.input())).doesNotContain("합성아이");assertThat(v.input()).containsKey("ageYears").containsKey("interests");assertThat(v.aliases()).containsEntry("합성아이","아이");});}
+    @Test void callsUseSanitizedGoalHistoryAndAgeWithoutProfileInterests() {
+        f.legacy.db.jdbc().update("update core.core_child set age=11, interests_json=cast(:interests as jsonb) where id=:child",
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("child",f.legacy.child)
+                        .addValue("interests",kr.mujoong.contract.json.JsonCodec.shared().write(List.of("공룡"))));
+        f.legacy.service.generate(f.legacy.original());
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(f.provider).generate(calls.capture());verify(f.provider).review(calls.capture());
+        assertThat(calls.getAllValues()).allSatisfy(call->{
+            assertThat(kr.mujoong.contract.json.JsonCodec.shared().write(call.input())).doesNotContain("합성아이","공룡");
+            assertThat(call.input()).containsEntry("ageYears",11).doesNotContainKey("interests");
+            assertThat(call.aliases()).containsEntry("합성아이","아이");
+        });
+    }
+
     @Test void historyReadOccursBeforeModelAndPreservesStructuredReplay(){var first=f.legacy.service.generate(f.legacy.original());assertThat(f.legacy.service.generate(f.legacy.original())).isEqualTo(first);verify(f.provider).generate(any());verify(f.provider).review(any());assertThat(first.generation().calls()).isEqualTo(2);}
 }
