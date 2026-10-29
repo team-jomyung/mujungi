@@ -6,15 +6,31 @@ import kr.mujoong.core.result.WebTestSupport;
 import kr.mujoong.core.web.support.WebFixtures;
 import org.junit.jupiter.api.*;
 @Tag("result-report") @Tag("db") class ReportApiIT extends WebTestSupport {
-    @Test void creatingWithElevenActivitiesReturnsValidationFailure(){
+    @Test void creatingWithMoreThanTenOwnedActivitiesPreservesEverySelection(){
         var f=family();var user=WebFixtures.guardianFor(app,f.guardianId());
+        var sessions=java.util.stream.IntStream.range(0,23).mapToObj(i->{var id=copy(f,"ENDED",null);record(f,id,"ENDED",3);return id;}).toList();
         String date=app.clock().now().atZone(ReportService.ZONE).toLocalDate().toString();
-        var sessions=java.util.stream.IntStream.range(0,11).mapToObj(i->UUID.randomUUID().toString()).toList();
-        var response=app.post("/api/reports").session(user.session()).csrf(user.csrf())
-            .json(JsonCodec.shared().write(Map.of("from",date,"to",date,"sessionIds",sessions,"idempotencyKey",UUID.randomUUID().toString()))).send();
-        assertThat(response.status()).isEqualTo(400);
-        assertThat(response.json()).containsEntry("code","VALIDATION_FAILED");
-        assertThat(app.bean(ReportRepository.class).unsaved(f.guardianId())).isEmpty();
+        var body=Map.of("from",date,"to",date,"sessionIds",sessions,"idempotencyKey",UUID.randomUUID().toString());
+        var response=checked("POST /api/reports",app.post("/api/reports").session(user.session()).csrf(user.csrf()).json(JsonCodec.shared().write(body)));
+        assertThat(response.status()).isEqualTo(202);
+        UUID id=UUID.fromString((String)response.json().get("reportId"));
+        assertThat(app.bean(ReportRepository.class).activities(id)).extracting(ReportRepository.Activity::sessionId).containsExactlyInAnyOrderElementsOf(sessions);
+        var fetched=checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session()));
+        assertThat(((Number)fetched.json().get("activityCount")).intValue()).isEqualTo(23);
+        var repeated=checked("POST /api/reports",app.post("/api/reports").session(user.session()).csrf(user.csrf()).json(JsonCodec.shared().write(body)));
+        assertThat(repeated.json().get("reportId")).isEqualTo(id.toString());
+        var runner=app.bean(kr.mujoong.core.result.JobRunner.class);
+        var jobs=app.bean(kr.mujoong.core.result.ResultJobRepository.class);
+        for(int attempt=0;attempt<40&&app.bean(ReportRepository.class).find(id).orElseThrow().status().equals("GENERATING");attempt++){
+            var job=runner.claim("REPORT").stream().filter(j->j.subjectId().equals(id)).findFirst().orElseThrow();runner.execute(job);
+            var after=jobs.find(job.id()).orElseThrow();
+            if(after.status().equals("REQUESTED"))app.clock().advance(java.time.Duration.between(app.clock().now(),after.nextAttemptAt()));
+        }
+        var ready=checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session()));
+        assertThat(ready.json()).containsEntry("status","READY");
+        assertThat(((Number)ready.json().get("activityCount")).intValue()).isEqualTo(23);
+        assertThat((List<?>)ready.json().get("sections")).hasSize(10);
+        assertThat(app.get("/api/reports/"+id+"/pdf").session(user.session()).send().status()).isEqualTo(200);
     }
     UUID create(UUID guardian,UUID session){var today=app.clock().now().atZone(ReportService.ZONE).toLocalDate();return app.bean(ReportService.class).create(guardian,today,today,List.of(session),UUID.randomUUID().toString()).reportId();}
     @Test void previewAndCreateConformToSchemas(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var user=WebFixtures.guardianFor(app,f.guardianId());String date=app.clock().now().atZone(ReportService.ZONE).toLocalDate().toString();assertThat(checked("GET /api/reports/preview",app.get("/api/reports/preview?from="+date+"&to="+date).session(user.session())).status()).isEqualTo(200);var body=Map.of("from",date,"to",date,"sessionIds",List.of(session),"idempotencyKey",UUID.randomUUID().toString());assertThat(checked("POST /api/reports",app.post("/api/reports").session(user.session()).csrf(user.csrf()).json(JsonCodec.shared().write(body))).status()).isEqualTo(202);}
