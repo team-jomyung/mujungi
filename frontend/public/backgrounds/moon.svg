@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+  <!-- 무중 아이 기기 배경: 달에서 본 지구(자체 제작 그림). 별이 뜬 우주 · 떠오르는 지구 · 무중이가 서는 달 표면과 크레이터 -->
+  <defs>
+    <linearGradient id="space" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1033"/>
+      <stop offset="0.55" stop-color="#1c2260"/>
+      <stop offset="1" stop-color="#2d2f74"/>
+    </linearGradient>
+    <radialGradient id="nebula" cx="0.25" cy="0.3" r="0.45">
+      <stop offset="0" stop-color="#7b5fd6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7b5fd6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.62" stop-color="#8fd3ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8fd3ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ocean" cx="0.38" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#7cc8ff"/>
+      <stop offset="0.6" stop-color="#3f8ee8"/>
+      <stop offset="1" stop-color="#2a5fb8"/>
+    </radialGradient>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="0.6">
+      <stop offset="0.5" stop-color="#0d1033" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0d1033" stop-opacity="0.65"/>
+    </linearGradient>
+    <clipPath id="earthClip"><circle cx="1210" cy="250" r="118"/></clipPath>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9d6ea"/>
+      <stop offset="0.5" stop-color="#bdb8d6"/>
+      <stop offset="1" stop-color="#9f99c2"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a7a2c9"/>
+      <stop offset="1" stop-color="#8d88b6"/>
+    </linearGradient>
+    <g id="star"><path d="M0 -9 L2.2 -2.2 L9 0 L2.2 2.2 L0 9 L-2.2 2.2 L-9 0 L-2.2 -2.2 Z"/></g>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#space)"/>
+  <rect width="1600" height="900" fill="url(#nebula)"/>
+
+  <!-- 별 -->
+  <g fill="#ffffff">
+    <circle cx="60" cy="60" r="2" opacity="0.9"/><circle cx="180" cy="140" r="1.4" opacity="0.6"/><circle cx="300" cy="60" r="2.4"/>
+    <circle cx="420" cy="190" r="1.6" opacity="0.7"/><circle cx="520" cy="80" r="1.2" opacity="0.6"/><circle cx="640" cy="40" r="2" opacity="0.85"/>
+    <circle cx="700" cy="170" r="1.4" opacity="0.6"/><circle cx="880" cy="60" r="1.8" opacity="0.8"/><circle cx="960" cy="150" r="1.2" opacity="0.5"/>
+    <circle cx="1040" cy="40" r="2.2" opacity="0.9"/><circle cx="1400" cy="70" r="1.6" opacity="0.7"/><circle cx="1500" cy="170" r="2.2"/>
+    <circle cx="1560" cy="320" r="1.4" opacity="0.6"/><circle cx="1440" cy="420" r="1.8" opacity="0.7"/><circle cx="1000" cy="300" r="1.2" opacity="0.5"/>
+    <circle cx="120" cy="300" r="1.8" opacity="0.8"/><circle cx="240" cy="400" r="1.2" opacity="0.5"/><circle cx="380" cy="320" r="2" opacity="0.8"/>
+    <circle cx="560" cy="380" r="1.4" opacity="0.6"/><circle cx="40" cy="460" r="1.6" opacity="0.6"/><circle cx="1100" cy="420" r="1.6" opacity="0.6"/>
+    <circle cx="1300" cy="460" r="1.2" opacity="0.5"/><circle cx="760" cy="300" r="1.2" opacity="0.4"/><circle cx="840" cy="420" r="1.4" opacity="0.5"/>
+  </g>
+  <g fill="#fff6c9">
+    <use href="#star" transform="translate(220 230) scale(1.1)"/>
+    <use href="#star" transform="translate(980 220) scale(0.8)"/>
+    <use href="#star" transform="translate(1520 260) scale(0.9)"/>
+    <use href="#star" transform="translate(470 120) scale(0.7)"/>
+  </g>
+
+  <!-- 지구 -->
+  <circle cx="1210" cy="250" r="150" fill="url(#glow)"/>
+  <circle cx="1210" cy="250" r="118" fill="url(#ocean)"/>
+  <g clip-path="url(#earthClip)">
+    <path d="M1120 170 C 1150 140 1200 150 1215 175 C 1230 200 1205 215 1180 222 C 1160 228 1170 255 1150 262 C 1125 270 1100 245 1105 215 C 1108 195 1110 180 1120 170 Z" fill="#7fd08a"/>
+    <path d="M1240 220 C 1270 205 1310 215 1320 245 C 1330 280 1300 300 1290 330 C 1282 352 1255 350 1248 325 C 1242 300 1222 290 1226 262 C 1228 245 1230 228 1240 220 Z" fill="#8fd97a"/>
+    <path d="M1150 300 C 1170 292 1192 305 1190 325 C 1188 345 1165 352 1152 340 C 1140 330 1138 308 1150 300 Z" fill="#7fd08a"/>
+    <path d="M1100 140 C 1160 120 1230 128 1290 150" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+    <path d="M1180 205 C 1220 196 1262 198 1300 210" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.6"/>
+    <path d="M1110 290 C 1150 282 1180 284 1215 292" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.65"/>
+    <path d="M1230 345 C 1260 338 1290 338 1320 345" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+    <rect x="1080" y="120" width="260" height="260" fill="url(#night)"/>
+  </g>
+
+  <!-- 먼 달 언덕 -->
+  <path d="M0 590 C 160 555 300 548 460 565 C 600 580 700 560 820 552 C 980 542 1120 568 1260 560 C 1400 552 1510 562 1600 572 L1600 900 L0 900 Z" fill="url(#far)"/>
+  <!-- 달 표면(무중이가 서는 자리) -->
+  <path d="M0 640 C 260 600 520 590 800 592 C 1080 594 1340 606 1600 632 L1600 900 L0 900 Z" fill="url(#ground)"/>
+  <path d="M90 628 C 330 600 560 594 800 596 C 1000 598 1180 604 1330 616" fill="none" stroke="#ece9f7" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- 크레이터 -->
+  <g>
+    <ellipse cx="260" cy="720" rx="120" ry="30" fill="#aaa4cb"/><ellipse cx="260" cy="714" rx="104" ry="22" fill="#c4bfdc"/>
+    <ellipse cx="1330" cy="740" rx="140" ry="34" fill="#aaa4cb"/><ellipse cx="1330" cy="733" rx="122" ry="25" fill="#c4bfdc"/>
+    <ellipse cx="560" cy="830" rx="90" ry="22" fill="#9d97c0"/><ellipse cx="560" cy="825" rx="76" ry="16" fill="#b7b1d3"/>
+    <ellipse cx="1060" cy="820" rx="70" ry="18" fill="#9d97c0"/><ellipse cx="1060" cy="816" rx="58" ry="13" fill="#b7b1d3"/>
+    <ellipse cx="1180" cy="650" rx="46" ry="11" fill="#aaa4cb"/><ellipse cx="1180" cy="647" rx="38" ry="8" fill="#c8c3e0"/>
+    <ellipse cx="420" cy="648" rx="40" ry="10" fill="#aaa4cb"/><ellipse cx="420" cy="645" rx="32" ry="7" fill="#c8c3e0"/>
+  </g>
+  <!-- 작은 돌 -->
+  <g fill="#8f89b7">
+    <ellipse cx="140" cy="800" rx="14" ry="8"/><ellipse cx="720" cy="870" rx="18" ry="9"/><ellipse cx="1480" cy="840" rx="16" ry="8"/>
+    <ellipse cx="930" cy="700" rx="10" ry="6"/><ellipse cx="660" cy="690" rx="8" ry="5"/>
+  </g>
+</svg>

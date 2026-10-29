@@ -57,4 +57,28 @@ describe("useDeviceSubtitle", () => {
     });
     expect(result.current.subtitle).toBeNull();
   });
+  it("무중이 발화(talking)는 묶음 사이 틈에 이어지고, 틈이 지나거나 끊기면 끝난다", () => {
+    const { result } = renderHook(() => useDeviceSubtitle());
+    expect(result.current.talking).toBe(false);
+    act(() => {
+      result.current.speakingChanged(true);
+    });
+    expect(result.current.talking).toBe(true);
+    act(() => {
+      result.current.speakingChanged(false);
+      vi.advanceTimersByTime(SUBTITLE_HOLD_MS - 100);
+    });
+    expect(result.current.talking).toBe(true);
+    act(() => {
+      result.current.speakingChanged(true);
+      result.current.speakingChanged(false);
+      vi.advanceTimersByTime(SUBTITLE_HOLD_MS);
+    });
+    expect(result.current.talking).toBe(false);
+    act(() => {
+      result.current.speakingChanged(true);
+      result.current.clear();
+    });
+    expect(result.current.talking).toBe(false);
+  });
 });

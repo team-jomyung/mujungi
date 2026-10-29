@@ -30,6 +30,8 @@ export interface StatusViewProps {
   readonly label: string | null;
   /** 라벨 아래 보조 줄(U3: 재접속 주기의 "다시 연결하고 있어요", mockups 9-31). 없으면 그리지 않는다. */
   readonly subLabel?: string | null;
+  /** 무중이 발화 중(묶음 사이 틈 포함). 참이면 발화가 끝날 때까지 무중이가 말하기 동작을 이어 간다. */
+  readonly talking?: boolean;
   /** 무중이 말 자막(OUTPUT_BEGIN.text). 말하는 중에 대화창으로 보인다. */
   readonly subtitle?: string | null;
   readonly onTurnOn: () => void;
@@ -39,7 +41,7 @@ export interface StatusViewProps {
 // 3D 무중이는 three.js가 커서 첫 화면 번들에서 떼어 기기에서만 불러온다.
 const DuckAvatar = dynamic(() => import("../avatar/DuckAvatar").then((m) => m.DuckAvatar), { ssr: false });
 
-function Character({ expression, still }: { readonly expression: StatusDisplay; readonly still: boolean }) {
+function Character({ expression, still, talking }: { readonly expression: StatusDisplay; readonly still: boolean; readonly talking: boolean }) {
   // 3D가 준비되기 전 · 실패하면 기본 도형 캐릭터가 그대로 보인다.
   const [duck, setDuck] = useState<"loading" | "ready" | "error">("loading");
   return (
@@ -49,12 +51,12 @@ function Character({ expression, still }: { readonly expression: StatusDisplay; 
         <span className="mj-character__eye mj-character__eye--right" />
         <span className="mj-character__mouth" />
       </div>
-      {duck !== "error" ? <DuckAvatar motion={motionFor(expression)} still={still} onStatus={setDuck} /> : null}
+      {duck !== "error" ? <DuckAvatar motion={motionFor(expression, talking)} still={still} onStatus={setDuck} /> : null}
     </div>
   );
 }
 
-export function StatusView({ display, label, subLabel = null, subtitle = null, onTurnOn, onTurnOff }: StatusViewProps) {
+export function StatusView({ display, label, subLabel = null, talking = false, subtitle = null, onTurnOn, onTurnOff }: StatusViewProps) {
   const isOff = display === "off" || display === "mic-request" || display === "mic-denied";
   // 대화창이 같은 뜻을 크게 보이는 상태에서는 라벨을 화면에서만 숨긴다(화면 읽기용으로는 남김)
   const dialogShown = kindOf(display, subtitle) !== "none";
@@ -73,7 +75,7 @@ export function StatusView({ display, label, subLabel = null, subtitle = null, o
         {PROPOSED_COPY.device.reduceMotion}
       </button>
       <div className="mj-t19__stage">
-        <Character expression={display} still={motion.reduceMotion} />
+        <Character expression={display} still={motion.reduceMotion} talking={talking} />
         {display === "mic-denied" ? (
           <div className="mj-t19__mic-denied" role="alert">
             <p className="mj-t19__mic-title">{COPY.device.t19MicDeniedTitle}</p>

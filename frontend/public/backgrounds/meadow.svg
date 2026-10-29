@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+  <!-- 무중 아이 기기 배경: 파스텔 초원(자체 제작 그림). 하늘 · 구름 · 먼 언덕 · 큰 언덕 · 앞 풀밭과 작은 꽃 -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fb8f2"/>
+      <stop offset="0.45" stop-color="#a9d8fb"/>
+      <stop offset="0.72" stop-color="#e3f3ff"/>
+      <stop offset="1" stop-color="#f4fbf2"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.82" cy="0.12" r="0.35">
+      <stop offset="0" stop-color="#fffbe6" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#fff6d6" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#fff6d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b9dfb8"/>
+      <stop offset="1" stop-color="#d7eccd"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0.2" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#9edc72"/>
+      <stop offset="0.55" stop-color="#7cc456"/>
+      <stop offset="1" stop-color="#5faa43"/>
+    </linearGradient>
+    <linearGradient id="hillShade" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#3f8a35" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#3f8a35" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#78c254"/>
+      <stop offset="1" stop-color="#58a63f"/>
+    </linearGradient>
+    <g id="cloud">
+      <ellipse cx="0" cy="0" rx="70" ry="34"/>
+      <ellipse cx="-58" cy="12" rx="52" ry="26"/>
+      <ellipse cx="62" cy="10" rx="58" ry="28"/>
+      <ellipse cx="-14" cy="-26" rx="44" ry="34"/>
+      <ellipse cx="34" cy="-18" rx="38" ry="28"/>
+      <rect x="-104" y="10" width="216" height="28" rx="14"/>
+    </g>
+    <g id="flower">
+      <circle cx="0" cy="-5" r="4.2"/><circle cx="5" cy="0" r="4.2"/><circle cx="0" cy="5" r="4.2"/><circle cx="-5" cy="0" r="4.2"/>
+      <circle cx="0" cy="0" r="2.8" fill="#ffd34d"/>
+    </g>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#sun)"/>
+
+  <g fill="#ffffff">
+    <use href="#cloud" transform="translate(230 140) scale(1.15)" opacity="0.95"/>
+    <use href="#cloud" transform="translate(620 90) scale(0.7)" opacity="0.85"/>
+    <use href="#cloud" transform="translate(1080 170) scale(1.0)" opacity="0.92"/>
+    <use href="#cloud" transform="translate(1440 80) scale(0.62)" opacity="0.8"/>
+    <use href="#cloud" transform="translate(860 300) scale(0.5)" opacity="0.7"/>
+    <use href="#cloud" transform="translate(90 330) scale(0.45)" opacity="0.65"/>
+  </g>
+
+  <!-- 먼 언덕 -->
+  <path d="M0 560 C 180 520 320 500 470 520 C 640 545 760 500 930 492 C 1110 484 1260 520 1400 506 C 1490 498 1560 505 1600 512 L1600 900 L0 900 Z" fill="url(#far)"/>
+  <!-- 큰 언덕 -->
+  <path d="M0 640 C 220 560 470 500 760 498 C 1040 496 1300 548 1600 610 L1600 900 L0 900 Z" fill="url(#hill)"/>
+  <path d="M0 640 C 220 560 470 500 760 498 C 1040 496 1300 548 1600 610 L1600 900 L0 900 Z" fill="url(#hillShade)"/>
+  <path d="M120 600 C 330 535 560 505 760 503 C 900 502 1020 512 1140 528" fill="none" stroke="#c4ef9a" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+  <!-- 앞 풀밭 -->
+  <path d="M0 770 C 260 735 520 742 800 756 C 1080 770 1330 742 1600 730 L1600 900 L0 900 Z" fill="url(#front)"/>
+
+  <!-- 풀 포기 -->
+  <g fill="none" stroke="#4f9a39" stroke-width="3" stroke-linecap="round" opacity="0.7">
+    <path d="M110 812 q4 -18 0 -30 M118 812 q6 -14 12 -22 M102 812 q-6 -14 -12 -20"/>
+    <path d="M420 840 q4 -18 0 -30 M428 840 q6 -14 12 -22 M412 840 q-6 -14 -12 -20"/>
+    <path d="M1180 820 q4 -18 0 -30 M1188 820 q6 -14 12 -22 M1172 820 q-6 -14 -12 -20"/>
+    <path d="M1480 850 q4 -18 0 -30 M1488 850 q6 -14 12 -22 M1472 850 q-6 -14 -12 -20"/>
+    <path d="M300 700 q3 -12 0 -20 M306 700 q4 -10 8 -15"/>
+    <path d="M1320 680 q3 -12 0 -20 M1326 680 q4 -10 8 -15"/>
+  </g>
+
+  <!-- 작은 꽃 -->
+  <g fill="#ffffff">
+    <use href="#flower" transform="translate(160 800)"/>
+    <use href="#flower" transform="translate(240 842) scale(0.9)"/>
+    <use href="#flower" transform="translate(520 815) scale(0.8)"/>
+    <use href="#flower" transform="translate(1080 836) scale(0.9)"/>
+    <use href="#flower" transform="translate(1260 806)"/>
+    <use href="#flower" transform="translate(1530 820) scale(0.85)"/>
+    <use href="#flower" transform="translate(380 690) scale(0.6)"/>
+    <use href="#flower" transform="translate(1240 664) scale(0.6)"/>
+  </g>
+  <g fill="#ffb3c7">
+    <use href="#flower" transform="translate(205 822) scale(0.8)"/>
+    <use href="#flower" transform="translate(1310 846) scale(0.8)"/>
+    <use href="#flower" transform="translate(470 700) scale(0.55)"/>
+    <use href="#flower" transform="translate(1160 676) scale(0.55)"/>
+  </g>
+  <g fill="#ffe27a">
+    <use href="#flower" transform="translate(600 850) scale(0.75)"/>
+    <use href="#flower" transform="translate(1000 812) scale(0.75)"/>
+  </g>
+</svg>
