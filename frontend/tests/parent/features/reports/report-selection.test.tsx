@@ -21,7 +21,7 @@ it("자동 선택 없이 10개씩 표시하고 페이지·종류를 바꿔도 �
   expect(screen.getAllByRole("checkbox")).toHaveLength(10);
   expect(count()).toHaveTextContent("선택 0 / 10개");
   expect(screen.getByTestId("report-range-create")).toBeDisabled();
-  fireEvent.click(row(0)); expect(row(0)).toHaveAttribute("aria-checked", "true"); expect(row(0)).toHaveTextContent("선택됨");
+  fireEvent.click(row(0)); expect(row(0)).toHaveAttribute("aria-checked", "true"); expect(row(0)).not.toHaveTextContent("선택");
   next(); fireEvent.click(row(10));
   next(); expect(screen.getAllByRole("checkbox")).toHaveLength(3); fireEvent.click(row(22));
   expect(count()).toHaveTextContent("선택 3 / 10개");
@@ -53,4 +53,11 @@ it("기간 변경 시 선택과 페이지를 초기화하고 이전 기간 목�
   pending.resolve(jsonResponse(200, { firstRecordDate: "2026-09-01", activities: activities.slice(10, 12) }));
   await waitFor(() => expect(row(10)).toBeEnabled());
   expect(row(10)).toHaveAttribute("aria-checked", "false"); expect(screen.queryByRole("navigation", { name: "대화 목록 페이지" })).toBeNull();
+});
+it("활동 고르기 줄은 결과 요약이 있을 때만 요약을 보인다", async () => {
+  const withSummary = [{ ...activities[0], summary: "블록을 같이 쌓자고 먼저 말했어요." }, { ...activities[1], summary: null }];
+  renderParent(<ReportRangeScreen />, { handler: () => jsonResponse(200, { firstRecordDate: "2026-09-01", activities: withSummary }) });
+  expect(await screen.findByTestId(`report-range-item-summary-${activities[0].sessionId}`)).toHaveTextContent("블록을 같이 쌓자고 먼저 말했어요.");
+  expect(row(0)).toHaveAttribute("role", "checkbox");
+  expect(screen.queryByTestId(`report-range-item-summary-${activities[1].sessionId}`)).toBeNull();
 });

@@ -88,8 +88,10 @@ export function ReportRangeScreen() {
               disabled={selectionUnavailable || (!checked && selected.length >= MAX_ACTIVITIES)}
               className="mj-card mj-report-activity" data-testid={`report-range-item-${a.sessionId}`} onClick={() => toggle(a.sessionId)}>
               <span className="mj-report-activity__check" aria-hidden="true">{checked ? S.check : ""}</span>
-              <span>{reportActivityLabel(shortDate(a.date), formatHhmm(a.startedAt), a.activityType === "PRACTICE" ? S.practice : S.freeTalk)}</span>
-              <span className="mj-report-activity__state">{checked ? S.selected : S.select}</span>
+              <span className="mj-report-activity__body">
+                <span>{reportActivityLabel(shortDate(a.date), formatHhmm(a.startedAt), a.activityType === "PRACTICE" ? S.practice : S.freeTalk)}</span>
+                {a.summary !== null ? <span className="mj-record-summary" data-testid={`report-range-item-summary-${a.sessionId}`}>{a.summary}</span> : null}
+              </span>
             </button>;
           })}
         </div>

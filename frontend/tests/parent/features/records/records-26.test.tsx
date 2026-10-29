@@ -27,7 +27,14 @@ it("대화 유형이 없는 경우 빈 날짜와 구분해 표시한다", async 
   expect(screen.getByText("선택한 종류의 대화가 없어요.")).toBeInTheDocument();
   expect(screen.queryByTestId("records-empty-day")).toBeNull();
 });
-it("연습 목표 수와 중단을 표시한다", async () => { render([item({ activityType: "PRACTICE", goalCount: 2, interrupted: true })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("연습 · 목표 2개 · 3분 · 중간에 끊김"); });
+it("연습은 목표 수 없이 연습대화 · 분과 중단을 표시한다", async () => { render([item({ activityType: "PRACTICE", goalCount: 2, interrupted: true })]); const row = await screen.findByTestId(`records-item-${SESSION_ID}`); expect(row).toHaveTextContent("연습대화 · 3분 · 중간에 끊김"); expect(row).not.toHaveTextContent("목표"); });
+it("결과 요약이 있으면 줄 아래에 보이고 없으면 요약 자리를 두지 않는다", async () => {
+  const otherId = "00000000-0000-4000-8000-000000000089";
+  render([item({ summary: "블록을 같이 쌓자고 먼저 말했어요." }), item({ sessionId: otherId, summary: null })]);
+  expect(await screen.findByTestId(`records-item-summary-${SESSION_ID}`)).toHaveTextContent("블록을 같이 쌓자고 먼저 말했어요.");
+  expect(screen.getByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("10:00 자유대화 · 3분");
+  expect(screen.queryByTestId(`records-item-summary-${otherId}`)).toBeNull();
+});
 it("재시작 FAILED는 중간에 끊김이다", async () => { render([item({ finalStatus: "FAILED" })]); expect(await screen.findByTestId(`records-item-${SESSION_ID}`)).toHaveTextContent("중간에 끊김"); });
 it("DECLINED 카드는 키보드 이동이나 클릭으로 상세를 열지 않는다", async () => { render([item({ finalStatus: "DECLINED", linkable: false })]); const row = await screen.findByTestId(`records-item-declined-${SESSION_ID}`); expect(row).not.toHaveAttribute("tabindex"); fireEvent.click(row); expect(router.push).not.toHaveBeenCalled(); });
 it("시각이 없는 시작 실패 기록은 종류·상태·시간 안내를 나누고 성과를 표시하지 않는다", async () => {

@@ -22,6 +22,7 @@ import kr.mujoong.core.record.RecordCalendar;
 import kr.mujoong.core.record.RecordQueryService;
 import kr.mujoong.core.record.RecordQueryService.Detail;
 import kr.mujoong.core.record.RecordQueryService.ListItem;
+import kr.mujoong.core.result.ResultSummaryReader;
 import kr.mujoong.core.security.GuardianPrincipal;
 import kr.mujoong.core.web.ApiResponses;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code GET /api/records?month=yyyy-MM} → {@code {days[{date, count}]}}.
  *   <li>{@code GET /api/records?date=yyyy-MM-dd} → {@code {items[{sessionId, activityType, startedAt, endedAt, finalStatus, endReason,
- *       linkable, goalCount, interrupted}]}}. month · date는 둘 중 하나만(아니면 400).
+ *       linkable, goalCount, interrupted, summary}]}}. month · date는 둘 중 하나만(아니면 400). summary는 정리 끝 결과 문장
+ *       (없으면 null, 동의 철회로 끝난 활동은 늘 null).
  *   <li>{@code GET /api/records/{sessionId}} → {@code {session, goals, utterances, gaps, recordScope, endConfirmed}}. 남의 · 없는 ·
  *       아직 기록 없음 · FAILED는 404.
  * </ul>
@@ -49,10 +51,12 @@ public class RecordController {
 
     private final RecordQueryService records;
     private final GuardianRepository guardians;
+    private final ResultSummaryReader summaries;
 
-    public RecordController(RecordQueryService records, GuardianRepository guardians) {
+    public RecordController(RecordQueryService records, GuardianRepository guardians, ResultSummaryReader summaries) {
         this.records = Objects.requireNonNull(records, "records");
         this.guardians = Objects.requireNonNull(guardians, "guardians");
+        this.summaries = Objects.requireNonNull(summaries, "summaries");
     }
 
     @GetMapping("/api/records")
@@ -72,7 +76,15 @@ public class RecordController {
             return ApiResponses.json(200, new MonthBody(days));
         }
         LocalDate parsed = RecordCalendar.date(date).orElseThrow(() -> CoreApiException.of(ErrorCode.VALIDATION_FAILED));
-        return ApiResponses.json(200, new DateBody(records.onDate(guardianId, parsed).stream().map(ItemBody::of).toList()));
+        List<ListItem> items = records.onDate(guardianId, parsed);
+        Map<UUID, String> summaryBySession = summaries.summaries(guardianId, items.stream()
+                .map(ListItem::record)
+                .filter(record -> !"CONSENT_WITHDRAWN".equals(record.endReason()))
+                .map(StoredRecord::sessionId)
+                .toList());
+        return ApiResponses.json(200, new DateBody(items.stream()
+                .map(item -> ItemBody.of(item, summaryBySession.get(item.record().sessionId())))
+                .toList()));
     }
 
     @GetMapping("/api/records/{sessionId}")
@@ -105,14 +117,15 @@ public class RecordController {
             EndReason endReason,
             boolean linkable,
             int goalCount,
-            boolean interrupted) {
+            boolean interrupted,
+            String summary) {
 
-        static ItemBody of(ListItem item) {
+        static ItemBody of(ListItem item, String summary) {
             StoredRecord record = item.record();
             return new ItemBody(record.sessionId(), ActivityType.fromWire(record.activityType()),
                     ApiResponses.time(record.startedAt()), ApiResponses.time(record.endedAt()),
                     SessionStatus.fromWire(record.finalStatus()), SessionViewService.parse(EndReason.class, record.endReason()),
-                    item.linkable(), item.goalCount(), item.interrupted());
+                    item.linkable(), item.goalCount(), item.interrupted(), summary);
         }
     }
 

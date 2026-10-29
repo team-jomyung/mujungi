@@ -24,7 +24,6 @@
 .mj-parent button.mj-report-activity[aria-checked="true"] { border-color: var(--color-brand-primary); background: var(--color-fixed-expression); font-weight: 700; }
 .mj-report-activity__check { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 24px; height: 24px; border: 2px solid var(--color-border-default); border-radius: 5px; }
 .mj-report-activity[aria-checked="true"] .mj-report-activity__check { border-color: var(--color-brand-primary); background: var(--color-brand-primary); color: var(--color-surface-card); }
-.mj-report-activity__state { margin-inline-start: auto; white-space: nowrap; font-size: 0.875rem; }
 .mj-parent button.mj-report-activity:disabled { cursor: default; opacity: 0.55; }
 .mj-parent button.mj-report-activity:focus-visible, .mj-activity-filter select:focus-visible { outline: 2px solid var(--color-brand-primary); outline-offset: 3px; }
 .mj-scene-chip { display: inline-block; padding: 6px 10px; border: 1px solid var(--color-border-selected); border-radius: 999px; margin: 4px; background: var(--color-fixed-expression); color: var(--color-brand-primary); font-size: 0.875rem; }
@@ -33,3 +32,7 @@
 .mj-record-unstarted__heading h3 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
 .mj-record-unstarted__status { padding: 4px 8px; border: 1px solid var(--color-border-default); border-radius: 999px; font-size: 0.875rem; line-height: 1.5; }
 .mj-record-unstarted__time { margin: 10px 0 0; font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
+/* 26 기록 줄 · 28 활동 고르기 줄: 머리 줄 아래 결과 요약을 두 줄까지 보인다(편차 FT-1029-a). */
+.mj-parent button.mj-record-item { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; text-align: left; }
+.mj-report-activity__body { display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: left; }
+.mj-record-summary { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 0.875rem; font-weight: 400; line-height: 1.45; color: var(--color-text-secondary); }

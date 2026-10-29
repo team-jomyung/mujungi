@@ -28,13 +28,23 @@ public class ReportService {
             ResultJobRepository jobs,GuardianWriteLock guardians,MujoongClock clock,CoreProperties properties,JsonCodec json,PlatformTransactionManager transactions){
         this.reports=reports;this.records=records;this.children=children;this.states=states;this.jobs=jobs;this.guardians=guardians;this.clock=clock;this.properties=properties;this.json=json;tx=new TransactionTemplate(transactions);
     }
-    public record PreviewActivity(UUID sessionId,LocalDate date,String activityType,Instant startedAt){}
+    private ResultSummaryReader summaries;
+    /** 28 활동 고르기 요약 읽기. 선택 의존이라 생성자로 만드는 시험은 요약 없이 돈다. */
+    @org.springframework.beans.factory.annotation.Autowired
+    void summaries(ResultSummaryReader reader){summaries=reader;}
+    /** summary: 정리 끝 결과 문장(ResultSummaryReader, 없으면 null). 동의 철회로 끝난 활동은 늘 null. */
+    public record PreviewActivity(UUID sessionId,LocalDate date,String activityType,Instant startedAt,String summary){}
     public record Preview(LocalDate firstRecordDate,List<PreviewActivity> activities){}
     public record Created(UUID reportId,String status){}
     public Preview preview(UUID guardian,LocalDate from,LocalDate to){
         validateDates(from,to);var child=children.childContext(guardian);if(child.isEmpty())return new Preview(null,List.of());
         var all=records.reportRecords(guardian,child.get().childId());
-        return new Preview(all.isEmpty()?null:all.getFirst().listedAt().atZone(ZONE).toLocalDate(),all.stream().map(r->new PreviewActivity(r.sessionId(),r.listedAt().atZone(ZONE).toLocalDate(),r.activityType(),r.startedAt())).filter(a->!a.date().isBefore(from)&&!a.date().isAfter(to)).toList());
+        var inRange=all.stream().filter(r->{var date=r.listedAt().atZone(ZONE).toLocalDate();return !date.isBefore(from)&&!date.isAfter(to);}).toList();
+        Map<UUID,String> summaryBySession=summaries==null?Map.of():summaries.summaries(guardian,inRange.stream()
+                .filter(r->!"CONSENT_WITHDRAWN".equals(r.endReason())).map(r->r.sessionId()).toList());
+        return new Preview(all.isEmpty()?null:all.getFirst().listedAt().atZone(ZONE).toLocalDate(),inRange.stream()
+                .map(r->new PreviewActivity(r.sessionId(),r.listedAt().atZone(ZONE).toLocalDate(),r.activityType(),r.startedAt(),summaryBySession.get(r.sessionId())))
+                .toList());
     }
     public Created create(UUID guardian,LocalDate from,LocalDate to,List<UUID> sessions,String key){
         validateDates(from,to);

@@ -35,6 +35,30 @@ import org.junit.jupiter.api.*;
     @Test void discardReturns204WithTombstone(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(checked("POST /api/reports/{reportId}/discard",app.post("/api/reports/"+id+"/discard").session(user.session()).csrf(user.csrf()).json("{}")).status()).isEqualTo(204);assertThat(checked("GET /api/reports/{reportId}",app.get("/api/reports/"+id).session(user.session())).json()).containsEntry("status","DISCARDED");}
     @Test void ownerAndDeletionGuardsApply(){var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var id=create(f.guardianId(),session);var other=WebFixtures.guardianFor(app,family().guardianId());assertThat(app.get("/api/reports/"+id).session(other.session()).send().status()).isEqualTo(404);var user=WebFixtures.guardianFor(app,f.guardianId());db.jdbc().update("update core.core_guardian set status='DELETION_REQUESTED' where id=:id",Map.of("id",f.guardianId()));assertThat(app.get("/api/reports/"+id).session(user.session()).send().status()).isEqualTo(403);}
     @Test void writesRequireCsrfAndDatesAreValidated(){var f=family();var user=WebFixtures.guardianFor(app,f.guardianId());assertThat(app.post("/api/reports").session(user.session()).json("{}").send().status()).isEqualTo(403);assertThat(app.get("/api/reports/preview?from=no&to=no").session(user.session()).send().status()).isEqualTo(400);}
+    /** FT-1029-a: 기록 목록 · 리포트 미리보기 줄의 summary는 정리 끝 현재 결과의 결과 문장이고, 정리 전 · 동의 철회는 null이다. */
+    @SuppressWarnings("unchecked")
+    @Test void listAndPreviewCarryDoneResultSentencesAsSummary(){
+        var f=family();var done=copy(f,"ENDED",null);record(f,done,"ENDED",3);var pending=copy(f,"ENDED",null);record(f,pending,"ENDED",3);
+        var withdrawn=copy(f,"ENDED",null);record(f,withdrawn,"ENDED",3);
+        db.jdbc().update("update core.core_activity_record set end_reason='CONSENT_WITHDRAWN' where session_id=:id",Map.of("id",withdrawn));
+        var now=app.clock().now();var states=app.bean(kr.mujoong.core.result.SessionResultStateRepository.class);
+        var jobs=app.bean(kr.mujoong.core.result.ResultJobRepository.class);var results=app.bean(kr.mujoong.core.result.ActivityResultRepository.class);
+        for(UUID s:List.of(done,withdrawn)){
+            states.insert(s,f.guardianId(),f.childId(),"FREE_TALK",true,now);
+            var job=jobs.submit("SESSION_RESULT",s,f.guardianId(),"SR:"+s,"ACTIVITY_RECORDED",now.plusSeconds(60),now);states.attach(s,job.id(),1,now);
+            var result=results.insert(s,job.id(),"FULL","[{\"goalSelectionId\":null,\"text\":\"블록을 같이 쌓자고 먼저 말했어요.\",\"citations\":[]},{\"goalSelectionId\":null,\"text\":\" 차례도 지켰어요. \",\"citations\":[]}]","[]","[]",null,"[]","[]",now);
+            db.jdbc().update("update core.core_session_result_state set job_status='DONE',current_result_id=:r where session_id=:s",Map.of("r",result.id(),"s",s));
+        }
+        states.insert(pending,f.guardianId(),f.childId(),"FREE_TALK",true,now);
+        var user=WebFixtures.guardianFor(app,f.guardianId());String date=now.atZone(ReportService.ZONE).toLocalDate().toString();
+        var list=(List<Map<String,Object>>)checked("GET /api/records",app.get("/api/records?date="+date).session(user.session())).json().get("items");
+        var preview=(List<Map<String,Object>>)checked("GET /api/reports/preview",app.get("/api/reports/preview?from="+date+"&to="+date).session(user.session())).json().get("activities");
+        for(var rows:List.of(list,preview)){
+            Map<String,Object> bySession=new HashMap<>();rows.forEach(r->bySession.put((String)r.get("sessionId"),r.get("summary")));
+            assertThat(bySession).containsEntry(done.toString(),"블록을 같이 쌓자고 먼저 말했어요. 차례도 지켰어요.")
+                    .containsEntry(pending.toString(),null).containsEntry(withdrawn.toString(),null);
+        }
+    }
     @SuppressWarnings("unchecked")
     @Test void savedListIsOwnedPagedAndDoesNotExposeContent(){
         var f=family();var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);

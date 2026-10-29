@@ -23,7 +23,8 @@
           "sessionId": { "$ref": "common.schema.json#/$defs/Uuid" },
           "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
           "activityType": { "$ref": "common.schema.json#/$defs/ActivityType" },
-          "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" }
+          "startedAt": { "$ref": "common.schema.json#/$defs/NullableDateTime" },
+          "summary": { "type": ["string", "null"], "description": "26 기록 목록과 같은 요약(편차 FT-1029-a). 없으면 null." }
         }
       }
     }
