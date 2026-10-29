@@ -5,6 +5,7 @@ import type { DeviceView } from "../../common/api/types";
 // 04 대화 기기 구역 (U1 3.5 Step 39 · interaction-spec 3.2 · mockups S-04)
 // 안정 · 불안정 · 끊김 · 응답 없음 · 확인 불가 · 기기 없음 여섯 상태를 색 점 + 아이콘 + 상태명 + 사유로 함께 보인다
 // (색만으로 구분하지 않음). 「기기 등록」은 등록이 없을 때만, 「기기 상태 보기 ›」는 등록된 기기면 어느 상태든 보인다.
+// 두 단추 모두 아이 · 지금 활동 구역과 같은 글자 단추로 그린다(홈 카드 생김새 통일).
 
 export type DeviceTone = "stable" | "unstable" | "disconnected" | "unresponsive" | "unknown" | "none";
 
@@ -95,7 +96,7 @@ export function DeviceCard({ device, onRegister, onViewStatus }: DeviceCardProps
       {view.reason !== null ? <p className="mj-device-card__reason">{view.reason}</p> : null}
       {view.timeLine !== null ? <p className="mj-device-card__time">{view.timeLine}</p> : null}
       {view.tone === "none" ? (
-        <button type="button" className="mj-button mj-button--primary" data-testid="home-device-register" onClick={onRegister}>
+        <button type="button" className="mj-link-button" data-testid="home-device-register" onClick={onRegister}>
           {COPY.home.registerDevice}
         </button>
       ) : (

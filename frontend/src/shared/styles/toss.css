@@ -72,6 +72,13 @@
 .mj-child-section__line,.mj-activity-card__status{margin:0 0 4px;font-size:1.375rem;font-weight:800;letter-spacing:-.02em;color:#3d2a22}
 .mj-device-card__status{font-size:1.375rem;font-weight:800}
 .mj-activity-card__reason{color:#9a7f72}
-/* ⑤ 빈 상태 꾸밈: 활동 없음 카드에 그림 자리 + 옅은 배경 */
-.mj-activity-card[data-state="none"]{position:relative;padding-right:110px;background:linear-gradient(135deg,#fff 40%,#fff1e6 100%)}
-.mj-activity-card[data-state="none"]::after{content:"";position:absolute;right:18px;top:50%;width:76px;height:76px;transform:translateY(-50%);border-radius:50%;background:#f3e3d2 url("/brand/mujoong-character.png") center/cover;box-shadow:0 0 0 4px #fff}
+/* ⑤ 빈 상태 꾸밈: 활동 없음 · 잠김(기기 끊김 등) 카드에 그림 자리 + 옅은 배경 */
+.mj-activity-card:is([data-state="none"],[data-state="locked"]){position:relative;padding-right:110px;background:linear-gradient(135deg,#fff 40%,#fff1e6 100%)}
+.mj-activity-card:is([data-state="none"],[data-state="locked"])::after{content:"";position:absolute;right:18px;top:50%;width:76px;height:76px;transform:translateY(-50%);border-radius:50%;background:#f3e3d2 url("/brand/mujoong-character.png") center/cover;box-shadow:0 0 0 4px #fff}
+/* ⑥ 홈 대화 기기 카드: 아이 · 지금 활동 카드와 같은 위계(옅은 배경 · 큰 값 줄 · 갈색 보조 줄 · 글자 단추)로 맞춘다 */
+.mj-child-section,.mj-device-card,.mj-activity-card{display:flex;flex-direction:column;gap:0}
+.mj-device-card{background:linear-gradient(135deg,#fff 0%,#fff3ec 100%)}
+.mj-device-card__status{margin:0 0 4px;gap:8px;font-size:1.375rem;font-weight:800;letter-spacing:-.02em;color:#3d2a22}
+.mj-device-card__reason,.mj-device-card__time,.mj-activity-card__reason{margin:0;font-size:1rem;color:#9a7f72}
+.mj-child-section .mj-link-button,.mj-device-card .mj-link-button,.mj-activity-card .mj-link-button{margin-top:8px}
+.mj-device-card .mj-status-dot{flex:0 0 auto;width:24px;height:24px;font-size:.75rem;box-shadow:0 0 0 3px #fff}

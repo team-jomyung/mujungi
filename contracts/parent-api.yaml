@@ -818,6 +818,7 @@ paths:
         ENDED · ENDED_UNCONFIRMED · ABORTED는 linkable true, DECLINED는 linkable false(시작하지 못함 한 줄, B19). FAILED는 정리 대상인
         재시작 FAILED(사본 FAILED + SERVER_RESTART + 전사 발화 1개 이상)만 linkable true로 보이고 그 밖 FAILED는 보이지 않는다(U6 BR14.1).
         줄마다 goalCount(연습 목표 수) · interrupted(중간에 끊김)를 더했다(편차 (U4a-b)).
+        summary는 정리 끝 결과 문장을 이어 붙인 짧은 요약이다(없으면 null, 편차 FT-1029-a).
       x-unit: U4a
       x-u4a-deviation: ["(U4a-b)"]
       x-u6-deviation: ["(U6-b)"]
@@ -844,6 +845,7 @@ paths:
                     linkable: true
                     goalCount: 0
                     interrupted: false
+                    summary: null
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/AccountDeletion" }
@@ -1111,6 +1113,7 @@ paths:
       operationId: previewReport
       x-unit: U6
       summary: 리포트 범위 미리보기
+      description: 활동마다 26 기록 목록과 같은 요약(summary, 없으면 null)을 싣는다(편차 FT-1029-a).
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
