@@ -590,14 +590,14 @@ class ConfigKeyContractTest {
         }
         TextAiProperties ai = bindRecord(TextAiProperties.class, "mujoong.text-ai", base);
         assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(10));
-        assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(40));
+        assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(90)); // FT-1029-b: 40초에서 90초로
         assertThat(ai.retry().maxRetries()).isEqualTo(1);
         assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));
         assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base).enabled()).isTrue();
         assertThat(bindRecord(KnowledgeProperties.class, "mujoong.knowledge.neo4j", base,
                 TEST_RESOURCES.resolve("application-test.yml")).enabled()).isFalse();
         CoreProperties bound = bind(base);
-        assertThat(bound.timing().result().attemptTimeout()).isEqualTo(Duration.ofSeconds(90));
+        assertThat(bound.timing().result().attemptTimeout()).isEqualTo(Duration.ofSeconds(150)); // FT-1029-b: 90초에서 150초로
         assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
         assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));
     }

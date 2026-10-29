@@ -96,7 +96,7 @@ class StructuredLogFormatTest {
                 "PRACTICE_AUDIO_STAGE", "OUTPUT_DISCARDED", "DEVICE_CONNECTION", "INTERNAL_HTTP", "EVENT_DELIVERY", "STARTUP_RECOVERY", "METRIC_SNAPSHOT",
                 "SECURITY_AUTH_FAILED", "SECURITY_RATE_LIMITED", "SECURITY_ORIGIN_DENIED", "SECURITY_DEV_LOGIN_BLOCKED",
                 "SECURITY_INTERNAL_TOKEN_FAILED", "APP_ERROR", "QUEUE_PRESSURE", "LUNA_CALL", "LUNA_STARTUP",
-                "GOAL_CANDIDATE_DROPPED", "ADMIN_RECORD_VIEWED");
+                "GOAL_CANDIDATE_DROPPED", "GOAL_CANDIDATES_ASSESSED", "ADMIN_RECORD_VIEWED");
         Set<String> keyNames = Arrays.stream(AttrKey.values()).map(AttrKey::key).collect(Collectors.toSet());
         assertThat(keyNames).doesNotContain(
                 "message", "text", "transcript", "audio", "token", "cookie", "code", "email", "password", "secret", "input",

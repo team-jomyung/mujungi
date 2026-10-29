@@ -179,14 +179,14 @@ web의 loading-notice-delay는 MUJOONG_TIMING_PARENT_LOADINGNOTICEDELAY 환경 �
 | `mujoong.timing.result.job-attempts` | `4` | core-api | 최초 1회 + 추가 최대 3회. realtime/web 비소유 키 | FR7.6 · U14 |
 | `mujoong.timing.result.job-retry-backoff` | `[5s, 15s, 30s]` | core-api | 실패 뒤 다음 시도 간격. realtime/web 비소유 키 | FR7.6 · U14 |
 | `mujoong.timing.result.job-tick` | `1s` | core-api | 실행기 주기 | FD-Q2 |
-| `mujoong.timing.result.attempt-timeout` | `90s` | core-api | 세션 결과 시도 시한 | FD-Q2 |
+| `mujoong.timing.result.attempt-timeout` | `150s` | core-api | 세션 결과 시도 시한. 90초 → 150초로 늘렸다 | FD-Q2 · FT-1029-b |
 | `mujoong.timing.result.reconcile-interval` | `5m` | core-api | 누락 · 후보 등록 · 리포트 정리 점검 | FD-Q2 |
 | `mujoong.timing.result.undecided-limit` | `1h` | core-api | 기록 저장 뒤 UNDECIDED 판정 유예 상한 | R-12 |
 | `mujoong.timing.report.ready-target` | `6m` | core-api · web | 리포트 접수부터 절대 마감(web은 이만큼 기다린 뒤 실패로 본다) | BR9.4 · U6-e · FT-1023-c |
 | `mujoong.timing.report.result-settle-wait` | `5m` | core-api | 접수부터 고른 활동의 결과 정리를 기다리는 상한(`ready-target`보다 짧아야 한다) | FT-1023-c |
 | `mujoong.timing.report.result-settle-poll` | `10s` | core-api | 정리를 기다리는 동안 다시 보는 간격 | FT-1023-c |
 | `mujoong.timing.report.unsaved-retention` | `24h` | core-api | 저장 안 된 READY · FAILED 보존 | FD-Q2 |
-| `mujoong.text-ai.result.request-timeout` | `40s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하). 20초에서 늘렸다 | FD-Q2 · FT-1027-i |
+| `mujoong.text-ai.result.request-timeout` | `90s` | core-api | AI 한 번의 최대 시한(시도 잔여 시간 이하). 20초 → 40초 → 90초로 늘렸다 | FD-Q2 · FT-1027-i · FT-1029-b |
 | `mujoong.text-ai.result.temperature-judgment` | `0` | core-api | 재판정 온도 | ai-io 6.1 |
 | `mujoong.text-ai.result.temperature-generation` | `0.2` | core-api | 생성 온도 | ai-io 6.1 |
 | `mujoong.text-ai.result.prompt-version` | `v1` | core-api | 프롬프트 리소스 버전 | U6-J |
@@ -269,6 +269,15 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 ### 2026-10-21 실제 분석 호출 보완
 
 저장 대화의 구조화 응답이 medium 추론에서 10.6초, none에서 4.5초로 관찰됐다(서비스 수준 보장은 아님). Core의 결과 호출 한도는 20초(2026-10-27 40초로 늘림, 아래 절), 순차 분석 작업 전체는 90초로 제한하며 작업 취소·재시도 횟수는 유지한다. 일반 Core 텍스트 호출은 10초이고 U10 상황 생성 전체 한도는 기존 15초를 유지한다. 결과 텍스트·목표 후보·상황 생성·상황 검토는 추론 none을 사용하되 입력 정리·출력 형식·출처·안전 분류 검사를 생략하지 않는다. 실시간 발화 판정·Jev 설정은 변경하지 않는다.
+
+### 2026-10-29 결과 호출 한도 90초 · 결과 시도 시한 150초 (FT-1029-b)
+
+목표 후보 생성이 화용 지표 여섯 개(P1 ~ P5 · U5)를 모두 평가하고 서로 다른 지원 필요마다 후보를 최대 8개(이전 3개) 내도록 바뀌어(`goal-candidates.v4`), 한 번의 출력이 길어진다. 판정이 실행마다 흔들리지 않게 목표 후보 추론 강도를 `low`에서 `medium`으로 올린다. 실호출 측정(오늘 자유대화 44행 · 합성 대화, 실기기 아님)에서 목표 후보 호출은 `low` 8 ~ 21초, `medium` 34 ~ 64초였고 출력은 추론 포함 최대 약 5,900 토큰이었다.
+
+- `mujoong.text-ai.result.request-timeout`: `40s` → `90s`. 이 키는 결과 작업의 모든 AI 호출(구조화 · 결과 문장 · 목표 후보 · 재판정 · 2차 분류)에 같이 걸린다.
+- `mujoong.timing.result.attempt-timeout`: `90s` → `150s`. 한 시도 안에서 구조화 · 결과 문장 호출 뒤 목표 후보 호출이 이어 돌아, 90초로는 목표 후보 호출이 시도 시한에 걸린다. 이 값은 작업 선점 시한이기도 하다.
+- 목표 후보 출력 한도 `mujoong.luna.purpose.goal-candidates.max-output-tokens`: 4000 → 16000(시간 값 아님, ai-io.md 10.8).
+- 재시도 횟수 · 지연(최초 1회 + 추가 3회, 5 · 15 · 30초)은 그대로다. 그래서 자유대화 종료부터 결과가 정리될 때까지의 최악 상한이 늘어난다(4 × 150초 + 50초). 리포트가 결과 정리를 기다리는 `report.result-settle-wait`(5분)는 그대로라, 시도가 여러 번 실패한 활동은 리포트 접수 때 정리 중으로 남을 수 있다.
 
 ### 2026-10-27 결과 호출 한도 40초 (FT-1027-i)
 

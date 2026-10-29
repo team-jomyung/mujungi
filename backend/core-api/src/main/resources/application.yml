@@ -162,7 +162,8 @@ mujoong:
       job-attempts: 4
       job-retry-backoff: [5s, 15s, 30s]
       job-tick: 1s
-      attempt-timeout: 90s
+      # 구조화 · 결과 문장 뒤 목표 후보(medium, 최대 90s)가 이어 돌아 90s에서 150s로 늘렸다(FT-1029-b)
+      attempt-timeout: 150s
       reconcile-interval: 5m
       undecided-limit: 1h
     report:
@@ -266,8 +267,9 @@ mujoong:
   text-ai:
     request-timeout: 10s
     result:
-      # 목표 후보(low)가 긴 대화에서 14~15초까지 걸려 20s에서 40s로 늘렸다. 시도 전체는 timing.result.attempt-timeout(90s)이 막는다(FT-1027-i)
-      request-timeout: 40s
+      # 목표 후보(low)가 긴 대화에서 14~15초까지 걸려 20s에서 40s로 늘렸고(FT-1027-i), 지표 평가 · 후보 최대 8개 · medium 추론(34~64초)으로 90s로 늘렸다(FT-1029-b).
+      # 시도 전체는 timing.result.attempt-timeout(150s)이 막는다
+      request-timeout: 90s
       temperature-judgment: 0
       temperature-generation: 0.2
       prompt-version: v1
@@ -294,9 +296,11 @@ mujoong:
         max-output-tokens: 4000
         reasoning-effort: none
       goal-candidates:
-        max-output-tokens: 4000
-        # none이면 긴 대화에서 질문 한 번 무시를 놓친다. low는 8~15초로 result.request-timeout(40s) 안이다(FT-1027-i)
-        reasoning-effort: low
+        # 화용 지표 여섯 개 평가 + 후보 최대 8개(FT-1029-b)라 출력이 길다. 추론 토큰도 이 한도 안에서 쓴다
+        max-output-tokens: 16000
+        # none이면 긴 대화에서 질문 한 번 무시를 놓치고(FT-1027-i), low는 실행마다 잡는 지표가 흔들려 medium으로 올렸다(FT-1029-b).
+        # medium은 실호출 34~64초라 결과 호출 한도 result.request-timeout(90s) 안에 끝나야 한다
+        reasoning-effort: medium
       rejudgment:
         max-output-tokens: 4000
         reasoning-effort: medium
