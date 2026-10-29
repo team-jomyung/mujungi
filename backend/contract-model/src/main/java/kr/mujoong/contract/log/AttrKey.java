@@ -161,6 +161,13 @@ public enum AttrKey {
             "CHECK_DICTIONARY", "CHECK_CLASSIFIER")),
     DROP_FIELD("dropField", ValueType.ENUM, Set.of("DISPLAY_NAME", "DISPLAY_EVIDENCE", "TARGET_EXPRESSION", "REASON_TEXT",
             "SKILL_REF", "SITUATION", "PARTNER", "INTENT", "EXPRESSION", "EVIDENCE", "NONE")),
+    // GOAL_CANDIDATES_ASSESSED (FT-1029-b). 화용 지표 코드(P1 ~ P5 · U5)만 판정별로 나눠 싣고 근거 · 사유 글은 담지 않는다
+    NEED_INDICATORS("needIndicators", ValueType.NAME_LIST, null),
+    OK_INDICATORS("okIndicators", ValueType.NAME_LIST, null),
+    NOT_OBSERVED_INDICATORS("notObservedIndicators", ValueType.NAME_LIST, null),
+    // LUNA_CALL 출력 형식 실패 진단(FT-1029-c). SCHEMA_INVALID일 때만 싣는다. 출력 본문은 담지 않고 모양과 글자 수만 남긴다
+    SCHEMA_FAILURE("schemaFailure", ValueType.ENUM, Set.of("NOT_JSON", "TRAILING_CONTENT", "NOT_OBJECT", "CONTRACT_VIOLATION")),
+    OUTPUT_CHARS("outputChars", ValueType.NUMBER, null),
     // ADMIN_RECORD_VIEWED(JIRA-280): 열람한 관리자의 ownerHash(OwnerHasher 12자 16진). 관리자 id 원문은 싣지 않는다
     VIEWER_HASH("viewerHash", ValueType.LABEL, null);
 

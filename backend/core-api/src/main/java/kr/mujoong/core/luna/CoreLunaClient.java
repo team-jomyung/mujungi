@@ -135,7 +135,7 @@ public class CoreLunaClient {
             Attempt attempt = attempt(body, limit, request, schema);
             Duration latency = clock.elapsedSince(started);
             audit(request, input.sentFieldNames(), attempt.failure == null ? "OK" : attempt.failure.name(),
-                    attempt.responseModel, latency, attempts);
+                    attempt.responseModel, latency, attempts, attempt.diagnosis);
             recordUsage(request, link, callId, attempts, attempt);
             if (attempt.failure == null) {
                 return new LunaResult(attempt.outputJson, attempt.responseModel, request.promptVersion(), latency, attempts,
@@ -219,7 +219,8 @@ public class CoreLunaClient {
         }
         boolean valid = contractSchema ? schemas.isValidOutput(purpose, reply.outputText()) : schemas.isJsonObject(reply.outputText());
         if (!valid) {
-            return Attempt.failed(LunaFailureReason.SCHEMA_INVALID, model, Optional.empty());
+            return Attempt.failed(LunaFailureReason.SCHEMA_INVALID, model, Optional.empty())
+                    .withDiagnosis(OutputDiagnosis.of(json, reply.outputText()));
         }
         return new Attempt(null, model, reply.outputText(), Optional.empty());
     }
@@ -240,6 +241,11 @@ public class CoreLunaClient {
 
     private void audit(LunaRequest request, List<String> sentFields, String outcome, String responseModel, Duration latency,
             int attempt) {
+        audit(request, sentFields, outcome, responseModel, latency, attempt, null);
+    }
+
+    private void audit(LunaRequest request, List<String> sentFields, String outcome, String responseModel, Duration latency,
+            int attempt, OutputDiagnosis diagnosis) {
         events.log(EventCode.LUNA_CALL, EventLog.Component.CORE_LUNA_CLIENT, null, entry -> {
             entry.attr(AttrKey.LUNA_PURPOSE, request.purpose())
                     .attr(AttrKey.LUNA_OUTCOME, outcome)
@@ -250,6 +256,9 @@ public class CoreLunaClient {
                     .attr(AttrKey.ATTEMPT, attempt);
             if (responseModel != null && !responseModel.equals(properties.model())) {
                 entry.attr(AttrKey.RESPONSE_MODEL, responseModel);
+            }
+            if (diagnosis != null) {
+                entry.attr(AttrKey.SCHEMA_FAILURE, diagnosis.schemaFailure()).attr(AttrKey.OUTPUT_CHARS, diagnosis.outputChars());
             }
         });
     }
@@ -275,12 +284,28 @@ public class CoreLunaClient {
         return a.compareTo(b) <= 0 ? a : b;
     }
 
-    /** 시도 하나의 결과(실패면 failure가 있다). body는 사용량을 읽을 응답 원문이며 응답이 없으면 null이다. */
+    /**
+     * 출력 형식 실패의 모양 진단(FT-1029-c). 본문 대신 최상위 JSON 모양과 글자 수만 남긴다(R-F14). JSON 객체로는 읽히지만 계약 스키마를 어긴
+     * 경우는 CONTRACT_VIOLATION이다.
+     */
+    record OutputDiagnosis(String schemaFailure, int outputChars) {
+
+        static OutputDiagnosis of(JsonCodec json, String output) {
+            JsonCodec.Shape shape = json.shape(output);
+            return new OutputDiagnosis(shape == JsonCodec.Shape.OBJECT ? "CONTRACT_VIOLATION" : shape.name(),
+                    output.codePointCount(0, output.length()));
+        }
+    }
+
+    /**
+     * 시도 하나의 결과(실패면 failure가 있다). body는 사용량을 읽을 응답 원문이며 응답이 없으면 null이다. diagnosis는 SCHEMA_INVALID의
+     * 모양 진단이다.
+     */
     private record Attempt(LunaFailureReason failure, String responseModel, String outputJson, Optional<Duration> retryAfter,
-            String body) {
+            String body, OutputDiagnosis diagnosis) {
 
         Attempt(LunaFailureReason failure, String responseModel, String outputJson, Optional<Duration> retryAfter) {
-            this(failure, responseModel, outputJson, retryAfter, null);
+            this(failure, responseModel, outputJson, retryAfter, null, null);
         }
 
         static Attempt failed(LunaFailureReason reason, String responseModel, Optional<Duration> retryAfter) {
@@ -288,7 +313,11 @@ public class CoreLunaClient {
         }
 
         Attempt withBody(String value) {
-            return new Attempt(failure, responseModel, outputJson, retryAfter, value);
+            return new Attempt(failure, responseModel, outputJson, retryAfter, value, diagnosis);
+        }
+
+        Attempt withDiagnosis(OutputDiagnosis value) {
+            return new Attempt(failure, responseModel, outputJson, retryAfter, body, value);
         }
 
         @Override

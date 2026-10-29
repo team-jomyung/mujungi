@@ -66,7 +66,7 @@ class LunaEventLogTest {
 
         assertThat(EventCode.LUNA_CALL.allowedKeys().stream().map(AttrKey::key).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrder("lunaPurpose", "lunaOutcome", "model", "responseModel", "promptVersion",
-                        "sentFields", "latencyMs", "attempt");
+                        "sentFields", "latencyMs", "attempt", "schemaFailure", "outputChars");
         assertThat(EventCode.LUNA_STARTUP.allowedKeys()).containsExactly(AttrKey.LUNA_STATE);
         assertThat(lines).singleElement().asString().startsWith("INFO ").contains("\"component\":\"core-api/LunaClient\"");
         assertThat(attrs(lines.getFirst())).containsOnly(

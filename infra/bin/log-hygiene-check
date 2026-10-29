@@ -6,7 +6,7 @@
 # 고정 문자열로 찾는다(값을 명령줄 인자 · 파일 · 출력에 두지 않는다).
 #   format   앱 로그(core-api · realtime)의 '{'로 시작하는 줄이 JSON이고 최상위 키가 정확히 ts · level · traceId · component ·
 #            event · ownerHash · attrs(이 순서)다. JVM 시작 줄 같은 비JSON 줄은 형식 대상이 아니지만 아래 검사는 받는다
-#   attrs    event가 사건 코드 23종(U9 LUNA_CALL · LUNA_STARTUP · 목표 후보 진단 GOAL_CANDIDATE_DROPPED, JIRA-280 ADMIN_RECORD_VIEWED 포함) 중 하나이고 attrs 키가 그 코드의 허용 표(OD-2, 정본은 kr.mujoong.contract.log.EventCode ·
+#   attrs    event가 사건 코드 24종(U9 LUNA_CALL · LUNA_STARTUP · 목표 후보 진단 GOAL_CANDIDATE_DROPPED · GOAL_CANDIDATES_ASSESSED, JIRA-280 ADMIN_RECORD_VIEWED 포함) 중 하나이고 attrs 키가 그 코드의 허용 표(OD-2, 정본은 kr.mujoong.contract.log.EventCode ·
 #            AttrKey) 안에 있고 값이 객체 · 배열이 아니다. 허용 표는 --print-allowlist로 보이고 test-host-tools.sh가 자바 정본과 대조한다
 #   names    금지 헤더 · 이름(Set-Cookie · Cookie: · Authorization · X-Internal-Token · X-CSRF-TOKEN · MUJOONG_SESSION ·
 #            MUJOONG_DEVICE*)이 앱 · web · nginx · postgres 로그에 0건
@@ -55,9 +55,10 @@ readonly ALLOWLIST_JSON='{
   "SECURITY_INTERNAL_TOKEN_FAILED": ["direction","statusCode","repeat"],
   "APP_ERROR": ["errorKind","repeat"],
   "QUEUE_PRESSURE": ["queue","dropped","repeat"],
-  "LUNA_CALL": ["lunaPurpose","lunaOutcome","model","responseModel","promptVersion","sentFields","latencyMs","attempt"],
+  "LUNA_CALL": ["lunaPurpose","lunaOutcome","model","responseModel","promptVersion","sentFields","latencyMs","attempt","schemaFailure","outputChars"],
   "LUNA_STARTUP": ["lunaState"],
   "GOAL_CANDIDATE_DROPPED": ["promptVersion","candidateIndex","candidatesProposed","dropReason","dropField"],
+  "GOAL_CANDIDATES_ASSESSED": ["promptVersion","candidatesProposed","needIndicators","okIndicators","notObservedIndicators"],
   "ADMIN_RECORD_VIEWED": ["viewerHash"]
 }'
 # env 파일에서 비밀로 보는 변수(infra-spec 3.7 SecureString + 앱 데이터 소스 매핑)
