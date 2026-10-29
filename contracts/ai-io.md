@@ -262,13 +262,31 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 - v3와 함께 `mujoong.luna.purpose.goal-candidates.reasoning-effort`를 `none`에서 `low`로 올렸다(FT-1027-i). `none`에서는 긴 대화에서 질문을 한 번 무시한 대목을 놓쳤다(진돗개 자유대화 · 합성 사례 모두 0/3 → `low` 3/3). 응답은 8 ~ 15초다. 긴 대화에서 여유가 적어 `mujoong.text-ai.result.request-timeout`을 20초에서 40초로 늘렸다(timing.md 2026-10-27 절). `medium`은 긴 대화에서 29 ~ 32초가 걸려 비용 대비 이득이 없다.
 - 이전 판 `goal-candidates.v1.txt` · `goal-candidates.v2.txt`는 이력으로 남긴다. 결과 · 사용량 기록의 `promptVersion`으로 판의 결과를 구분한다.
 
+**현재 지시문(2026-10-29, `prompts/goal/goal-candidates.v4.txt`, 판 `goal-candidates.v4`) [편차 FT-1029-b].** v3 위에 다음을 바꾼다.
+- 대화 전체를 POC 평가 기준표(`PERFORM_RUBRIC.csv` P1 ~ P5, `UNDERSTAND_RUBRIC.csv` U5)의 화용 지표 여섯 개로 모두 평가한다: P1 응답 · P2 정보 충분성 · P3 화제 관리 · P4 수정 · 명료화 · P5 상대 · 관계 맞춤 · U5 상대 관점. 출력 `assessment`에 지표마다 `NEED` · `OK` · `NOT_OBSERVED`를 한 번씩 쓰고, `NEED`인 지표는 그 지표의 후보가 하나 이상 있어야 한다. 후보마다 `indicator`에 다루는 지표 코드 하나를 쓴다.
+- P2는 상대가 알 수 없는 대상을 지시어로만 가리킴('엄마랑 그거 먹으러 갔어'), 낱말을 떠올리지 못해 '그거 있잖아 그거'로 대신함, 핵심 정보 누락 · 사건 순서 뒤섞임으로 상대가 되물어야 했음을 지원 필요로 본다. **상대가 되물어 해결됐더라도 처음 말에서 핵심 정보가 빠졌으면 지원 필요다**(v3의 "'그거 줘' → '어느 색?' → '파란색'으로 해결되면 후보 아님"을 대체). 바로 앞에서 말한 대상을 '그거'로 다시 가리킨 것은 해당하지 않는다.
+- 서로 다른 지원 필요는 우선순위가 낮아도 빼지 않고 모두 후보로 만든다. 상한은 3개에서 **8개**로 올린다(`GoalCandidateValidator.MAX_KEPT`). 후보 개수 · 후보 칸 글자 수 · 근거 유무는 출력 스키마에서 빼고 서버 검사가 후보마다 본다: 후보 하나가 어겨도 출력 전체를 버리지 않고 그 후보만 `OVER_LIMIT` · `LENGTH` · `NO_EVIDENCE`로 뺀다. 지시문은 출력 전에 NEED 지표마다 후보가 있는지, `displayName` 글자 수가 12자 이하인지 스스로 점검하게 한다. 8개를 넘으면 우선순위로 앞의 8개만 낸다. reasonText는 세 문장 이내다.
+- `displayName`은 이번 대화의 활동 · 물건 · 화제를 빼고 다른 장면에서도 같은 연습이 되는 행동 범주 이름으로 쓴다(예: '발표 내용을 구체화하기' → '내용을 구체화하기'). 장면은 `displayEvidence` · `reasonText`가 맡는다. 같은 지표 · 같은 행동 범주의 근거가 여러 대목이면 후보 하나의 `evidence`에 함께 넣는다.
+- AI 쪽 문제 제외 · 모욕 표현 자체는 근거가 아님(2026-10-27 결정 3-2) · 인용 규칙 · 구조 서명 · 서버 검사는 v3와 같다. P5는 서로 다른 관계의 상대와 주고받은 장면이 두 개 이상 없으면 `NOT_OBSERVED`다.
+- 출력이 길어져 목표 후보 출력 한도를 4000에서 16000 토큰으로 올린다. 목표 후보 추론 강도 `mujoong.luna.purpose.goal-candidates.reasoning-effort`를 `low`에서 `medium`으로 올린다: 실호출 측정(오늘 자유대화 · 합성 대화, 실기기 아님)에서 `low`는 실행마다 잡는 지표가 달라 P1을 놓치거나 정상 마무리 발화를 P3로 잡았고, `medium`은 5회 모두 P1 · P3를 잡고 지표 판정과 후보가 맞았다. 대신 지연이 8 ~ 21초에서 34 ~ 64초로, 출력 토큰이 약 3배로 늘어 결과 호출 한도 `mujoong.text-ai.result.request-timeout`을 40초에서 90초로, 결과 시도 시한 `mujoong.timing.result.attempt-timeout`을 90초에서 150초로 올린다(timing.md 2026-10-29 절). 이 절 위의 v3 문단의 "`medium`은 비용 대비 이득이 없다"를 대체한다.
+- 서버 인용 검사는 전사 앞뒤 공백만 빠진 인용을 같은 발화로 받고 저장은 전사 원문으로 한다(글자 · 문장부호가 다르면 `QUOTE_MISMATCH`).
+- `goal-candidates.v3.txt`는 이력으로 남긴다.
+
+**화용 지표 평가 진단 로그(`GOAL_CANDIDATES_ASSESSED`, 2026-10-29).** 목표 후보 호출이 계약 스키마를 통과하면 core-api `Maintenance` 컴포넌트가 호출마다 INFO 한 줄을 남긴다(병합 없음, `ownerHash`는 보호자). 후보가 0개일 때 모델이 어느 지표도 지원 필요로 보지 않았는지(`needIndicators` 빈 목록), 지원 필요를 봤는데 후보가 서버 검사에서 빠졌는지(`GOAL_CANDIDATE_DROPPED`와 함께)를 가른다. 지표 코드만 싣고 근거 · 사유 글 · 전사는 담지 않는다(R-F14).
+
+| 속성 | 형식 | 값 |
+|---|---|---|
+| `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v4`) |
+| `candidatesProposed` | NUMBER | 모델이 낸 후보 수(서버 검사 전) |
+| `needIndicators` · `okIndicators` · `notObservedIndicators` | NAME_LIST | 판정이 `NEED` · `OK` · `NOT_OBSERVED`인 지표 코드(`P1` ~ `P5` · `U5`) |
+
 **후보 탈락 진단 로그(`GOAL_CANDIDATE_DROPPED`, 2026-10-27).** 모델이 낸 후보가 서버 검사에서 빠지면 core-api `Maintenance` 컴포넌트가 후보마다 INFO 한 줄을 남긴다(병합 없음, `ownerHash`는 보호자). 모델이 0개를 냈으면 줄이 없으므로, 후보가 없는 결과가 모델 판단인지 서버 탈락인지를 가를 수 있다. 후보 이름 · 인용 · 사유 글 · 전사는 담지 않는다(R-F14). 정본은 `EventCode` · `AttrKey`이고 `infra/bin/log-hygiene-check` 허용 표와 대조한다.
 
 | 속성 | 형식 | 값 |
 |---|---|---|
 | `promptVersion` | LABEL | 보낸 지시문 판(`goal-candidates.v3`) |
 | `candidateIndex` · `candidatesProposed` | NUMBER | 모델 출력에서 몇 번째(0부터) 후보인지, 모델이 낸 후보 수 |
-| `dropReason` | ENUM | `GoalCandidateValidator`: `LENGTH` · `SKILL_REF_UNKNOWN` · `NO_EVIDENCE` · `QUOTE_MISMATCH` · `FORBIDDEN_DICTIONARY` · `NUMBER_GUARD` · `DUPLICATE` · `OVER_LIMIT`(남길 수 있는 3개를 넘음). `OutputChecker`: 1차 `CHECK_EMPTY` · `CHECK_QUOTE` · `CHECK_NUMBER` · `CHECK_DICTIONARY`, 2차 분류 위반 `CHECK_CLASSIFIER` |
+| `dropReason` | ENUM | `GoalCandidateValidator`: `LENGTH` · `SKILL_REF_UNKNOWN` · `NO_EVIDENCE` · `QUOTE_MISMATCH` · `FORBIDDEN_DICTIONARY` · `NUMBER_GUARD` · `DUPLICATE` · `OVER_LIMIT`(남길 수 있는 개수를 넘음, v4부터 8개). `OutputChecker`: 1차 `CHECK_EMPTY` · `CHECK_QUOTE` · `CHECK_NUMBER` · `CHECK_DICTIONARY`, 2차 분류 위반 `CHECK_CLASSIFIER` |
 | `dropField` | ENUM | 처음 걸린 칸: `DISPLAY_NAME` · `DISPLAY_EVIDENCE` · `TARGET_EXPRESSION` · `REASON_TEXT` · `SKILL_REF` · `SITUATION` · `PARTNER` · `INTENT` · `EXPRESSION` · `EVIDENCE` · `NONE` |
 
 검사 기준 · 순서 · 남기는 후보는 바꾸지 않았다. 진단 줄은 검사가 끝난 뒤 쓰기만 한다.
@@ -405,6 +423,8 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `LUNA_CALL` | `model` · `responseModel` · `promptVersion` | LABEL | `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`. 요청 모델, 응답 모델(받았을 때), 보낸 프롬프트 판 |
 | `LUNA_CALL` | `sentFields` | NAME_LIST | 보낸 입력의 최상위 키 이름을 쉼표로 이은 값. 이름마다 `[A-Za-z][A-Za-z0-9_]{0,63}`, 최대 32개 |
 | `LUNA_CALL` | `latencyMs` · `attempt` | NUMBER | 시도 지연(밀리초), 시도 번호 1 ~ 3(미호출 실패는 0) |
+| `LUNA_CALL` | `schemaFailure` | ENUM | `lunaOutcome`이 `SCHEMA_INVALID`일 때만(core-api, FT-1029-c): `NOT_JSON`(JSON으로 읽히지 않음) · `TRAILING_CONTENT`(앞은 JSON 객체인데 뒤에 다른 글) · `NOT_OBJECT`(최상위가 객체가 아님) · `CONTRACT_VIOLATION`(객체지만 계약 스키마 위반) |
+| `LUNA_CALL` | `outputChars` | NUMBER | `schemaFailure`와 함께, 출력 글자 수(본문은 남기지 않는다) |
 | `LUNA_STARTUP` | `lunaState` | ENUM | `ENABLED`(env `OPENAI_API_KEY` 있음, realtime은 `mujoong.luna.enabled`도 true) · `DISABLED_NO_KEY`(없음 · 공백) · `DISABLED_SWITCH_OFF`(realtime만: 키는 있으나 `mujoong.luna.enabled`가 false, 편차 (U11-c)) |
 
 - 형식에 맞지 않는 LABEL · NAME_LIST 값은 조용히 버리지 않고 `UNKNOWN`으로 쓴다. `lunaOutcome`이 `OK`가 아니면 줄 수준은 WARN이다.
@@ -423,7 +443,7 @@ Luna 호출부(core-api · realtime-activity 각자)는 공급자 시도마다 `
 | `mujoong.luna.enabled` | `false` | realtime | realtime Luna 스위치(시간 값 아님). 키가 있어도 false면 `RealtimeLunaClient`를 등록하지 않는다(판정은 보류 구현). 켜면 진행 중 판정은 언제나 Decisions API로 간다. demo에서 true로 바꾸기 전에 `infra/RUNBOOK.md` 단계 4의 R-F15 확인 기록(Decisions 끝점 확인 포함)을 남긴다 [편차 FT-1023-d] |
 | `mujoong.luna.base-url` | `https://api.openai.com/v1` | core-api · realtime | OpenAI API 기준 주소(core-api `{base-url}/responses`, realtime `{base-url}/decisions`). 두 앱이 같은 주소 규칙을 쓴다. test 프로필은 루프백으로 덮어쓴다 |
 | `mujoong.luna.max-response-bytes` | `1000000` | core-api · realtime | 응답 본문 바이트 상한. 넘으면 `LENGTH_EXCEEDED` |
-| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000` | core-api | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment` |
+| `mujoong.luna.purpose.<목적>.max-output-tokens` | `4000`(`goal-candidates`는 `16000`, FT-1029-b) | core-api | 요청 `max_output_tokens`. core 목적: `scenario-generation` · `scenario-review` · `seed-generation` · `result-text` · `goal-candidates` · `rejudgment` |
 | `mujoong.luna.purpose.<목적>.reasoning-effort` | `medium` | core-api | 요청 `reasoning.effort`(`none` · `minimal` · `low` · `medium` · `high`). realtime Decisions 요청에는 출력 한도 · 추론 강도 매개변수가 없어 realtime에는 이 키가 없다 |
 
 ### 10.10 U9 호출 방식 · 실패 사유 · 기존 어댑터

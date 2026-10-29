@@ -142,6 +142,30 @@ class CoreLunaClientTest {
         assertThat(lunaCalls()).hasSize(cases.size()).allSatisfy(line -> assertThat(line.get("level")).isEqualTo("WARN"));
     }
 
+    /** FT-1029-c: SCHEMA_INVALID 줄은 출력 모양과 글자 수만 더한다(본문은 없다). 성공 · 다른 실패 줄에는 붙지 않는다. */
+    @Test
+    void schemaInvalidLinesCarryOnlyTheOutputShapeAndLength() {
+        Map<String, String> cases = new LinkedHashMap<>();
+        cases.put("```json\n{\"characters\":[]}\n```", "NOT_JSON");
+        cases.put("[{\"characters\":[]}]", "NOT_OBJECT");
+        cases.put("{\"characters\":[]}\n설명을 덧붙였다", "TRAILING_CONTENT");
+        for (Map.Entry<String, String> entry : cases.entrySet()) {
+            stub.respond(Reply.ok(MODEL, entry.getKey()));
+            assertThat(failure(request(LunaPurpose.RESULT_TEXT)).reason()).isEqualTo(LunaFailureReason.SCHEMA_INVALID);
+        }
+        stub.respond(Reply.ok(MODEL, "{\"scenes\":[{\"sceneRunId\":\"x\",\"value\":\"none\",\"timing\":null}]}"));
+        failure(request(LunaPurpose.REJUDGMENT));
+        stub.respond(Reply.status(500));
+        failure(request(LunaPurpose.RESULT_TEXT));
+
+        var attrs = lunaCalls().stream().map(LogCapture::attrs).toList();
+        assertThat(attrs).extracting(line -> line.get("schemaFailure"))
+                .containsExactly("NOT_JSON", "NOT_OBJECT", "TRAILING_CONTENT", "CONTRACT_VIOLATION", null);
+        assertThat(attrs.get(2).get("outputChars")).isEqualTo("{\"characters\":[]}\n설명을 덧붙였다".length());
+        assertThat(attrs.get(4)).doesNotContainKey("outputChars");
+        assertThat(events.capture().lines()).noneMatch(line -> line.contains("설명을 덧붙였다") || line.contains("characters"));
+    }
+
     @Test
     void requestBoundedRetriesATransientFailureOnceAndASchemaMismatchOnceWithinThreeAttempts() {
         String valid = LunaTestFixtures.example("ai-scenario-review-output.schema.json");

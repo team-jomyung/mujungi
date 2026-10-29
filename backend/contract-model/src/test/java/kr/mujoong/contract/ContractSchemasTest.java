@@ -227,8 +227,27 @@ class ContractSchemasTest {
         assertThat(schema("guardrail-result.schema.json").validate(JSON.readTree(
                 "{\"decision\":\"BLOCK\",\"categories\":[],\"reasonCode\":\"모델이 쓴 긴 설명\",\"policyVersion\":\"guardrail-v1\"}")))
                 .as("reasonCode는 코드만").isNotEmpty();
-        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree("{\"candidates\":[{},{},{},{}]}")))
-                .as("후보 최대 3개").isNotEmpty();
+        // FT-1029-b: 후보 개수 · 칸 글자 수는 계약이 아니라 서버 검사(GoalCandidateValidator)가 후보마다 본다. 이름이 긴 후보 하나 · 9개째 후보 때문에
+        // 출력 전체가 SCHEMA_INVALID가 되지 않는다(실호출에서 displayName 13자 하나로 모든 후보를 잃음)
+        String candidate = "{\"indicator\":\"P2\",\"displayName\":\"대상을 구체적으로 말하기\",\"targetExpression\":\"떡볶이 먹으러 갔어\","
+                + "\"fourElements\":{\"situation\":\"s\",\"partner\":\"p\",\"intent\":\"i\",\"expression\":\"e\"},\"skillRef\":\"NONE\","
+                + "\"reasonText\":\"r\",\"evidence\":[{\"utteranceSeq\":2,\"quote\":\"엄마랑 그거 먹으러 갔어\"}],\"displayEvidence\":\"d\"}";
+        String nine = String.join(",", java.util.Collections.nCopies(9, candidate));
+        // FT-1029-b: 화용 지표 평가는 필수이고 지표 · 판정은 정해진 값만, 여섯 개를 한 번씩
+        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree("{\"candidates\":[]}")))
+                .as("assessment 필수").isNotEmpty();
+        String sixOk = "[{\"indicator\":\"P1\",\"rating\":\"OK\"},{\"indicator\":\"P2\",\"rating\":\"OK\"},{\"indicator\":\"P3\",\"rating\":\"OK\"},"
+                + "{\"indicator\":\"P4\",\"rating\":\"NOT_OBSERVED\"},{\"indicator\":\"P5\",\"rating\":\"NOT_OBSERVED\"},{\"indicator\":\"U5\",\"rating\":\"OK\"}]";
+        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree("{\"candidates\":[],\"assessment\":" + sixOk + "}")))
+                .as("후보 0개 · 지표 여섯 개").isEmpty();
+        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree("{\"candidates\":[" + nine + "],\"assessment\":" + sixOk + "}")))
+                .as("이름 13자 · 후보 9개도 계약은 통과(후보별 서버 검사)").isEmpty();
+        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree(
+                "{\"candidates\":[" + candidate.replace("\"P2\"", "\"P9\"") + "],\"assessment\":" + sixOk + "}")))
+                .as("지표 코드는 정해진 값만").isNotEmpty();
+        assertThat(schema("ai-goal-candidate-output.schema.json").validate(JSON.readTree(
+                "{\"candidates\":[],\"assessment\":" + sixOk.replace("\"U5\",\"rating\":\"OK\"", "\"U5\",\"rating\":\"SCORE_2\"") + "}")))
+                .as("판정은 NEED · OK · NOT_OBSERVED만").isNotEmpty();
         assertThat(schema("ai-seed-output.schema.json").validate(JSON.readTree("{\"skillName\":\"x\"}"))).isNotEmpty();
     }
 

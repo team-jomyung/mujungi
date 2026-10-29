@@ -23,7 +23,9 @@ public class GoalCandidateGateway {
     private final Optional<CoreLunaClient> luna;
     private final ChildKnowledgeService knowledge;
     private final GoalCandidateValidator validator;
-    private static final String PROMPT_VERSION="goal-candidates.v3";
+    private static final String PROMPT_VERSION="goal-candidates.v4";
+    /** 화용 지표 코드(FT-1029-b, ai-goal-candidate-output.schema.json assessment). */
+    private static final List<String> INDICATORS=List.of("P1","P2","P3","P4","P5","U5");
     private static final Map<String,String> CHECK_FIELDS=Map.of("goal-reason","REASON_TEXT","goal-display","DISPLAY_EVIDENCE","goal-name","DISPLAY_NAME","goal-target","TARGET_EXPRESSION");
     private final OutputChecker checker;
     private final EventLogger events;
@@ -45,13 +47,14 @@ public class GoalCandidateGateway {
         Map<String,String> references=new HashMap<>();
         request.replaceAll((key,value)->referenceIds(value,references));
         var quotes=childQuotes(objects(request.get("transcript")));
-        String prompt;try{prompt=new ClassPathResource("prompts/goal/goal-candidates.v3.txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
+        String prompt;try{prompt=new ClassPathResource("prompts/goal/"+PROMPT_VERSION+".txt").getContentAsString(StandardCharsets.UTF_8);}catch(java.io.IOException missing){throw new ResultAiException("INTERNAL");}
         access.run();LunaResult generated;
         try{generated=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES,PROMPT_VERSION,prompt,request,Map.of(),deadline));}
         catch(LunaException failed){throw new ResultAiException(failed.reason()==LunaFailureReason.TIMEOUT?"TIMEOUT":"PROVIDER_ERROR");}
         Map<String,Object> output=object(json.read(generated.outputJson(),Map.class));
         if(!(output.get("candidates") instanceof List<?>))throw new ResultAiException("SCHEMA_INVALID");
         var proposed=objects(output.get("candidates"));
+        assessed(guardian,proposed.size(),output.get("assessment"));
         var validated=validator.check(proposed,catalog.stream().map(s->s.seedId()).collect(java.util.stream.Collectors.toSet()),quotes);
         // 서버 검사에서 빠진 후보는 사유 코드만 남긴다(R-F14: 후보 글 · 인용 없음). 모델이 0개를 냈는지, 냈는데 서버가 버렸는지를 가른다
         for(var drop:validated.dropped())dropped(guardian,proposed.size(),drop);
@@ -67,6 +70,17 @@ public class GoalCandidateGateway {
             dropped(guardian,proposed.size(),new GoalCandidateValidator.Drop(validated.indexes().get(i),reason,CHECK_FIELDS.get(failed.id().substring(0,failed.id().lastIndexOf('-')))));
         }
         return List.copyOf(kept);
+    }
+    /** 화용 지표 평가 요약 한 줄(FT-1029-b). 지표 코드만 판정별로 나눠 싣고 근거 · 사유 글은 담지 않는다(R-F14). */
+    private void assessed(UUID guardian,int proposed,Object assessment){
+        Map<String,List<String>> byRating=new LinkedHashMap<>();
+        for(String rating:List.of("NEED","OK","NOT_OBSERVED"))byRating.put(rating,new ArrayList<>());
+        if(assessment instanceof List<?> rows)for(var row:rows)
+            if(row instanceof Map<?,?> item&&item.get("indicator") instanceof String indicator&&INDICATORS.contains(indicator)
+                    &&item.get("rating") instanceof String rating&&byRating.containsKey(rating))byRating.get(rating).add(indicator);
+        events.log(EventCode.GOAL_CANDIDATES_ASSESSED,EventLog.Component.CORE_MAINTENANCE,guardian,entry->entry.attr(AttrKey.PROMPT_VERSION,PROMPT_VERSION)
+                .attr(AttrKey.CANDIDATES_PROPOSED,proposed).attr(AttrKey.NEED_INDICATORS,byRating.get("NEED"))
+                .attr(AttrKey.OK_INDICATORS,byRating.get("OK")).attr(AttrKey.NOT_OBSERVED_INDICATORS,byRating.get("NOT_OBSERVED")));
     }
     private void dropped(UUID guardian,int proposed,GoalCandidateValidator.Drop drop){
         events.log(EventCode.GOAL_CANDIDATE_DROPPED,EventLog.Component.CORE_MAINTENANCE,guardian,entry->entry.attr(AttrKey.PROMPT_VERSION,PROMPT_VERSION)

@@ -86,6 +86,39 @@ public final class JsonCodec {
         }
     }
 
+    /** JSON 글의 최상위 모양. 공급자 출력이 왜 객체로 읽히지 않았는지 가르는 진단용이며 본문은 담지 않는다. */
+    public enum Shape {
+        /** JSON 객체 하나. */
+        OBJECT,
+        /** 읽히는 JSON이지만 최상위가 객체가 아니다(배열 · 문자열 · 숫자 등). */
+        NOT_OBJECT,
+        /** 앞부분은 JSON 객체인데 뒤에 다른 글이 붙어 있다(객체 두 번 · 설명 덧붙임 등). */
+        TRAILING_CONTENT,
+        /** JSON으로 읽히지 않는다(잘린 출력 · 마크다운 울타리 등). */
+        NOT_JSON
+    }
+
+    /** 글의 최상위 JSON 모양. OBJECT는 {@link #read}로 읽어 지도가 나오는 경우와 같다. */
+    public Shape shape(String text) {
+        if (text == null) {
+            return Shape.NOT_JSON;
+        }
+        try {
+            if (mapper.readValue(text, Object.class) instanceof Map<?, ?>) {
+                return Shape.OBJECT;
+            }
+        } catch (JacksonException e) {
+            // 엄격하게 읽히지 않으면 앞 값만 따로 읽어 어디서 어긋났는지 가른다
+        }
+        JsonNode first;
+        try {
+            first = mapper.readerFor(JsonNode.class).without(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readValue(text);
+        } catch (JacksonException e) {
+            return Shape.NOT_JSON;
+        }
+        return first != null && first.isObject() ? Shape.TRAILING_CONTENT : Shape.NOT_OBJECT;
+    }
+
     /**
      * 정규화 JSON: 객체 키를 사전순으로 정렬하고 공백 없이 쓴다. payload 해시(payload_hash · request_hash)의 입력이다(BR5.5).
      */

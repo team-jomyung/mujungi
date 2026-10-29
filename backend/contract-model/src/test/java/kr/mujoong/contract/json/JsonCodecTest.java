@@ -178,4 +178,25 @@ class JsonCodecTest {
         assertThat(CODEC.write(List.of(1, 2))).isEqualTo("[1,2]");
         assertThat(new JsonCodec().write(null)).isEqualTo("null");
     }
+
+    /** FT-1029-c: 공급자 출력 진단용 모양. OBJECT는 read로 지도가 읽히는 경우와 같다. */
+    @Test
+    void shapeTellsWhyTextIsNotAJsonObject() {
+        assertThat(CODEC.shape("{\"a\":1}")).isEqualTo(JsonCodec.Shape.OBJECT);
+        assertThat(CODEC.shape("  {\"a\":1}\n")).isEqualTo(JsonCodec.Shape.OBJECT);
+        assertThat(CODEC.shape("[1,2]")).isEqualTo(JsonCodec.Shape.NOT_OBJECT);
+        assertThat(CODEC.shape("\"글\"")).isEqualTo(JsonCodec.Shape.NOT_OBJECT);
+        assertThat(CODEC.shape("```json\n{}\n```")).isEqualTo(JsonCodec.Shape.NOT_JSON);
+        assertThat(CODEC.shape("{\"a\":")).isEqualTo(JsonCodec.Shape.NOT_JSON);
+        assertThat(CODEC.shape(null)).isEqualTo(JsonCodec.Shape.NOT_JSON);
+        // 뒤에 글이 붙은 객체: read가 거절하면 TRAILING_CONTENT, 받아 주면 OBJECT(read와 같은 판정)
+        String trailing = "{\"a\":1} 설명";
+        boolean readAccepts;
+        try {
+            readAccepts = CODEC.read(trailing, Object.class) instanceof java.util.Map<?, ?>;
+        } catch (JsonCodec.JsonCodecException e) {
+            readAccepts = false;
+        }
+        assertThat(CODEC.shape(trailing)).isEqualTo(readAccepts ? JsonCodec.Shape.OBJECT : JsonCodec.Shape.TRAILING_CONTENT);
+    }
 }

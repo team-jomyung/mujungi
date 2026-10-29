@@ -32,10 +32,19 @@ class GoalCandidateValidatorTest {
                 new GoalCandidateValidator.Drop(2,"SKILL_REF_UNKNOWN","SKILL_REF"),new GoalCandidateValidator.Drop(3,"FORBIDDEN_DICTIONARY","TARGET_EXPRESSION"),
                 new GoalCandidateValidator.Drop(4,"NO_EVIDENCE","EVIDENCE"),new GoalCandidateValidator.Drop(6,"DUPLICATE","NONE"));
     }
+    /** 전사 앞뒤 공백만 뺀 인용은 같은 발화로 받고 저장은 전사 원문으로 한다. 글자가 다르면 그대로 버린다. */
+    @Test void quoteDifferingOnlyBySurroundingSpaceKeepsTheStoredText(){
+        var trimmed=draft();trimmed.put("evidence",List.of(Map.of("utteranceSeq",1,"quote","같이 할래")));
+        var changed=draft();changed.put("displayName","다른 이름");changed.put("evidence",List.of(Map.of("utteranceSeq",1,"quote","같이 할래?")));
+        var checked=validator.check(List.of(trimmed,changed),Set.of(),Map.of(1L," 같이 할래"));
+        assertThat(checked.kept()).singleElement().satisfies(d->assertThat(d.evidence()).singleElement().extracting(GoalCandidateRepository.Evidence::quote).isEqualTo(" 같이 할래"));
+        assertThat(checked.dropped()).containsExactly(new GoalCandidateValidator.Drop(1,"QUOTE_MISMATCH","EVIDENCE"));
+    }
     @Test void candidatesBeyondTheCapAreReportedAsOverLimit(){
-        List<Map<String,Object>> drafts=new ArrayList<>();for(int i=0;i<4;i++){var d=draft();d.put("displayName","이름"+"가나다라".charAt(i));drafts.add(d);}
+        // FT-1029-b: 상한은 8개(이전 3개)
+        List<Map<String,Object>> drafts=new ArrayList<>();for(int i=0;i<9;i++){var d=draft();d.put("displayName","이름"+"가나다라마바사아자".charAt(i));drafts.add(d);}
         var checked=validator.check(drafts,Set.of(),Map.of(1L,"같이 할래"));
-        assertThat(checked.kept()).hasSize(3);assertThat(checked.dropped()).containsExactly(new GoalCandidateValidator.Drop(3,"OVER_LIMIT","NONE"));
+        assertThat(checked.kept()).hasSize(8);assertThat(checked.dropped()).containsExactly(new GoalCandidateValidator.Drop(8,"OVER_LIMIT","NONE"));
     }
     @Test void lengthDropNamesTheFourElementsField(){var d=draft();d.put("fourElements",Map.of("situation","놀이","partner","친구","intent","의도"));
         assertThat(validator.check(List.of(d),Set.of(),Map.of(1L,"같이 할래")).dropped()).containsExactly(new GoalCandidateValidator.Drop(0,"LENGTH","EXPRESSION"));}
