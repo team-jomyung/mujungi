@@ -1150,7 +1150,7 @@ paths:
     post:
       operationId: createReport
       x-unit: U6
-      summary: 상담용 리포트 접수 (선택 활동 1~10개)
+      summary: 상담용 리포트 접수 (선택 활동 1개 이상, 개수 상한 없음)
       security:
         - session: []
           csrf: []

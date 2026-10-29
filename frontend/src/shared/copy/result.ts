@@ -44,13 +44,12 @@ export const UNSTARTED_RECORD_COPY = {
 export const ACTIVITY_SELECTION_COPY = {
   filter: "대화 종류", all: "전체", freeTalk: "자유대화", practice: "연습대화",
   emptyFilter: "선택한 종류의 대화가 없어요.",
-  instruction: "리포트에 담을 대화를 최대 10개 골라 주세요.",
-  limit: "10개를 모두 골랐어요. 다른 대화를 담으려면 먼저 선택을 해제해 주세요.",
+  instruction: "리포트에 담을 대화를 골라 주세요.",
   clear: "선택 모두 해제",
   check: "✓", timeUnknown: "시각 미확인", selectionLabel: "리포트에 담을 대화",
   pages: "대화 목록 페이지", previous: "이전", next: "다음",
 } as const;
-export const reportSelectionCount = (count: number, max: number) => `선택 ${count} / ${max}개`;
+export const reportSelectionCount = (count: number) => `선택 ${count}개`;
 export const reportActivityPosition = (total: number, from: number, to: number) => `전체 ${total}개 · ${from}–${to}번째`;
 export const reportActivityLabel = (date: string, time: string | null, kind: string) => `${date} ${time ?? ACTIVITY_SELECTION_COPY.timeUnknown} · ${kind}`;
 export const reportActivityPage = (page: number, total: number) => `${page} / ${total}페이지`;

@@ -12,7 +12,6 @@ import { RESULT_TEMP_COPY as C } from "@/shared/copy/result";
 import { ACTIVITY_SELECTION_COPY as S, reportSelectionCount, reportActivityPosition, reportActivityLabel, reportActivityPage } from "@/shared/copy/result";
 import { ActivityTypeFilter, type ActivityTypeFilterValue } from "../../common/components/ActivityTypeFilter";
 import { formatHhmm } from "@/shared/copy/timeText";
-const MAX_ACTIVITIES = 10;
 const PAGE_SIZE = 10;
 type Mode = "RANGE" | "GENERATING" | "FAILED";
 export function ReportRangeScreen() {
@@ -42,7 +41,7 @@ export function ReportRangeScreen() {
     setSelectedIds(previous => {
       const next = new Set(preview.data?.activities.filter(a => previous.has(a.sessionId)).map(a => a.sessionId));
       if (next.has(sessionId)) next.delete(sessionId);
-      else if (next.size < MAX_ACTIVITIES) next.add(sessionId);
+      else next.add(sessionId);
       return next;
     });
   }
@@ -50,7 +49,7 @@ export function ReportRangeScreen() {
   function chooseDate(date: string) { setQuick("custom"); if (anchor === null) { setAnchor(date); change(date, date); } else { change(date < anchor ? date : anchor, date < anchor ? anchor : date); setAnchor(null); } }
   function cancel() { generation.current += 1; submitting.current = false; setActive(null); setMode("RANGE"); }
   const create = useCallback(async (fresh = false) => {
-    if (submitting.current || selected.length === 0 || selected.length > MAX_ACTIVITIES || selectionUnavailable) return;
+    if (submitting.current || selected.length === 0 || selectionUnavailable) return;
     submitting.current = true;
     const token = ++generation.current;
     if (fresh || key.current === null) key.current = crypto.randomUUID();
@@ -75,17 +74,16 @@ export function ReportRangeScreen() {
       <section aria-label={S.selectionLabel} aria-busy={preview.isFetching}>
         <p>{S.instruction}</p>
         <div className="mj-report-selection-summary">
-          <strong role="status" data-testid="report-selection-count">{reportSelectionCount(selected.length, MAX_ACTIVITIES)}</strong>
+          <strong role="status" data-testid="report-selection-count">{reportSelectionCount(selected.length)}</strong>
           <button type="button" disabled={selected.length === 0 || selectionUnavailable} onClick={() => { setSelectedIds(new Set()); key.current = null; }}>{S.clear}</button>
         </div>
-        {selected.length === MAX_ACTIVITIES ? <p role="status">{S.limit}</p> : null}
         {preview.isFetching ? <p role="status">{C.readingActivities}</p> : null}
         {filtered.length > 0 ? <p>{reportActivityPosition(filtered.length, currentPage * PAGE_SIZE + 1, Math.min((currentPage + 1) * PAGE_SIZE, filtered.length))}</p> : null}
         <div className="mj-report-activity-list">
           {visible.map(a => {
             const checked = selectedIds.has(a.sessionId);
             return <button type="button" role="checkbox" aria-checked={checked} key={a.sessionId}
-              disabled={selectionUnavailable || (!checked && selected.length >= MAX_ACTIVITIES)}
+              disabled={selectionUnavailable}
               className="mj-card mj-report-activity" data-testid={`report-range-item-${a.sessionId}`} onClick={() => toggle(a.sessionId)}>
               <span className="mj-report-activity__check" aria-hidden="true">{checked ? S.check : ""}</span>
               <span className="mj-report-activity__body">
@@ -103,7 +101,7 @@ export function ReportRangeScreen() {
         </nav> : null}
       </section>
       {preview.data?.activities.length === 0 ? <div data-testid="report-range-empty"><p>{C.emptyRange}</p><p>{C.emptyRangeDetail}</p></div> : null}
-      <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="report-range-create" disabled={selected.length === 0 || selected.length > MAX_ACTIVITIES || selectionUnavailable} onClick={() => void create()}>{selected.length === 0 ? "리포트 만들기" : `활동 ${selected.length}개로 리포트 만들기`}</button>
+      <button type="button" className="mj-button mj-button--primary mj-button--block" data-testid="report-range-create" disabled={selected.length === 0 || selectionUnavailable} onClick={() => void create()}>{selected.length === 0 ? "리포트 만들기" : `활동 ${selected.length}개로 리포트 만들기`}</button>
     </>}
   </main></div>;
 }

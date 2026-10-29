@@ -18,7 +18,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** BR9.1~BR9.3·BR10.2~BR10.3: 보호자 잠금 안에서 멱등 생성과 저장·버림을 직렬화한다. */
 @Service
 public class ReportService {
-    public static final int MAX_ACTIVITIES=10;
     public static final ZoneId ZONE=ZoneId.of("Asia/Seoul");
     public static final String NOTICE="이 리포트는 진단 결과가 아니에요. 전문가에게 보여 줄 참고 자료예요. 제한사항은 마지막 항목에 있어요.";
     private final ReportRepository reports;private final ResultRecordReader records;private final ChildProfileService children;
@@ -48,7 +47,7 @@ public class ReportService {
     }
     public Created create(UUID guardian,LocalDate from,LocalDate to,List<UUID> sessions,String key){
         validateDates(from,to);
-        if(sessions==null||sessions.isEmpty()||sessions.size()>MAX_ACTIVITIES||sessions.stream().anyMatch(Objects::isNull)||new HashSet<>(sessions).size()!=sessions.size())throw invalid();
+        if(sessions==null||sessions.isEmpty()||sessions.stream().anyMatch(Objects::isNull)||new HashSet<>(sessions).size()!=sessions.size())throw invalid();
         try{if(key==null||key.length()!=36)throw invalid();UUID.fromString(key);}catch(RuntimeException e){throw invalid();}
         String hash=json.sha256OfCanonical(json.write(Map.of("from",from.toString(),"to",to.toString(),"sessionIds",sessions.stream().map(UUID::toString).sorted().toList())));
         return tx.execute(t->{

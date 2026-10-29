@@ -7,12 +7,13 @@ import kr.mujoong.core.common.error.CoreApiException;
 import org.junit.jupiter.api.*;
 @Tag("result-report") @Tag("db") class ReportServiceIT extends WebTestSupport {
     ReportService service(){return app.bean(ReportService.class);}LocalDate today(){return app.clock().now().atZone(ReportService.ZONE).toLocalDate();}
-    @Test void atMostTenActivitiesAreAcceptedAndRejectedRequestsLeaveExistingReportUntouched(){
+    @Test void moreThanTenActivitiesAreAcceptedAndInvalidRequestsLeaveExistingReportUntouched(){
         var f=family();var sessions=new ArrayList<UUID>();
         for(int i=0;i<11;i++){var session=copy(f,"ENDED",null);record(f,session,"ENDED",3);sessions.add(session);}
-        var accepted=service().create(f.guardianId(),today(),today(),sessions.subList(0,10),UUID.randomUUID().toString());
-        assertThat(app.bean(ReportRepository.class).activities(accepted.reportId())).hasSize(10);
-        assertThatThrownBy(()->service().create(f.guardianId(),today(),today(),sessions,UUID.randomUUID().toString()))
+        var accepted=service().create(f.guardianId(),today(),today(),sessions,UUID.randomUUID().toString());
+        assertThat(app.bean(ReportRepository.class).activities(accepted.reportId())).hasSize(11);
+        var invalid=new ArrayList<>(sessions);invalid.add(UUID.randomUUID());
+        assertThatThrownBy(()->service().create(f.guardianId(),today(),today(),invalid,UUID.randomUUID().toString()))
             .isInstanceOf(CoreApiException.class);
         assertThat(service().owned(f.guardianId(),accepted.reportId()).status()).isEqualTo("GENERATING");
         assertThat(app.bean(ReportRepository.class).unsaved(f.guardianId())).hasSize(1);
