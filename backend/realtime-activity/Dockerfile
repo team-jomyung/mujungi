@@ -19,11 +19,14 @@ ARG JRE_IMAGE=eclipse-temurin:21.0.12_8-jre-noble@sha256:7739f0ffce786528961eea6
 # openssl 3.0.13-0ubuntu3.15) 고친 판 .deb를 Ubuntu 공식 보안 저장소에서 판과 sha256을 고정해 받는다.
 # BuildKit ADD가 받으므로 RUN 단계 네트워크가 없다(R-03). 실행 이미지에는 .deb가 남지 않는다(bind 마운트로만 설치).
 # core-api · migrate Dockerfile과 같은 값이다(셋을 함께 바꾼다). 기반 다이제스트가 이 판 이상을 담으면 이 단계를 지운다.
+# libbrotli1은 기반 판(1.1.0-2build2)의 CVE-2026-111497(HIGH)을 고친 판이다(JIRA-296).
 FROM scratch AS os-patches
 ADD --checksum=sha256:219f43b1cd836a4da550938db5fda93160d269d39a4edcf1f1ce698a470db797 \
     https://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb /debs/
 ADD --checksum=sha256:675b84971ffd4467707008c25ef7520f90ea7c23ef27b7a76b0dccf1d7c4dc3f \
     https://security.ubuntu.com/ubuntu/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb /debs/
+ADD --checksum=sha256:70b188a86d81f30d7510aab30e25d638ed5037dded6691af1533952b71ac61de \
+    https://security.ubuntu.com/ubuntu/pool/main/b/brotli/libbrotli1_1.1.0-2ubuntu0.1_amd64.deb /debs/
 
 # 1단계: bootJar를 계층별로 푼다
 FROM ${JRE_IMAGE} AS layers
