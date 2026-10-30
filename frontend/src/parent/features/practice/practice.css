@@ -24,6 +24,7 @@
 .mj-practice__notice { font-size: 0.875rem; color: var(--color-text-secondary); text-align: center; }
 /* 상황 준비 중(최대 1분): 버튼을 흐리게 두지 않고 회전 표시로 작업 중임을 보인다(FT-1030-a) */
 .mj-practice__start-busy:disabled { opacity: 0.85; cursor: progress; }
+.mj-practice__start-busy .mj-spinner { margin-right: 0; }
 .mj-spinner {
   display: inline-block;
   flex: none;

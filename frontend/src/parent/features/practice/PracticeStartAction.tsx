@@ -72,12 +72,12 @@ export function PracticeStartAction({ selected, owned, port, newKey, onAccepted,
   else if (outcome?.kind === "rejected") message = U5B_COPY.rejected[outcome.code as keyof typeof U5B_COPY.rejected] ?? U5B_COPY.otherRejected;
   return <div className="mj-practice__start">
     <button type="button" className={`mj-button mj-button--primary mj-button--block${sending ? " mj-practice__start-busy" : ""}`}
-      data-testid="practice-start" aria-busy={sending}
+      data-testid="practice-start" aria-busy={sending} aria-label={sending ? PRACTICE_COPY.start : undefined}
       disabled={sending || (!unresolved && (count === 0 || count > MAX_PRACTICE_GOALS || blocked)) || outcome?.kind === "accepted"}
       onClick={() => { void submit(); }}>
-      {/* 상황 준비는 1분까지 걸린다(FT-1030-a): 기다리는 동안 작업 중임을 보인다 */}
-      {sending && <span className="mj-spinner" data-testid="practice-start-spinner" aria-hidden="true" />}
-      {count ? PRACTICE_COPY.start : PRACTICE_COPY.choose}
+      {/* 상황 준비는 1분까지 걸린다(FT-1030-a): 기다리는 동안 문구 없이 회전 표시만 두고, 이름은 aria-label로 남긴다 */}
+      {sending ? <span className="mj-spinner" data-testid="practice-start-spinner" aria-hidden="true" />
+        : count ? PRACTICE_COPY.start : PRACTICE_COPY.choose}
     </button>
     <p className="mj-practice__notice" role="status" aria-live="polite">{message}</p>
   </div>;

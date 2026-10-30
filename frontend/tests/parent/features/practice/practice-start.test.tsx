@@ -75,9 +75,13 @@ it("상황 준비를 기다리는 동안만 단추에 로딩 표시를 둔다", 
   fireEvent.click(screen.getByRole("button"));
   expect(await screen.findByTestId("practice-start-spinner")).toBeInTheDocument();
   expect(screen.getByRole("button")).toHaveAttribute("aria-busy", "true");
+  // 기다리는 동안 단추에는 회전 표시만 보이고 문구는 없다. 화면 읽기 이름은 남긴다
+  expect(screen.getByRole("button")).toHaveTextContent(/^$/);
+  expect(screen.getByRole("button", { name: "연습 시작" })).toBeInTheDocument();
   await act(async () => { pending.resolve({ kind: "rejected", code: "SCENARIO_GEN_FAILED" }); });
   expect(screen.queryByTestId("practice-start-spinner")).toBeNull();
   expect(screen.getByRole("button")).toHaveAttribute("aria-busy", "false");
+  expect(screen.getByRole("button")).toHaveTextContent("연습 시작");
 });
 
 // FT-1030-c: 준비 중에 다른 탭으로 갔다 돌아와도 같은 요청의 준비 중 상태를 이어 보이고, 새 목표 선택 · 시작을 막는다.
