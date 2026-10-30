@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import kr.mujoong.core.textai.GeneratedScenario;
+import kr.mujoong.core.textai.ScenarioReview;
 import kr.mujoong.core.textai.ScenarioScript;
 import kr.mujoong.core.textai.ScenarioScriptProvider;
 import kr.mujoong.core.textai.TextAiProperties;
@@ -55,7 +56,7 @@ public final class ScenarioScriptGenerator {
     }
     public Result generate(Input input,ScenarioDeadline deadline){
         var budget=new Budget();ScenarioScript.Scene preserved=null;String model=null;
-        Input active=input;List<String> correctionReasons=List.of();ScenarioScript scriptToRepair=null;Approved approvedBeforeVariant=null;
+        Input active=input;List<String> correctionReasons=List.of();List<ScenarioReview.Finding> correctionFindings=List.of();ScenarioScript scriptToRepair=null;Approved approvedBeforeVariant=null;
         Duration lastRoundCost=null,lastReviewCost=null;
         for(int correction=0;correction<=2;correction++){
             if(correction==2 && (correctionReasons.isEmpty() || !correctionReasons.stream().allMatch(
@@ -71,6 +72,9 @@ public final class ScenarioScriptGenerator {
             try {
                 Map<String,Object> payload=new LinkedHashMap<>(current.payload());
                 if(correction>0){payload.put("correction",true);payload.put("correctionReasons",correctionReasons);
+                    // 검토가 지목한 점검 항목 · 필드(닫힌 값)도 넘긴다. 사유만 받으면 어느 필드를 고칠지 몰라 지목된 필드를 그대로 둔
+                    // 대본을 다시 냈다(2026-10-30 합성 실호출, FT-1030-f)
+                    if(!correctionFindings.isEmpty())payload.put("correctionFindings",findingsInput(correctionFindings));
                     if(scriptToRepair!=null)payload.put("scriptToRepair",scriptToRepair);}
                 if(preserved!=null)payload.put("baseToPreserve",preserved);
                 var generationStartedWith=deadline.remaining();
@@ -118,6 +122,7 @@ public final class ScenarioScriptGenerator {
                     // 다음 생성은 이 대본을 고쳐 만드므로 거절 이유를 함께 넘긴다. 빠지면 이유 없이 같은 대본을 다시 고쳐
                     // 같은 사유로 또 거절됐다(2026-10-28 실키, FT-1028-c). 변형 판정은 BASE만 만드는 다음 생성과 무관해 넘기지 않는다
                     correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                    correctionFindings=reviewed.review().findings();
                     if(result==ScenarioScriptValidation.Result.INVALID_BASE)correctionReasons.add(result.name());
                     active=withoutGraph(current);preserved=null;continue;
                 }
@@ -139,6 +144,7 @@ public final class ScenarioScriptGenerator {
                 if(result==ScenarioScriptValidation.Result.VALID&&reviewed.review().approved())
                     return approved(script,model,reviewed.model(),current,budget,deadline);
                 correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
+                correctionFindings=reviewed.review().findings();
                 if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioValidation_"+result.name());
                 if(!reviewed.review().approved())diagnoseReview(reviewed.review());
                 if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
@@ -261,12 +267,16 @@ public final class ScenarioScriptGenerator {
             throw new ScenarioScriptProvider.Failure(ScenarioScriptProvider.Failure.Kind.TRANSIENT,Optional.empty());
         }
     }
+    /** 검토 지적을 생성 입력 모양(사유 · 점검 항목 · 필드, 모두 닫힌 값)으로 바꾼다. 대본 원문 · 자유 설명은 담지 않는다. */
+    private static List<Map<String,String>> findingsInput(List<ScenarioReview.Finding> findings){
+        return findings.stream().map(f->Map.of("reason",f.reason(),"check",f.check(),"field",f.field())).toList();
+    }
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
-        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v5");
+        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v6");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v4"),new Scenario.Generation(model,"scenario-generation.v5",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v5"),new Scenario.Generation(model,"scenario-generation.v6",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     private static boolean variantReason(String code){return java.util.Set.of("INVARIANT_MISMATCH","SKILL_MISMATCH","TRANSFER_MISMATCH","UNCHANGED_VARIANT").contains(code);}
     private static boolean metadata(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,79}");}

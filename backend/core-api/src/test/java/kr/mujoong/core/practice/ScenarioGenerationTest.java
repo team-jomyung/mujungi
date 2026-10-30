@@ -30,6 +30,20 @@ class ScenarioGenerationTest {
         run();
         assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH","ScenarioReviewFinding_GOAL_MISMATCH_OPPORTUNITY_opportunitySentence");
     }
+    /** FT-1030-f: 수정 생성은 검토가 지목한 점검 항목 · 필드를 닫힌 값으로 받고, 지적이 없던 첫 생성 · 지적 없는 거절에는 넣지 않는다. */
+    @Test void repairReceivesTheFieldsTheReviewPointedAt(){
+        var finding=new ScenarioReview.Finding("GOAL_MISMATCH","OPPORTUNITY","opportunitySentence");
+        when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("REJECT",List.of("GOAL_MISMATCH"),List.of(finding)),"fake-review"),
+                reject("INCOMPLETE_SCENE"),approve());
+        run();
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(3)).generate(calls.capture());
+        assertThat(calls.getAllValues().get(0).input()).doesNotContainKey("correctionFindings");
+        assertThat(calls.getAllValues().get(1).input()).containsEntry("correctionReasons",List.of("GOAL_MISMATCH"))
+                .containsEntry("correctionFindings",List.of(Map.of("reason","GOAL_MISMATCH","check","OPPORTUNITY","field","opportunitySentence")));
+        // 다음 거절에 지적이 없으면 앞 라운드 지적을 끌고 가지 않는다
+        assertThat(calls.getAllValues().get(2).input()).containsEntry("correctionReasons",List.of("INCOMPLETE_SCENE")).doesNotContainKey("correctionFindings");
+    }
     /** FT-1028-c: 직전 라운드만큼 시간이 남지 않으면 검토를 끝낼 수 없는 생성 호출을 쓰지 않는다. */
     @Test void aRoundThatCannotFinishBeforeTheDeadlineIsNotStarted(){
         var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
