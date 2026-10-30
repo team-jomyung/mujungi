@@ -161,6 +161,7 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.text-ai.request-timeout` | `10s` | core-api | 호출 한 번의 상한 | U5a-J7 |
+| `mujoong.text-ai.scenario.request-timeout` | `15s` | core-api | 연습 상황 생성 · 검토 호출 한 번의 상한(나머지 텍스트 AI 호출은 위 10초). 그래프 맥락 · 최근 노출 · 수정 요청이 붙으면 7 ~ 10초가 걸려 10초에 자주 걸렸다. 상황 준비 전체 예산(`scenario-request-timeout` 60초)은 그대로다 | FT-1030-n |
 | `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
 | `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
 | `mujoong.timing.practice.scenario-request-timeout` | `60s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한. 독립 검토·보완을 포함한다. 30초에서 60초로 늘렸다 | U5a-J18 · 연습 시작 신뢰성 보완 · FT-1030-a |

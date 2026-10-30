@@ -266,6 +266,9 @@ mujoong:
   # 저장 대화 실호출: medium 구조화가 10초를 초과했다. 목적별 none과 유한 시한을 사용하고 검증·분류는 유지한다.
   text-ai:
     request-timeout: 10s
+    scenario:
+      # 연습 상황 생성 · 검토 호출 한 번의 상한. 그래프 맥락 · 최근 노출 · 수정 요청이 붙으면 7~10초가 걸려 공통 10초에 자주 걸렸다(FT-1030-n)
+      request-timeout: 15s
     result:
       # 목표 후보(low)가 긴 대화에서 14~15초까지 걸려 20s에서 40s로 늘렸고(FT-1027-i), 지표 평가 · 후보 최대 8개 · medium 추론(34~64초)으로 90s로 늘렸다(FT-1029-b).
       # 시도 전체는 timing.result.attempt-timeout(150s)이 막는다

@@ -46,6 +46,14 @@ class RulesTest {
                 + (plan.context().participants().equals(base.participants()) ? 0 : 1);
         assertThat(changes).isEqualTo(1);
     }
+    // FT-1030-p: 같은 맥락 변형은 장소를 먼저 바꾸고, 그 장소가 이미 노출됐으면 활동, 참여자는 마지막이다(이름순으로 늘 참여자만 바뀌던 것을 대체)
+    @Test void sameContextPrefersPlaceThenTopicOverParticipants() {
+        var plan = planner.plan(seed, base, List.of()).orElseThrow();
+        assertThat(plan.changedField()).isEqualTo("place");
+        var places = java.util.stream.Stream.of("도서관", "운동장").map(place -> new VariantPlanner.Exposure(seed.seedId(),
+                new VariantPlanner.Context(base.topic(), place, base.participants(), base.relationship(), base.situation()))).toList();
+        assertThat(planner.plan(seed, base, places).orElseThrow().changedField()).isEqualTo("topic");
+    }
     @Test void twoExposuresStaySameContext() {
         assertThat(planner.plan(seed, base, java.util.Collections.nCopies(2, new VariantPlanner.Exposure(seed.seedId(), base)))
                 .orElseThrow().grade()).isEqualTo("SAME_CONTEXT");

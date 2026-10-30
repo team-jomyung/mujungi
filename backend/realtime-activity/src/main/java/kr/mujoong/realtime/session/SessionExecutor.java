@@ -483,6 +483,22 @@ public final class SessionExecutor {
     private String inputGroupId;
     private boolean inputGroupDuringIntroduction;
     private long inputGroupSeq;
+    /**
+     * 승인 문장 낭독이 대기 중일 때 연 입력 묶음은 조각을 바로 기록하지 않고 확정 때 기록한다. 공급자가 낭독할 승인 문장을 아이 입력 전사로 보낸 일이
+     * 있어(2026-10-30 실키, 기기 재생 전 · 공급자 첫 출력 전), 확정 때 그 문장과 같으면 아이 말로 받지 않고 버린다(FT-1030-q).
+     */
+    private boolean inputGroupDeferred;
+    /** 지금 입력 묶음 첫 조각의 공급자 시간선 시작(ms, 없으면 -1). 진단용. */
+    private long inputGroupStartMs = -1;
+    /** 확정 중인 입력 묶음의 시간선 시작(진단용, 확정 입구로 넘긴다). */
+    private long confirmingInputStartMs = -1;
+    /** 확정 중인 입력 묶음이 낭독 대기 때문에 조각을 기록하지 않았는가. */
+    private boolean confirmingDeferred;
+    /** 마지막 지시 확인 사건의 시간선 구간(진단용). */
+    private long lastAppendedStartMs = -1;
+    private long lastAppendedEndMs = -1;
+    /** 승인 문장과 같은지 볼 아이 전사의 최소 글자 수(공백 · 문장부호 제외). '응' 같은 짧은 대답이 우연히 포함돼 버려지지 않게 한다. 시간 값이 아니다. */
+    static final int ECHO_MIN_CHARS = 6;
     private final List<Object> pendingRetry = new ArrayList<>();
 
     /** 기기 표식 · 끝내기 구역 협력 객체(실행기 스레드 전용). */
@@ -2448,6 +2464,8 @@ public final class SessionExecutor {
                 // 사용량 초는 파싱만 한다(실호출 도구 보고서가 기록). 지표 이름은 contracts 표에 없어 이 단위에서 더하지 않는다
             }
             case ProviderEvent.InstructionsAppended appended -> {
+                lastAppendedStartMs = appended.startMs();
+                lastAppendedEndMs = appended.endMs();
                 if (ctx.outputGen().onAppended(appended.clientEventId(), appended.endMs())) {
                     judgment.onInstructionAcked();
                 }
@@ -2718,8 +2736,10 @@ public final class SessionExecutor {
                 sealAndGate(true);
             }
             // 아이 입력이 시작되면 모아 둔 AI 전사를 먼저 한 행으로 낸다(보호자 화면의 순서가 말한 순서와 같게)
-            ctx.transcripts().endStream(at);
-            ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            if (!inputGroupDeferred) {
+                ctx.transcripts().endStream(at);
+                ctx.transcripts().childDelta(inputGroupId, delta.delta(), at);
+            }
         }
     }
 
@@ -2734,6 +2754,8 @@ public final class SessionExecutor {
             if (!inputGroupDuringIntroduction) inputGroupOpens++;
             inputGroupId = delta.itemId() != null ? delta.itemId() : "in-" + (++inputGroupSeq);
             inputGroup.setLength(0);
+            inputGroupDeferred = approvedSpeechPending();
+            inputGroupStartMs = delta.startMs();
         }
         inputGroup.append(delta.delta());
         ctx.timers().arm(Kind.INPUT_TRANSCRIPT_QUIET, ctx.services().settings().inputTranscriptQuiet());
@@ -2744,6 +2766,8 @@ public final class SessionExecutor {
         ctx.timers().cancel(Kind.INPUT_TRANSCRIPT_QUIET);
         inputGroupId = null;
         inputGroupDuringIntroduction = false;
+        inputGroupDeferred = false;
+        inputGroupStartMs = -1;
         inputGroup.setLength(0);
     }
 
@@ -2758,6 +2782,8 @@ public final class SessionExecutor {
         String id = inputGroupId;
         String text = inputGroup.toString();
         boolean duringIntroduction = inputGroupDuringIntroduction;
+        confirmingInputStartMs = inputGroupStartMs;
+        confirmingDeferred = inputGroupDeferred;
         clearInputGroup();
         if (id == null || text.isBlank()) {
             return;
@@ -2771,6 +2797,35 @@ public final class SessionExecutor {
             return;
         }
         onConfirmedChildTranscript(done, at, duringIntroduction);
+    }
+
+    /** 연습에서 승인 문장 낭독(생성 발화 아님)이 아직 끝나지 않았는가. */
+    private boolean approvedSpeechPending() {
+        var speech = pendingPracticeSpeech;
+        return practice != null && speech != null && !speech.generated();
+    }
+
+    /**
+     * 승인 문장 낭독 대기 중 확정된 아이 전사를 진단하고, 낭독할 문장과 같으면 아이 말로 받지 않는다(FT-1030-q). 원문은 남기지 않고 사유 코드만 남긴다
+     * (R-F14): 일치 여부와, 입력 전사 시간선이 마지막 지시 확인 구간보다 앞 · 안 · 뒤인지.
+     */
+    private boolean approvedSpeechEcho(String transcript, long inputStartMs) {
+        if (!approvedSpeechPending() || transcript == null) return false;
+        String child = compactSpeech(transcript);
+        boolean match = child.length() >= ECHO_MIN_CHARS && compactSpeech(pendingPracticeSpeech.text()).contains(child);
+        var events = ctx.services().events();
+        events.appError(EventLog.Component.VOICE_RELAY, "PracticeChildInputDuringApprovedSpeech_" + (match ? "MATCH" : "NO_MATCH"),
+                EventCode.Level.INFO);
+        if (inputStartMs >= 0 && lastAppendedStartMs >= 0) {
+            String where = inputStartMs < lastAppendedStartMs ? "BEFORE_APPEND" : inputStartMs <= lastAppendedEndMs ? "IN_APPEND" : "AFTER_APPEND";
+            events.appError(EventLog.Component.VOICE_RELAY, "PracticeChildInputTimeline_" + where, EventCode.Level.INFO);
+        }
+        if (match) events.appError(EventLog.Component.VOICE_RELAY, "PracticeChildTranscriptEchoDropped", EventCode.Level.INFO);
+        return match;
+    }
+
+    static String compactSpeech(String text) {
+        return text == null ? "" : text.replaceAll("[\\s\\p{Punct}…“”‘’·]", "");
     }
 
     /** 정산 창이 끝날 때 묶던 입력 전사가 있으면 정산 창 규칙으로 확정한다(발화 시작이 ended_at보다 이르면 저장). */
@@ -2801,7 +2856,17 @@ public final class SessionExecutor {
             joinFlow.onJoinReply(done.transcript(), at, ctx.inputBeganAt() == null ? at : ctx.inputBeganAt());
             return;
         }
+        long inputStartMs = confirmingInputStartMs;
+        boolean deferred = confirmingDeferred;
+        confirmingInputStartMs = -1;
+        confirmingDeferred = false;
+        if (inRelayRange() && approvedSpeechEcho(done.transcript(), inputStartMs)) {
+            ctx.inputBeganAt(null);
+            return;
+        }
         if (inRelayRange()) {
+            // 낭독 대기 중 미뤄 둔 묶음이면 여기서 AI 흐름을 먼저 닫고 아래에서 확정 행으로 기록한다(보호자 화면의 순서)
+            if (deferred) ctx.transcripts().endStream(at);
             // JIRA-262: 비언어 표지([cry 등) · 앞머리 문장부호 잡음을 지운 글로 저장 · 판정 · 제브 문맥 · 종료 판정을 한다(표지만 있던 말은 빈 전사 =
             // 불확실). 참여 확인 대답(위)은 지금 동작을 바꾸지 않으려고 정리하지 않는다
             String cleaned = kr.mujoong.realtime.log.TranscriptMarkers.cleanChild(done.transcript());

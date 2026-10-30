@@ -22,6 +22,15 @@ class ScenarioGenerationTest {
         when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
         run();assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH");
     }
+    // 2026-10-30 합성 실호출: 한국어 장면에 일본어 문장이 섞여 나왔다. 가나 · 한자가 들어 있으면 사유 코드로 남기고, 한글 · 문장부호만이면 남기지 않는다
+    @Test void foreignScriptInChildFacingTextIsDetected(){
+        var korean=new ScenarioScript(List.of(base()));
+        assertThat(ScenarioScriptGenerator.foreignScript(korean)).isFalse();
+        var kana=new ScenarioScript(List.of(base().withDescription(base().sceneDescription()+" 今日はそこまでにしようかな")));
+        assertThat(ScenarioScriptGenerator.foreignScript(kana)).isTrue();
+        var hanzi=new ScenarioScript(List.of(base().withDescription(base().sceneDescription()+" 友達")));
+        assertThat(ScenarioScriptGenerator.foreignScript(hanzi)).isTrue();
+    }
     /** FT-1028-c: 거절 사유마다 걸린 점검 항목 · 필드를 고정 코드로 남긴다. */
     @Test void reviewFindingsAreRecordedAsFixedCodes(){
         var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
@@ -91,7 +100,9 @@ class ScenarioGenerationTest {
         assertThat(result.details().scenes().getFirst().sceneDescription()).isEqualTo(base().sceneDescription());
     }
     @Test void rejectionUsesOneContentCorrectionThenSeparateReview(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());assertThat(run().details().generation().calls()).isEqualTo(4);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
-    @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    // FT-1030-l: 반복도 마지막 수정 라운드를 쓴다. 세 라운드 모두 거절되면 여전히 발급하지 않는다
+    @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());}
+    @Test void nonRepairableRejectionStillStopsAfterTwoRounds(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void correctionReceivesTheRejectionReasonWithoutAcceptingTheRejectedScript(){
         when(provider.review(any())).thenReturn(reject("REPETITION"),approve());
         run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);

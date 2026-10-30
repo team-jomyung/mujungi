@@ -23,11 +23,11 @@ class GoalCandidateGatewayTest {
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).isEmpty();verify(checker,times(1)).check(anyList(),eq(deadline),any(Runnable.class));
     }
     /**
-     * FT-1027-g · FT-1027-i · FT-1029-b: 목표 후보는 관찰된 지원 필요에서 만든다(goal-candidates.v4). v4는 평가 기준표 지표 여섯 개를 모두 평가하고
+     * FT-1027-g · FT-1027-i · FT-1029-b: 목표 후보는 관찰된 지원 필요에서 만든다(goal-candidates.v4 이후). v4는 평가 기준표 지표 여섯 개를 모두 평가하고
      * 지시어만으로 가리키기 · 낱말 대신 '그거'를 P2 지원 필요로 보며, 상대가 되물어 해결된 경우도 빼지 않는다.
      */
     @Test void sendsTheAllIndicatorsPromptVersionFour(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());
-        assertThat(request.getValue().promptVersion()).isEqualTo("goal-candidates.v4");
+        assertThat(request.getValue().promptVersion()).isEqualTo("goal-candidates.v5");
         assertThat(request.getValue().instructions()).contains("이미 적절하게 사용한 표현만 있는 경우에도 빈 배열이다","다음 여섯 지표를 하나도 빠뜨리지 않고 평가한다",
                 "'엄마랑 그거 먹으러 갔어'","'그거 있잖아 그거'","상대가 되물어 결국 뜻이 통했더라도","최대 8개","assessment에는 여섯 지표를 한 번씩")
                 .doesNotContain("완성 문장을 다시 말하는 목표를 만들지 않는다","최대 3개");
@@ -36,6 +36,10 @@ class GoalCandidateGatewayTest {
         // PERFORM_RUBRIC P1(응답) · P3(화제)와 씨앗 정의로 다시 확인하는 문장. 모욕 · 무시하는 말 자체는 근거가 아니다(3-2)
         assertThat(request.getValue().instructions()).contains("아이가 그에 답하지 않고 관련 없는 말을 했다","연결이나 알림 없이 자기 화제로 바꿨다",
                 "상대를 탓하거나 무시하는 말 자체는 응답·화제 기준의 근거가 아니다","그 seedId를 skillRef로 쓰고, 그 정의에 비추어 근거가 맞는지 다시 확인한다");}
+    /** FT-1030-m: v5는 목표 표현 · 네 요소에 이번 대화의 특정 물건 · 화제를 넣지 않고 자리 표시로 두게 한다(여러 새 장면에서 연습하므로). */
+    @Test void v5KeepsTargetExpressionFreeOfThisConversationsObjects(){run(Map.of());var request=ArgumentCaptor.forClass(LunaRequest.class);verify(luna).call(request.capture());
+        assertThat(request.getValue().instructions()).contains("targetExpression과 fourElements(situation, intent, expression)에도 이번 대화의 특정 활동·물건·인물·장소·화제",
+                "'내 ○○는 △△할 수 있고 □□도 돼.'");}
     /** FT-1027-i: AI가 같은 말을 되풀이한 구간은 보내지 않고, 그 구간의 아이 발화를 인용한 후보는 인용 검사에서 빠진다. */
     @Test void repeatedAiSpanIsNotSentAndCannotGroundACandidate(){
         var draft=new GoalCandidateValidatorTest().draft();draft.put("evidence",List.of(Map.of("utteranceSeq",4,"quote","너 왜 그 말만 반복해")));
@@ -97,15 +101,15 @@ class GoalCandidateGatewayTest {
         var assessment=List.of(Map.of("indicator","P1","rating","OK"),Map.of("indicator","P2","rating","NEED"),Map.of("indicator","P3","rating","OK"),
                 Map.of("indicator","P4","rating","NOT_OBSERVED"),Map.of("indicator","P5","rating","NOT_OBSERVED"),Map.of("indicator","U5","rating","NEED"),
                 Map.of("indicator","X9","rating","NEED"),Map.of("indicator","P1","rating","GOOD"));
-        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(),"assessment",assessment)),"fake","goal-candidates.v4",Duration.ZERO,1,false));
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of(),"assessment",assessment)),"fake","goal-candidates.v5",Duration.ZERO,1,false));
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","엄마랑 그거 먹으러 갔어"))))).isEmpty();
         assertThat(events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATES_ASSESSED)).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs)
-                .isEqualTo(Map.of("promptVersion","goal-candidates.v4","candidatesProposed",0,"needIndicators","P2,U5","okIndicators","P1,P3","notObservedIndicators","P4,P5"));
+                .isEqualTo(Map.of("promptVersion","goal-candidates.v5","candidatesProposed",0,"needIndicators","P2,U5","okIndicators","P1,P3","notObservedIndicators","P4,P5"));
         assertThat(events.capture().lines()).noneMatch(line->line.contains("그거 먹으러"));
     }
     /** 평가가 없던 판의 출력(빈 assessment)도 줄은 남기고 세 목록은 비어 있다. 후보 0개가 모델 판단인지 가르는 줄이 늘 있다. */
     @Test void missingAssessmentStillLogsEmptyLists(){
-        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of())),"fake","goal-candidates.v4",Duration.ZERO,1,false));
+        when(luna.call(any(LunaRequest.class))).thenReturn(new LunaResult(JsonCodec.shared().write(Map.of("candidates",List.of())),"fake","goal-candidates.v5",Duration.ZERO,1,false));
         run(Map.of());
         assertThat(events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATES_ASSESSED)).singleElement().extracting(line->kr.mujoong.testsupport.log.LogCapture.attrs(line).get("candidatesProposed")).isEqualTo(0);
     }
@@ -117,7 +121,7 @@ class GoalCandidateGatewayTest {
         when(checker.check(anyList(),eq(deadline),any(Runnable.class))).thenAnswer(i->{Map<String,String> all=new LinkedHashMap<>();for(OutputChecker.Draft d:i.<List<OutputChecker.Draft>>getArgument(0))all.put(d.id(),d.text());return all;});
         assertThat(run(Map.of("transcript",List.of(Map.of("seq",1,"speaker","CHILD","text","같이 할래"))))).singleElement().extracting(GoalCandidateRepository.Draft::displayName).isEqualTo("다른 이름");
         var lines=events.capture().events(kr.mujoong.contract.log.EventCode.GOAL_CANDIDATE_DROPPED);
-        assertThat(lines).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs).isEqualTo(Map.of("promptVersion","goal-candidates.v4","candidateIndex",0,"candidatesProposed",2,"dropReason","NUMBER_GUARD","dropField","REASON_TEXT"));
+        assertThat(lines).singleElement().extracting(kr.mujoong.testsupport.log.LogCapture::attrs).isEqualTo(Map.of("promptVersion","goal-candidates.v5","candidateIndex",0,"candidatesProposed",2,"dropReason","NUMBER_GUARD","dropField","REASON_TEXT"));
         assertThat(events.capture().lines()).noneMatch(line->line.contains("41번")||line.contains("같이 할래"));
     }
     @Test void secondClassifierDropKeepsOriginalIndexAndFirstFailingField(){

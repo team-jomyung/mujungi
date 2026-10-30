@@ -36,8 +36,16 @@ public final class VariantPlanner {
         }
         return plans.stream().sorted(Comparator
                 .comparing((Plan p) -> exposures.stream().anyMatch(e -> e.seedId().equals(seed.seedId()) && e.context().equals(p.context())))
-                .thenComparing(Plan::changedField).thenComparing(p -> p.context().toString())).findFirst();
+                .thenComparingInt((Plan p) -> AXIS_ORDER.indexOf(p.changedField()))
+                .thenComparing(p -> p.context().toString())).findFirst();
     }
+
+    /**
+     * 바꿀 축의 우선순위. 이름순으로 고르면 늘 참여자(아이와 친구 → 아이와 또래)만 바뀌어 검토가 의미 있는 변형이 아니라고(UNCHANGED_VARIANT)
+     * 거절했다(2026-10-30 실키 4번 모두). 아이가 달라졌다고 느끼는 장소 · 활동을 먼저 바꾸고, 참여자는 마지막에 둔다(FT-1030-p).
+     * NEAR 단계의 관계 · 상황은 지금 순서를 지킨다.
+     */
+    private static final List<String> AXIS_ORDER = List.of("place", "topic", "participants", "relationship", "situation");
 
     private void add(List<Plan> plans, KnowledgeSeed seed, Context base, String grade, String field, String value) {
         Context changed = new Context(field.equals("topic") ? value : base.topic(),

@@ -80,19 +80,23 @@ import org.junit.jupiter.api.*;
         doThrow(new IllegalStateException("synthetic graph unavailable")).when(f.graph).variantPlan(any(),any(),any(),any(),any());
         var result=f.legacy.service.generate(f.legacy.original());assertThat(result.generation().graphContextUsed()).isFalse();verify(f.provider,times(2)).generate(any());
     }
-    @Test void rejectedBaseChangingCoordinatesCannotUseUndeliveredNewPlanForVariantReview(){
+    /**
+     * FT-1030-i: 변형 계획이 있어도 거절된 BASE는 변형 라운드(변형 계획을 받은 생성 · 검토)로 가지 않는다. 그래프 없이 BASE만 다시 만들고, 그 생성 · 검토
+     * 입력에는 변형 계획 · 구조 맥락이 없다. 이전 설계(거절된 BASE도 변형 라운드에서 좌표를 바꿔 다시 만듦)를 대체한다.
+     */
+    @Test void rejectedBaseIsRepairedWithoutGraphAndNeverReachesVariantReview(){
         when(f.provider.review(any())).thenReturn(ScenarioGenerationTest.reject("AGE_MISMATCH"),ScenarioGenerationTest.approve());
         doAnswer(c->{ScenarioScriptProvider.Call call=c.getArgument(0);var input=call.input();
             if(!input.containsKey("variantPlan"))return ScenarioGenerationTest.generated(scene(new VariantPlanner.Context("놀이","교실","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE"),null,"base","BASE"));
             var received=json.read(json.write(input.get("variantPlan")),VariantPlanner.Plan.class);
-            var changedBase=scene(new VariantPlanner.Context("그림","도서관","아이와 친구","FRIEND_CLOSE","FRIEND_PRIVATE"),null,"base","BASE");
-            return ScenarioGenerationTest.generated(changedBase,scene(received.context(),received,"variant","VARIANT"));
+            return ScenarioGenerationTest.generated(scene(received.context(),received,"variant","VARIANT"));
         }).when(f.provider).generate(any());
-        var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(1);assertThat(result.generation().calls()).isEqualTo(5);
+        var result=f.legacy.service.generate(f.legacy.original());assertThat(result.scenes()).hasSize(1);assertThat(result.generation().graphContextUsed()).isFalse();
+        assertThat(result.generation().calls()).isEqualTo(4);
         var generated=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(2)).generate(generated.capture());
-        Object delivered=generated.getAllValues().getLast().input().get("variantPlan");
-        var reviews=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(3)).review(reviews.capture());
-        assertThat(reviews.getAllValues()).allSatisfy(call->assertThat(call.input().get("variantPlan")).isEqualTo(delivered));
-        verify(f.graph,times(2)).variantPlan(any(),any(),any(),any(),any());
+        assertThat(generated.getAllValues()).allSatisfy(call->assertThat(call.input()).doesNotContainKey("variantPlan"));
+        assertThat(generated.getAllValues().getLast().input()).doesNotContainKey("structureContext").containsEntry("correctionReasons",List.of("AGE_MISMATCH"));
+        var reviews=org.mockito.ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(f.provider,times(2)).review(reviews.capture());
+        assertThat(reviews.getAllValues().getLast().input()).doesNotContainKeys("variantPlan","structureContext");
     }
 }

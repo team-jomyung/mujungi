@@ -60,6 +60,49 @@ import org.mockito.ArgumentCaptor;
     void planReadyWithApprovedBaseFirst(){when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));
         when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"),
                 new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,variant)),"fake"));}
+    /** FT-1030-i: 변형 계획이 있어도 거절된 BASE는 변형 라운드로 보내지 않고, 사유 · 지적 필드를 넘겨 그래프 없이 BASE만 다시 만든다. 구조 사유는 빼고 넘긴다. */
+    @Test void aRejectedBaseWithAPlanIsRepairedWithoutGraphInsteadOfTheVariantRound(){
+        when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        var finding=new ScenarioReview.Finding("ANSWER_INCLUDED","INTRODUCTION","spokenIntroduction");
+        var structure=new ScenarioReview.Finding("INVARIANT_MISMATCH","STRUCTURE","preservation");
+        when(provider.review(any())).thenReturn(new ScenarioScriptProvider.Reviewed(new ScenarioReview("REJECT",List.of("ANSWER_INCLUDED","INVARIANT_MISMATCH"),List.of(finding,structure)),"fake-review"),
+                ScenarioGenerationTest.approve());
+        var codes=new ArrayList<String>();generator.diagnostics(codes::add);
+        var result=run();
+        assertThat(result.details().generation().graphContextUsed()).isFalse();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.");
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).doesNotContainKeys("structureContext","variantPlan","baseToPreserve")
+                .containsEntry("baseOnly",true).containsEntry("correctionReasons",List.of("ANSWER_INCLUDED"))
+                .containsEntry("correctionFindings",List.of(Map.of("reason","ANSWER_INCLUDED","check","INTRODUCTION","field","spokenIntroduction")));
+        assertThat(codes).contains("ScenarioVariantBase_NOT_APPROVED","ScenarioReview_INVARIANT_MISMATCH");
+    }
+    /** FT-1030-j: 검토가 승인해도 장면 문장에 가나 · 한자가 섞이면 발급하지 않고 FOREIGN_SCRIPT로 고쳐 쓰게 한다. */
+    @Test void anApprovedBaseWithForeignScriptIsRepairedNotIssued(){
+        when(f.service.variantPlan(any(),any(),any(),any(),any())).thenReturn(Optional.of(plan));
+        var foreign=new ScenarioScript.Scene(base.sceneKey(),base.sceneKind(),base.sceneDescription()+" 今日はそこまで",base.opportunitySentence(),base.reexplanation(),
+                base.focusPoints(),base.expressionExamples(),base.relation(),base.place(),base.topic(),base.preservation(),null);
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(foreign)),"fake"));
+        var result=run();
+        assertThat(result.legacy().scenarioText()).startsWith("새 기본 장면.").doesNotContain("今日");
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).generate(calls.capture());
+        assertThat(calls.getAllValues().getLast().input()).containsEntry("correctionReasons",List.of("FOREIGN_SCRIPT"));
+    }
+    /** FT-1030-o: 변형 라운드에서 모델이 BASE를 조금 바꿔 옮겨도 서버가 승인본으로 고정해 변형만 검토 · 발급한다. */
+    @Test void theVariantRoundPinsTheApprovedBase(){planReadyWithApprovedBaseFirst();
+        var drifted=new ScenarioScript.Scene(base.sceneKey(),base.sceneKind(),base.sceneDescription()+" 조금 바뀜",base.opportunitySentence(),base.reexplanation(),
+                base.focusPoints(),base.expressionExamples(),base.relation(),base.place(),base.topic(),base.preservation(),null);
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"),
+                new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(drifted,variant)),"fake"));
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE","VARIANT");
+        assertThat(result.details().scenes().getFirst().sceneDescription()).doesNotContain("조금 바뀜");}
+    @Test void pinBaseAddsTheBaseWhenOnlyAVariantCameBack(){
+        var pinned=ScenarioScriptGenerator.pinBase(new ScenarioScript(List.of(variant)),base);
+        assertThat(pinned.scenes()).containsExactly(base,variant);
+        var same=new ScenarioScript(List.of(base,variant));assertThat(ScenarioScriptGenerator.pinBase(same,base)).isSameAs(same);}
     @Test void aRejectedVariantRoundIssuesTheScriptApprovedBeforeItWithoutRepair(){planReadyWithApprovedBaseFirst();
         when(provider.review(any())).thenReturn(ScenarioGenerationTest.approve(),ScenarioGenerationTest.reject("GOAL_MISMATCH"));
         var result=run();
