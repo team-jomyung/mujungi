@@ -124,6 +124,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private ConsentAnswer pendingConsent;
     private int waitingGoal = -1;
     private boolean stopping;
+    /** 첫 대본(목표 안내 · 장면 도입 · 여는 말)이 끝나 처음 아이 입력을 기다릴 때까지 참. 그동안 실행부는 아이 음성을 받지 않는다(FT-1030-b). */
+    private boolean openingHold;
     private Signal pendingSignal = Signal.NONE;
     private long speechGeneration;
     private String lastStage = STAGE_SCENARIO_INTRO;
@@ -176,6 +178,10 @@ public final class PracticeConversation implements PracticeSessionExtension {
     public boolean collectingIntroduction() {
         return state.phase() == Phase.SCENE_INTRO && openSlot != null && !stopping;
     }
+    @Override
+    public boolean holdsChildInput() {
+        return openingHold && !stopping;
+    }
     @Override public boolean canYieldUnplayedSpeech() {
         // No goal achievement, consent, coaching or closing transition may be inferred from an unheard output.
         return !stopping && state.phase() == Phase.OPPORTUNITY
@@ -201,6 +207,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
             failedScripts.add(0);
             reportFailure(parsed.firstScenarioRejection());
         }
+        openingHold = true;
         startGoal(0);
         return finish();
     }
@@ -893,6 +900,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void awaitInput() {
         inputReady = true;
+        openingHold = false;
         if (stopping || !state.phase().awaitsInput() || state.sub() != Sub.NONE) {
             return;
         }

@@ -12,7 +12,7 @@ import { practiceStartPort } from "./startPort";
 import { PRACTICE_COPY, PRACTICE_TEMP_COPY, goalMeta } from "./copy";
 import { usePracticeGoals } from "./usePracticeGoals";
 import { PracticeStartAction } from "./PracticeStartAction";
-import { MAX_PRACTICE_GOALS } from "./practiceStart";
+import { MAX_PRACTICE_GOALS, practiceStartStore } from "./practiceStart";
 import { MAX_FAVORITE_GOALS, SAVED_GOALS_PAGE_SIZE } from "./goalList";
 import { PROPOSED_COPY } from "@/shared/copy/ko";
 import { useToast } from "@/shared/toast/ToastProvider";
@@ -30,7 +30,8 @@ export function PracticeScreen({ returnedFailed = false, failureCode = null }: {
   const goals = usePracticeGoals();
   const entry = useActivityEntry(goals.refreshAutomatically);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [startLocked, setStartLocked] = useState(false);
+  // 준비 중에 다른 탭으로 갔다 돌아왔으면 목표 선택을 처음부터 잠근다(시작 동작이 같은 요청을 이어 받는다)
+  const [startLocked, setStartLocked] = useState(() => practiceStartStore.preparing);
   const [showReturnedFailure, setShowReturnedFailure] = useState(returnedFailed);
   const [savedPage, setSavedPage] = useState(0);
   const visible = goals.items ?? [];

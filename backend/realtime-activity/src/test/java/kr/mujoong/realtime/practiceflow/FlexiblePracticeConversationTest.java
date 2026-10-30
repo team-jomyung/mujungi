@@ -68,6 +68,32 @@ class FlexiblePracticeConversationTest {
         assertThat(h.out.generatedSlots()).hasSize(1);
     }
 
+    // FT-1030-b: 첫 대본(목표 안내 · 장면 도입 · 여는 말)이 끝나 처음 아이 입력을 기다릴 때까지 아이 음성을 받지 않는다
+    @Test
+    void childInputIsHeldUntilTheOpeningScriptHasFinished() {
+        Harness h=fresh(false);
+        assertThat(h.ext.holdsChildInput()).isFalse();
+        h.activate();
+        assertThat(h.ext.holdsChildInput()).isTrue();
+        h.played();
+        assertThat(h.ext.holdsChildInput()).isTrue();
+        h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
+        assertThat(h.ext.holdsChildInput()).isTrue();
+        h.played();
+        assertThat(h.ext.holdsChildInput()).isFalse();
+        h.child("파란 상자를 줘");h.result("J2","FULL");h.played();
+        assertThat(h.ext.holdsChildInput()).isFalse();
+    }
+
+    @Test
+    void stoppingReleasesTheOpeningInputHold() {
+        Harness h=fresh(false);h.activate();
+        assertThat(h.ext.holdsChildInput()).isTrue();
+        h.ext.onStopping();
+        assertThat(h.ext.holdsChildInput()).isFalse();
+    }
+
     private void completeDialogue(Harness h) {
         h.child("파란 상자를 줘");h.result("J2","FULL");h.played();
         h.child("고마워");h.result("J3","DELIVERED");h.played();

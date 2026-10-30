@@ -174,8 +174,8 @@ nginx_variant status-swap snippets/error-json.conf 'error_page 502 /__mujoong/er
 expect "nginx-5xx-status-swap" 1 "5xx 상태 치환" -- --only nginx --nginx-src "$work/ngx-status-swap"
 nginx_variant ws-buffering conf.d/https443.conf.tmpl "        proxy_buffering off;=>"
 expect "nginx-ws-buffering" 1 "proxy_buffering off" -- --only nginx --nginx-src "$work/ngx-ws-buffering"
-nginx_variant practice-timeout conf.d/https443.conf.tmpl "        proxy_read_timeout 35s;=>        proxy_read_timeout 15s;"
-expect "nginx-practice-start-timeout" 1 "/api/activities/practice 읽기 35초 아님" -- --only nginx --nginx-src "$work/ngx-practice-timeout"
+nginx_variant practice-timeout conf.d/https443.conf.tmpl "        proxy_read_timeout 65s;=>        proxy_read_timeout 15s;"
+expect "nginx-practice-start-timeout" 1 "/api/activities/practice 읽기 65초 아님" -- --only nginx --nginx-src "$work/ngx-practice-timeout"
 nginx_variant syntax conf.d/https443.conf.tmpl "    ssl_session_tickets off;=>    ssl_session_tickets off"
 expect "nginx-syntax-error" 1 "nginx -t https/compose" -- --only nginx --nginx-src "$work/ngx-syntax"
 nginx_variant regex-location conf.d/https443.conf.tmpl '    location ^~ /internal/ {=>    location ~ ^/internal/ {'

@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.UUID;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.ws.message.PlaybackMark;
+import kr.mujoong.contract.ws.message.SessionState;
+import kr.mujoong.contract.ws.message.View;
 import kr.mujoong.realtime.guardrail.GuardrailRequest;
 import kr.mujoong.realtime.practicelegacy.PracticePorts;
 import kr.mujoong.realtime.testing.FakeGuardrailClient;
@@ -149,6 +151,37 @@ class PracticeGeneratedSpeechTest {
         assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
         assertThat(extension.mismatches).isEmpty();
         assertThat(guard.count()).isZero();
+    }
+
+    /** FT-1030-b: 첫 대본 동안 아이 소리는 무음으로 보내고, 나가는 말은 기기가 끊지 않게 표시하며, 재생이 없으면 '생각 중'을 보인다. */
+    @Test
+    void theOpeningScriptHoldMutesTheChildShowsThinkingAndSendsUninterruptibleAudio() {
+        extension.hold = true;
+        var speech = startApprovedStream();
+        assertThat(h.executor.relay().isMuted()).isTrue();
+        assertThat(views()).last().isEqualTo(View.THINKING);
+        approvedUnit("나는 블록 ", 0);
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(h.link.outputs().getFirst().interruptible()).isFalse();
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(views()).as("첫 대본 사이 틈은 듣는 중이 아니다").last().isEqualTo(View.THINKING);
+        assertThat(h.executor.relay().isMuted()).isTrue();
+
+        extension.hold = false;
+        approvedUnit("놀이를 하고 싶어.", 1);
+        h.advance(Duration.ofMillis(801));
+        mark(h.link.outputs().getLast().playbackId(), PlaybackMark.Status.COMPLETED);
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(h.executor.relay().isMuted()).as("첫 대본이 끝나면 아이 소리를 다시 받는다").isFalse();
+        assertThat(views()).last().isEqualTo(View.LISTENING);
+    }
+
+    @Test
+    void withoutTheOpeningHoldOutputStaysInterruptibleAndTheChildIsHeard() {
+        startApprovedStream();
+        approvedUnit("나는 블록 ", 0);
+        assertThat(h.link.outputs().getFirst().interruptible()).isTrue();
+        assertThat(h.executor.relay().isMuted()).isFalse();
     }
 
     /** FT-1028-e: 원문과 다르게 읽힌 승인 낭독 단위는 버리지 않고 제브(연습 모드)에 묻고, ALLOW한 것만 낸다. */
@@ -570,6 +603,10 @@ class PracticeGeneratedSpeechTest {
         h.drain();
     }
 
+    private List<View> views() {
+        return h.link.sent(SessionState.class).stream().map(SessionState::view).toList();
+    }
+
     private List<String> appended() {
         return h.provider.last().requests(ProviderRequestFactory.InstructionsAppend.class).stream()
                 .map(ProviderRequestFactory.InstructionsAppend::content).toList();
@@ -580,6 +617,7 @@ class PracticeGeneratedSpeechTest {
         PracticeOutput out;
         boolean introduction;
         boolean recovery;
+        boolean hold;
         UUID replySlot;
         final List<PlaybackFact> facts = new ArrayList<>();
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
@@ -597,6 +635,7 @@ class PracticeGeneratedSpeechTest {
         }
 
         @Override public boolean collectingIntroduction() { return introduction; }
+        @Override public boolean holdsChildInput() { return hold; }
         @Override public boolean handlesAudioRecovery() { return recovery; }
         @Override public boolean canYieldUnplayedSpeech() { return !introduction; }
 

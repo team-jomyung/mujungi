@@ -73,7 +73,7 @@ U4b가 옮긴 것: `session.join-wait` · `session.join-wait-after-reprompt` · 
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.timing.parent.request-timeout` | `10s` | web | 보호자 웹의 REST 요청 제한 시간 | J80 · PD |
-| `mujoong.timing.parent.practice-start-request-timeout` | `35s` | web | 연습 시작 요청은 서버의 30초 상황 준비 결과와 전송 여유를 기다린다. Nginx의 정확 일치 `/api/activities/practice` 경로도 읽기 35초로 맞춘다(Compose·ECS). 다른 REST 요청의 시한은 유지한다. | 연습 시작 신뢰성 보완 |
+| `mujoong.timing.parent.practice-start-request-timeout` | `65s` | web | 연습 시작 요청은 서버의 60초 상황 준비 결과와 전송 여유를 기다린다. Nginx의 정확 일치 `/api/activities/practice` 경로도 읽기 65초로 맞춘다(Compose·ECS). 다른 REST 요청의 시한은 유지한다. 35초에서 65초로 늘렸다 | 연습 시작 신뢰성 보완 · FT-1030-a |
 | `mujoong.timing.recorder.flush-interval` | `200ms` | realtime | 전사 기록기 플러시 주기 | J73 · PD-5 |
 | `mujoong.timing.cache.approved-content-ttl` | `10m` | core-api | 승인 문구 캐시 수명(U1은 DB 직접 읽기로 대신, PD-7은 3.6) | J73 · PD |
 | `mujoong.timing.cache.policy-version-ttl` | `1m` | core-api | 현재 정책 버전 캐시 수명 | J73 · PD · J114 |
@@ -163,7 +163,7 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | `mujoong.text-ai.request-timeout` | `10s` | core-api | 호출 한 번의 상한 | U5a-J7 |
 | `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
 | `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
-| `mujoong.timing.practice.scenario-request-timeout` | `30s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한. 독립 검토·보완을 포함한다. | U5a-J18 · 연습 시작 신뢰성 보완 |
+| `mujoong.timing.practice.scenario-request-timeout` | `60s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한. 독립 검토·보완을 포함한다. 30초에서 60초로 늘렸다 | U5a-J18 · 연습 시작 신뢰성 보완 · FT-1030-a |
 | `mujoong.timing.practice.scenario-history-timeout` | `500ms` | core-api | U10 실제 노출 최근 3건 읽기 상한. 최초 생성 잔여 시한과 작은 값, 전용 읽기 트랜잭션 LOCAL timeout과 바깥 취소 | U10 R-02 · U8-c |
 | `mujoong.timing.goal.restore-window` | `5s` | core-api | 삭제 요청 처리 뒤 서버 복구 시한 | C4 · U5a-J3 |
 | `mujoong.timing.parent.loading-notice-delay` | `5s` | web | 화면 18 최초 조회가 이 시간을 넘으면 안내 토스트 | 화면 18 interaction-spec · U5a-J23 |
@@ -269,6 +269,15 @@ U11(선 형식 정비)이 더한 키다. 공급자 실호출에는 응답 id도 
 ### 2026-10-21 실제 분석 호출 보완
 
 저장 대화의 구조화 응답이 medium 추론에서 10.6초, none에서 4.5초로 관찰됐다(서비스 수준 보장은 아님). Core의 결과 호출 한도는 20초(2026-10-27 40초로 늘림, 아래 절), 순차 분석 작업 전체는 90초로 제한하며 작업 취소·재시도 횟수는 유지한다. 일반 Core 텍스트 호출은 10초이고 U10 상황 생성 전체 한도는 기존 15초를 유지한다. 결과 텍스트·목표 후보·상황 생성·상황 검토는 추론 none을 사용하되 입력 정리·출력 형식·출처·안전 분류 검사를 생략하지 않는다. 실시간 발화 판정·Jev 설정은 변경하지 않는다.
+
+### 2026-10-30 연습 상황 준비 60초 (FT-1030-a)
+
+2026-10-30 로컬 실키 연습 4번 중 2번이 상황 준비에서 실패했다(실호출 · 시험자 음성, 실기기 아님). 4번 모두 첫 대본이 독립 검토에서 거절됐고(`EARLY_CUE` · `INCOMPLETE_SCENE` · `ANSWER_INCLUDED`), 생성 4 ~ 8초 · 검토 5 ~ 9초라 30초 안에서는 보완 라운드를 한 번밖에 못 돌렸다. 첫 라운드가 17초 걸린 시도는 남은 13초가 직전 라운드보다 짧아 보완 없이 끝났다(`ScenarioBudgetInsufficient`).
+
+- `mujoong.timing.practice.scenario-request-timeout`: `30s` → `60s`. 호출 상한(최대 6호출) · 보완 사유 · 승인 · 서버 검사는 그대로다.
+- `mujoong.timing.parent.practice-start-request-timeout`: `35s` → `65s`. Nginx `/api/activities/practice` 읽기 시한도 65초로 맞춘다(Compose · ECS).
+- 보호자 화면은 준비 중임을 알 수 있게 시작 버튼에 로딩 표시를 둔다.
+- demo의 CloudFront 원본 응답 시한은 이 저장소 Terraform에 지정돼 있지 않아 기본값(30초)이다. 30초를 넘는 준비는 demo에서 CloudFront가 먼저 끊을 수 있으므로 `origin_read_timeout`을 따로 올려야 한다(기본 최대 60초, 그 이상은 할당량 요청). 이번 변경에서 Terraform은 고치지 않았다.
 
 ### 2026-10-29 결과 호출 한도 90초 · 결과 시도 시한 150초 (FT-1029-b)
 

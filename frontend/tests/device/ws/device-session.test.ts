@@ -209,6 +209,16 @@ describe("DeviceSession — 무중이 말 자막(OUTPUT_BEGIN.text)", () => {
     expect(session.takeSubtitle(PLAYBACK_ID)).toBeNull();
   });
 
+  it("OUTPUT_BEGIN.interruptible을 재생기에 넘긴다(FT-1030-b)", async () => {
+    const { session, player } = setup();
+    session.handleMessage(start());
+    await flushPromises();
+    session.handleMessage({ type: "OUTPUT_BEGIN", sessionId: SESSION_ID, playbackId: PLAYBACK_ID, interruptible: false });
+    expect(player.beginStream).toHaveBeenLastCalledWith(SESSION_ID, PLAYBACK_ID, false);
+    session.handleMessage({ type: "OUTPUT_BEGIN", sessionId: SESSION_ID, playbackId: PLAYBACK_ID });
+    expect(player.beginStream).toHaveBeenLastCalledWith(SESSION_ID, PLAYBACK_ID, true);
+  });
+
   it("text가 없는 OUTPUT_BEGIN은 자막을 두지 않는다", async () => {
     const { session, player } = setup();
     session.handleMessage(start());

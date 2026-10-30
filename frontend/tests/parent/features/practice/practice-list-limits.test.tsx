@@ -25,7 +25,7 @@ it("shows five saved goals per page, keeps favorites visible and preserves a che
   fireEvent.click(checkbox(6)); fireEvent.click(screen.getByRole("button", { name: "다음" })); await tick();
   expect(screen.queryByRole("checkbox", { name: "선택 — 목표 6" })).toBeNull();
   expect(checkbox(1)).toBeVisible(); expect(checkbox(11)).not.toBeChecked();
-  expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개");
+  expect(screen.getByTestId("practice-start")).toHaveTextContent("연습 시작"); expect(screen.getByTestId("practice-start")).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "이전" })); await tick(); expect(checkbox(6)).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "다음" }));
   fireEvent.click(screen.getByRole("button", { name: "다음" })); await tick();

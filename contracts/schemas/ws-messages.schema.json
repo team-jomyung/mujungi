@@ -135,7 +135,8 @@
       "properties": {
         "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
         "source": { "type": "string", "enum": ["GPT_LIVE", "SCENARIO_SCRIPT"] },
-        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "게이트를 통과한 이 말의 확정 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다" }
+        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "게이트를 통과한 이 말의 확정 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다" },
+        "interruptible": { "type": "boolean", "description": "false면 기기가 아이 소리(끼어들기)로 이 묶음 재생을 멈추지 않는다. 선택 필드라 없으면 끊을 수 있다. 연습 첫 대본(목표 안내 · 장면 도입 · 여는 말)에 쓴다 [FT-1030-b]" }
       }
     },
     "OUTPUT_END": {
