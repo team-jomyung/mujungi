@@ -91,14 +91,17 @@ class FlexiblePracticeConversationTest {
         assertThat(h.ext.holdsChildInput()).isFalse();
         h.activate();
         assertThat(h.ext.holdsChildInput()).isTrue();
+        // 사전 표현 연습(PR #88)이 있으면 첫 입력 대기는 사전 연습 질문 뒤다: 그 질문이 끝날 때 막음을 푼다
         h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.PREPARATION);
         assertThat(h.ext.holdsChildInput()).isTrue();
         h.played();
-        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
-        assertThat(h.ext.holdsChildInput()).isTrue();
-        h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.PREPARATION);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
         assertThat(h.ext.holdsChildInput()).isFalse();
-        h.child("파란 상자를 줘");h.result("J2","FULL");h.played();
+        // 막음이 풀린 뒤에는 사전 연습 · 상황극을 지나도 다시 막지 않는다
+        skipPreparation(h);h.played();h.played();
+        assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
         assertThat(h.ext.holdsChildInput()).isFalse();
     }
 
