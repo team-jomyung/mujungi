@@ -8,6 +8,9 @@
 !public/fonts/pretendard/LICENSE.txt
 !public/brand/mujoong-character.png
 !public/models/Explorer_A_Web.meshopt.glb
+!public/backgrounds/meadow.svg
+!public/backgrounds/room.svg
+!public/backgrounds/moon.svg
 .next/standalone/.env*
 .next/standalone/**/.env*
 .next/standalone/.next/cache

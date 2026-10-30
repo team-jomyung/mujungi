@@ -11,8 +11,33 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
+  isolation: isolate;
   background-color: var(--color-surface-base);
   color: var(--color-text-primary);
+}
+
+/* 배경 그림(features/scene: 새로고침마다 초원 · 아이 방 · 달에서 본 지구 중 하나, public/backgrounds/*.svg 자체 제작).
+ * 무중이가 언덕 · 러그 위에 서 있게 아래를 기준으로 채우고, 브라우저가 고른 뒤 부드럽게 나타낸다. */
+.mj-device::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+}
+.mj-device[data-scene]::before { opacity: 1; }
+.mj-device[data-scene="meadow"]::before { background-image: url("/backgrounds/meadow.svg"); }
+.mj-device[data-scene="room"]::before { background-image: url("/backgrounds/room.svg"); }
+.mj-device[data-scene="moon"]::before { background-image: url("/backgrounds/moon.svg"); }
+/* 어두운 우주 배경에서는 배경 위에 바로 놓이는 글(D0 안내 · 코드, 상태 라벨 · 마이크 안내)만 밝게 바꾼다. 흰 대화창 · 단추 글은 그대로 */
+.mj-device[data-scene="moon"] :is(.mj-d0, .mj-t19__stage) { color: #f4f6ff; text-shadow: 0 2px 10px rgb(8 10 40 / 70%); }
+.mj-device[data-scene="moon"] .mj-d0__brand { color: #ffb59f; }
+@media (prefers-reduced-motion: reduce) {
+  .mj-device::before { transition: none; }
 }
 
 /* ───── D0 ───── */
@@ -253,6 +278,8 @@
   grid-area: 1 / 1;
   width: 100%;
   height: 100%;
+  /* 초원 배경 위에 서 있게 발밑(캔버스 높이의 약 85%)에 옅은 그림자를 깐다. 캔버스는 투명이라 그림자가 비친다 */
+  background: radial-gradient(ellipse 17% 3.2% at 50% 85.5%, rgb(38 84 30 / 32%), rgb(38 84 30 / 0%) 100%);
   opacity: 0;
   transition: opacity 300ms ease-out;
 }

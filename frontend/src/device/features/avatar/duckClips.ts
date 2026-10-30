@@ -15,8 +15,16 @@ export const DUCK_CLIPS = {
 
 export type DuckMotion = keyof typeof DUCK_CLIPS;
 
-/** 상태는 표정이 1차라 말하는 중 · 듣는 중이 동작으로도 구분되게 고른다. */
-export function motionFor(display: StatusDisplay): DuckMotion {
+/** 켜져 대화 중인 상태. 이 상태에서만 발화 유지(talking)가 동작을 정한다(꺼짐 · 마이크 · 연결 화면은 상태 동작 그대로). */
+const TALK_HOLD_DISPLAYS: readonly StatusDisplay[] = ["speaking", "listening", "thinking", "standby", "closing"];
+
+/**
+ * 상태는 표정이 1차라 말하는 중 · 듣는 중이 동작으로도 구분되게 고른다.
+ * talking(무중이 발화 중, 묶음 사이 틈 포함)이면 발화가 끝날 때까지 말하기 동작을 이어 간다. 응답 묶음 사이에 소리가 잠깐 멎어
+ * 상태가 말하는 중 ↔ 듣는 중으로 오가도 동작이 talk ↔ look으로 바뀌며 끊겨 보이지 않게 한다.
+ */
+export function motionFor(display: StatusDisplay, talking = false): DuckMotion {
+  if (talking && TALK_HOLD_DISPLAYS.includes(display)) return "talk";
   switch (display) {
     case "speaking":
       return "talk";

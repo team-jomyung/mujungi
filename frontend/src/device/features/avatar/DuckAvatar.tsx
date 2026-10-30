@@ -14,6 +14,8 @@ import { DUCK_CLIPS, type DuckMotion } from "./duckClips";
 export const DUCK_MODEL_SRC = "/models/Explorer_A_Web.meshopt.glb";
 const MAX_DPR = 1.5;
 const CROSS_FADE_SEC = 0.25;
+/** 말하기 동작을 끝낼 때는 조금 더 천천히 넘긴다(입 · 몸짓이 뚝 끊겨 보이지 않게). */
+const TALK_END_FADE_SEC = 0.45;
 const MAX_FRAME_SEC = 0.05;
 
 export interface DuckAvatarProps {
@@ -169,9 +171,11 @@ export function DuckAvatar({ motion, src = DUCK_MODEL_SRC, onStatus, still = fal
       const reduce = stillRef.current;
       const next = actions.get(reduce ? "neutral" : wanted) ?? actions.get("idle");
       if (next === undefined) return;
+      // 같은 동작을 다시 받으면 처음부터 다시 틀지 않고 이어 재생한다(발화 중 말하기 동작이 되감겨 끊겨 보이던 원인)
+      if (!reduce && next === active) return;
       if (reduce) mixer.stopAllAction();
       next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
-      if (!reduce && active !== undefined && active !== next) active.crossFadeTo(next, CROSS_FADE_SEC, false);
+      if (!reduce && active !== undefined) active.crossFadeTo(next, active === actions.get("talk") ? TALK_END_FADE_SEC : CROSS_FADE_SEC, false);
       active = next;
       if (reduce) {
         mixer.update(0);

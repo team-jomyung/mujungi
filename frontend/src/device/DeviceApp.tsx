@@ -6,6 +6,7 @@ import { createAudioContextInGesture } from "./audio/audioContext";
 import { DebugLog } from "./features/debug/DebugLog";
 import { FirstBootView, type FirstBootDisplay } from "./features/first-boot/FirstBootView";
 import { useDeviceSubtitle } from "./features/status/useDeviceSubtitle";
+import { useDeviceScene } from "./features/scene/deviceScene";
 import { StatusView, type StatusDisplay } from "./features/status/StatusView";
 import {
   deviceReducer,
@@ -145,6 +146,8 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   const effectKey = effectKeyOf(pendingEffect(state));
   const poweredOn = isPoweredOn(state);
   const display = displayStateOf(state);
+  // 새로고침마다 초원 · 아이 방 · 달에서 본 지구 배경 중 하나(features/scene)
+  const scene = useDeviceScene();
 
   // 상태가 바라는 요청 · 대기 · 접속을 한다. 단계(stepId)가 바뀌면 앞 단계의 대기를 지우고 늦은 결과는 버린다.
   useEffect(() => {
@@ -255,12 +258,13 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   }, [clearSubtitle]);
 
   return (
-    <main className="mj-device" data-testid="device-app">
+    <main className="mj-device" data-testid="device-app" data-scene={scene ?? undefined}>
       {state.screen === "d0" ? (
         <FirstBootView display={display as FirstBootDisplay} code={state.code?.code ?? null} />
       ) : (
         <StatusView
           display={display as StatusDisplay}
+          talking={subtitles.talking}
           label={t19Label(state)}
           subLabel={display === "reconnecting" ? PROPOSED_COPY.device.t19Reconnecting : null}
           subtitle={subtitles.subtitle}

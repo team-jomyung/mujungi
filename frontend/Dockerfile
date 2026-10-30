@@ -28,6 +28,10 @@ COPY public/fonts/pretendard/PretendardVariable.woff2 ./public/fonts/pretendard/
 COPY public/fonts/pretendard/LICENSE.txt ./public/fonts/pretendard/LICENSE.txt
 COPY public/brand/mujoong-character.png ./public/brand/mujoong-character.png
 COPY public/models/Explorer_A_Web.meshopt.glb ./public/models/Explorer_A_Web.meshopt.glb
+# 아이 기기 배경(새로고침마다 셋 중 하나, src/device/features/scene)
+COPY public/backgrounds/meadow.svg ./public/backgrounds/meadow.svg
+COPY public/backgrounds/room.svg ./public/backgrounds/room.svg
+COPY public/backgrounds/moon.svg ./public/backgrounds/moon.svg
 # 빌드 캐시 · 소스맵이 standalone에 섞여 들어왔으면 버린다(실행에 필요 없음)
 RUN rm -rf ./.next/cache \
  && find . -name '*.map' -type f -delete

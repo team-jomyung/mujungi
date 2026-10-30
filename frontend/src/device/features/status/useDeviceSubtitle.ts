@@ -5,12 +5,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // 기기 자막 상태(docs/ui/device-subtitle.md). 응답을 나눠 보내면 묶음 사이에 소리가 잠깐 멎어 말하기 끝 → 시작이 반복된다.
 // 그때마다 자막을 지우면 대화창이 깜빡이므로, 말하기가 끝나도 잠깐(SUBTITLE_HOLD_MS) 두었다가 지우고,
 // 그 사이 새 묶음의 글이 오면 앞 글 뒤에 이어 붙인다(대화창은 이어서 쓴다).
+// 무중이 동작(talking)도 같은 기준으로 한 발화로 본다: 묶음 사이 틈에는 말하기 동작을 이어 가고, 자막을 지우는 때(발화 끝)에 끝낸다.
 
 /** 말하기가 끝난 뒤 자막을 두는 시간. 묶음 사이 틈보다 길고, 아이 차례로 넘어가는 것을 늦추지 않을 만큼 짧다. */
 export const SUBTITLE_HOLD_MS = 1200;
 
 export interface DeviceSubtitle {
   readonly subtitle: string | null;
+  /** 무중이 발화 중인가. 말하기가 시작되면 참, 묶음 사이 틈(SUBTITLE_HOLD_MS)이 지나 발화가 끝나거나 끊기면 거짓. */
+  readonly talking: boolean;
   /** 재생 STARTED의 글(이어 붙임) 또는 null(STOPPED: 바로 지움). */
   readonly show: (text: string | null) => void;
   readonly speakingChanged: (speaking: boolean) => void;
@@ -20,6 +23,7 @@ export interface DeviceSubtitle {
 
 export function useDeviceSubtitle(): DeviceSubtitle {
   const [subtitle, setSubtitle] = useState<string | null>(null);
+  const [talking, setTalking] = useState(false);
   const holdTimer = useRef<number | null>(null);
   const speaking = useRef(false);
 
@@ -33,6 +37,7 @@ export function useDeviceSubtitle(): DeviceSubtitle {
   const clear = useCallback(() => {
     cancelHold();
     setSubtitle(null);
+    setTalking(false);
   }, [cancelHold]);
 
   const show = useCallback(
@@ -53,12 +58,14 @@ export function useDeviceSubtitle(): DeviceSubtitle {
       speaking.current = now;
       if (now) {
         cancelHold();
+        setTalking(true);
         return;
       }
       cancelHold();
       holdTimer.current = window.setTimeout(() => {
         holdTimer.current = null;
         setSubtitle(null);
+        setTalking(false);
       }, SUBTITLE_HOLD_MS);
     },
     [cancelHold],
@@ -66,5 +73,5 @@ export function useDeviceSubtitle(): DeviceSubtitle {
 
   useEffect(() => cancelHold, [cancelHold]);
 
-  return { subtitle, show, speakingChanged, clear };
+  return { subtitle, talking, show, speakingChanged, clear };
 }

@@ -20,6 +20,9 @@
   | 마이크 거부 | `Mild_Sad` |
   | 「동작 줄이기」 스위치 켬 | `V6_Neutral`(고정 자세) |
 
+- 무중이 발화 중에는 말하기 동작을 발화가 끝날 때까지 이어 간다. 응답 묶음 사이 틈에 상태가 듣는 중 · 생각 중 · 대기 · 마무리로 잠깐 바뀌어도 `Expressive_Talk`를 유지하고, 자막과 같은 기준(말하기가 끝난 뒤 1.2초 `SUBTITLE_HOLD_MS`가 지나거나 끊김 · 끄기)으로 발화가 끝나면 상태 동작으로 0.45초에 걸쳐 넘어간다(`useDeviceSubtitle.ts`의 `talking`, `duckClips.ts`의 `motionFor`). 같은 동작을 다시 받으면 처음부터 다시 틀지 않고 이어 재생한다(`DuckAvatar.tsx`).
+- 배경은 페이지를 불러올 때마다 초원(`public/backgrounds/meadow.svg`) · 아이 방(`public/backgrounds/room.svg`) · 달에서 본 지구(`public/backgrounds/moon.svg`) 중 하나를 무작위로 고른다(`features/scene/deviceScene.ts`). 어두운 달 배경에서는 배경 위에 바로 놓이는 글만 밝은 색으로 바꾼다. 세 그림은 자체 제작 SVG이고, 무중이 발이 언덕 · 러그 위에 오게 아래를 기준으로 화면을 채운다. 웹 이미지는 `public`을 파일마다 명시해 넣으므로, 배경을 더하면 `frontend/.dockerignore`의 허용 줄(`!public/...`)과 `frontend/Dockerfile`의 `COPY` 줄을 함께 더한다.
+
 - 모델 파일은 `frontend/public/models/Explorer_A_Web.meshopt.glb`(16MB, 삼각형 약 53만)이고 `frontend/Dockerfile`이 웹 이미지에 넣는다. 저사양 기기 성능은 실기에서 확인해야 한다. 파일을 못 받으면 도형 캐릭터로 동작한다.
 
 ## 게임식 대화창 (`frontend/src/device/features/status/SubtitleDialog.tsx`)
