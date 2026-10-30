@@ -6,15 +6,15 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 연습 세션 전체에 유지하는 기본 지침(조원 프롬프트 묶음 v1의 {@code practice-system.v1.txt}, 원문 그대로). 연습 세션의 {@code session.start}
+ * 사전 표현 연습과 상황극을 분리하는 연습 세션 기본 지침({@code practice-system.v2.txt}, 원문 그대로). 연습 세션의 {@code session.start}
  * 지시문에 한 번만 싣고, 턴마다 보내는 500자 지시({@code PracticeInstruction})에는 넣지 않는다. 기동 때 읽고 없거나 비면 기동을 막는다.
  */
 public final class PracticeSystemPrompt {
 
     /** 리소스 경로(판 이름이 파일 이름에 들어 있다). */
-    public static final String RESOURCE = "practice/practice-system.v1.txt";
+    public static final String RESOURCE = "practice/practice-system.v2.txt";
     /** 판 이름(로그 · 기록용, 원문 아님). */
-    public static final String VERSION = "practice-system.v1";
+    public static final String VERSION = "practice-system.v2";
 
     private static final String BODY = load();
 

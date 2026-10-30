@@ -219,13 +219,42 @@ class PracticeFlowIT {
     }
 
     private void playGenerated(String text) {
+        playGenerated(text, GuardrailRequest.Mode.PRACTICE_PEER);
+    }
+
+    private void playGenerated(String text, GuardrailRequest.Mode mode) {
         int before = h.link.outputs().size();
         h.settleSend(); h.speak(text, 4800); h.advance(Duration.ofMillis(801));
-        assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
+        assertThat(guard.last().request().mode()).isEqualTo(mode);
         assertThat(h.link.outputs()).hasSize(before);
         guard.allow(); h.drain();
         assertThat(h.link.outputs()).hasSize(before + 1);
         complete(h.link.outputs().getLast().playbackId());
+    }
+
+    /** 실제 실행부 출력 슬롯·제브 대역·재생 완료를 거쳐 사전 연습을 마친다. 장면 수행은 아직 시작하지 않는다. */
+    private void completePreparation() {
+        int judgmentsBefore = judge.calls().size();
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+        playGenerated("필요한 물건을 말로 부탁해 보자. 컵이 필요하면 파란 컵을 줘라고 할 수 있어. 이제 빨간 컵을 부탁해 볼래?",
+                GuardrailRequest.Mode.PRACTICE_COACH);
+        assertThat(judge.calls()).hasSize(judgmentsBefore);
+        assertThat(repository.findSceneRuns(h.sessionId)).isEmpty();
+        h.childSays("preparation-child", "빨간 컵을 줘");
+        assertThat(judge.calls()).hasSize(judgmentsBefore + 1);
+        assertThat(judge.last().request().point()).isEqualTo(JudgmentPoint.J5);
+        assertThat(judge.last().request().criteria().coreFunction()).isEqualTo("PRACTICE_PREPARATION");
+        assertThat(judge.last().request().recentTurns()).anySatisfy(turn -> {
+            assertThat(turn.speaker()).isEqualTo(kr.mujoong.realtime.judgment.JudgeRequest.Speaker.COACH);
+            assertThat(turn.text()).contains("빨간 컵을 부탁해 볼래?");
+        });
+        judge.confirm("FULL", 0.95, "PARTIAL", 0.03);
+        h.drain();
+        assertThat(repository.findSceneRuns(h.sessionId)).as("사전 표현은 역할극 수행 결과를 만들지 않는다").isEmpty();
+        assertThat(repository.findHelps(h.sessionId)).as("사전 교육은 역할극 중 도움과 별도다").isEmpty();
+        playGenerated("빨간 컵을 달라고 말해 줬구나. 이제 상상 놀이에서 말해 보자.", GuardrailRequest.Mode.PRACTICE_COACH);
+        assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
+        assertThat(repository.findSceneRuns(h.sessionId)).as("장면 도입 재생 전에는 장면 행을 만들지 않는다").isEmpty();
     }
 
     @Test
@@ -241,9 +270,13 @@ class PracticeFlowIT {
         assertThat(guard.last().request().mode()).isEqualTo(GuardrailRequest.Mode.PRACTICE_PEER);
         guard.allow();h.drain();assertThat(h.link.outputs()).hasSize(1);
         complete(h.link.outputs().getLast().playbackId());
+        completePreparation();
         playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         assertThat(repository.findSceneRuns(h.sessionId)).hasSize(1);
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().facts()).extracting(PracticeFlowTypes.Fact::kind)
+                .contains(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED)
+                .doesNotContain(FactKind.FOCUS_HELP);
         assertThat(failures).isEmpty();
     }
 
@@ -268,6 +301,7 @@ class PracticeFlowIT {
     void flexibleDialogueSeparatesTargetAchievementFromAgreementAndGuardsEveryGeneratedReply() {
         flexible = true; h.activate();
         playGenerated("오늘은 부탁하기를 짧은 역할놀이로 연습해 볼 거야. 원하면 쉬거나 끝내도 돼.");
+        completePreparation();
         playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");
         playApproved(OPPORTUNITY);
         h.childSays("flex-child-1", "파란색 상자를 줘");
@@ -292,11 +326,19 @@ class PracticeFlowIT {
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
         playGenerated("좋아, 같이 담자.");
         assertThat(h.executor.status()).isEqualTo(SessionStatus.ACTIVE);
-        playGenerated("오늘은 원하는 상자를 말로 부탁했어. 오늘 연습은 여기까지야.");
+        playGenerated("오늘은 원하는 상자를 말로 부탁했어. 오늘 연습은 여기까지야.", GuardrailRequest.Mode.PRACTICE_COACH);
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(h.transitions.find(h.sessionId).orElseThrow().endDetail()).isEqualTo("PRACTICE_COMPLETED");
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
         assertThat(repository.findSceneRuns(h.sessionId).getFirst().endedAt()).isNotNull();
+        assertThat(repository.findSceneRuns(h.sessionId).getFirst().facts()).extracting(PracticeFlowTypes.Fact::kind)
+                .contains(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED)
+                .doesNotContain(FactKind.FOCUS_HELP);
+        assertThat(repository.findHelps(h.sessionId)).as("장면 중 도움 없이 수행했어도 사전 교육 사실은 별도로 남긴다").isEmpty();
+        String recordJson = JsonCodec.shared().write(PracticeFlowRecordAssembler.assemble(repository.findSceneRuns(h.sessionId)));
+        assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", recordJson)).isEmpty();
+        assertThat(recordJson).contains("PREPRACTICE_PROVIDED", "PREPRACTICE_ATTEMPTED")
+                .doesNotContain("빨간 컵을 줘", "파란색 상자를 줘");
         assertThat(failures).isEmpty();
     }
 
@@ -304,6 +346,7 @@ class PracticeFlowIT {
     void contextualClarificationIsRecordedDurablyAndShortAnswersUseTheActualPartnerQuestion() {
         flexible=true;h.activate();
         playGenerated("오늘은 부탁하기를 짧게 연습할 거야. 필요하면 도움을 받고 언제든 끝내도 돼.");
+        completePreparation();
         playApproved("상상 속 상황을 떠올려 봐. 무중이가 상황 속 상대 역할을 해 볼게.");playApproved(OPPORTUNITY);
         h.childSays("clarify-1","그거 줘");judge.confirm("PARTIAL",0.95,"FULL",0.03);h.drain();
         playGenerated("어느 색 상자를 말하는 거야?");
@@ -314,11 +357,13 @@ class PracticeFlowIT {
         });
         judge.confirm("FULL",0.95,"PARTIAL",0.03);h.drain();playGenerated("응, 여기 있어. 같이 정리할까?");
         h.childSays("clarify-3","응, 같이 정리하자");judge.confirm("DELIVERED",0.95,"STILL_SHORT",0.03);h.drain();playGenerated("좋아, 같이 정리하자.");
-        playGenerated("오늘은 친구가 어느 색인지 물었을 때 파란색이라고 알려줬어. 오늘 연습은 여기까지야.");
+        playGenerated("오늘은 친구가 어느 색인지 물었을 때 파란색이라고 알려줬어. 오늘 연습은 여기까지야.", GuardrailRequest.Mode.PRACTICE_COACH);
         var row=repository.findSceneRuns(h.sessionId).getFirst();
         assertThat(row.liveTiming()).isEqualTo(LiveTiming.AFTER_REASK);
-        assertThat(row.facts()).extracting(PracticeFlowTypes.Fact::kind).contains(PracticeFlowTypes.FactKind.REASK_RESOLVED)
+        assertThat(row.facts()).extracting(PracticeFlowTypes.Fact::kind)
+                .contains(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED, FactKind.REASK_RESOLVED)
                 .doesNotContain(PracticeFlowTypes.FactKind.FOCUS_HELP);
+        assertThat(repository.findHelps(h.sessionId)).as("사전 교육·자연스러운 확인 질문은 장면 중 도움으로 기록하지 않는다").isEmpty();
         assertThat(h.executor.status()).isEqualTo(SessionStatus.CLOSING);
         assertThat(failures).isEmpty();
     }

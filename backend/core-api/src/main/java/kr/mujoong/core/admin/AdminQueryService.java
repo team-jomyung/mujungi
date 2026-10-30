@@ -259,6 +259,10 @@ public class AdminQueryService {
 
     private static SceneResult scene(String id, String title, String kind, String judgment, String reason, String timing,
             String skip, SceneRunFacts run) {
+        if (run != null && run.facts().contains("PREPRACTICE_PROVIDED")) {
+            String condition = "사전 표현 연습 후 상황극 결과이며, 도움 없는 기초 수행을 뜻하지 않음";
+            reason = reason == null || reason.isBlank() ? condition : condition + " · " + reason;
+        }
         HelpProjection.Result help = HelpProjection.of(run);
         List<HelpRecord> helps = run == null ? List.of() : run.helps().stream()
                 .filter(record -> HelpProjection.EXECUTED_KINDS.contains(record.kind()))

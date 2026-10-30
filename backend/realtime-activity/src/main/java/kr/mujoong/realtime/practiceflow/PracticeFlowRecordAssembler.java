@@ -33,6 +33,9 @@ public final class PracticeFlowRecordAssembler {
             scene.put("scenarioRef", run.scenarioRef());
             scene.put("sceneKind", run.sceneKind().name());
             scene.put("startedAt", run.startedAt());
+            if (run.endedAt() != null) {
+                scene.put("endedAt", run.endedAt());
+            }
             if (run.liveTiming() != null) {
                 scene.put("liveOutcome", Map.of("timing", run.liveTiming().name()));
             }

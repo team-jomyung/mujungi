@@ -21,8 +21,13 @@
           "scenarioRef": { "$ref": "common.schema.json#/$defs/Uuid" },
           "sceneKind": { "enum": ["BASE", "VARIANT"] },
           "startedAt": { "type": "string", "format": "date-time" },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "실제 장면 종료 시각. 이전 기록에는 없다. 사전 연습 사실이 있는 새 기록은 시작·종료 범위에 완전히 속하는 전사만 수행 근거로 사용한다"
+          },
           "liveOutcome": {
-            "description": "진행 중 판정 요약. 라벨 · 확률 원값은 싣지 않는다",
+            "description": "장면 안 수행 시점 요약. PREPRACTICE_PROVIDED가 있으면 IMMEDIATE도 사전 연습 후의 장면 첫 반응이며 평소 독립 능력을 뜻하지 않는다. 라벨 · 확률 원값은 싣지 않는다",
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -30,7 +35,7 @@
             }
           },
           "facts": {
-            "description": "FR7.3 기록 사실",
+            "description": "FR7.3 기록 사실. PREPRACTICE_PROVIDED는 해당 목표의 사전 안내·예시가 완전히 재생됐음, PREPRACTICE_ATTEMPTED는 사전 목표 표현을 실제로 시도했음을 뜻한다. 상황극 수행이나 장면 안 코칭으로 세지 않는다",
             "type": "array",
             "items": {
               "enum": [
@@ -48,7 +53,9 @@
                 "END_REQUEST",
                 "TIMEOUT",
                 "TRANSCRIPT_FAILED",
-                "PLAYBACK_FAILED"
+                "PLAYBACK_FAILED",
+                "PREPRACTICE_PROVIDED",
+                "PREPRACTICE_ATTEMPTED"
               ]
             }
           },

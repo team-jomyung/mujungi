@@ -34,6 +34,12 @@ class ScenarioContinuityTest {
             assertThat(PracticeContinuity.support(Map.of("facts",List.of(row.getKey())),Map.of()))
                     .containsEntry("nextRoundStrategy",row.getValue());
     }
+    @Test void prepracticeHistoryStaysVisibleWithoutTurningItIntoInSceneHelp() {
+        var facts=List.of("PREPRACTICE_PROVIDED","PREPRACTICE_ATTEMPTED");
+        var result=PracticeContinuity.support(Map.of("facts",facts,"liveOutcome",Map.of("timing","IMMEDIATE")),Map.of());
+        assertThat(result).containsEntry("nextRoundStrategy","APPLY_AFTER_PREPRACTICE_NOT_BASELINE")
+                .containsEntry("observedSupport",facts).containsEntry("observedTiming","IMMEDIATE");
+    }
     private void record(StructuredFixture f,UUID session,UUID goal,String facts,String transcript) {
         var l=f.legacy;var now=l.clock.now();String practice=goal==null?null:JsonCodec.shared().write(Map.of("flowVersion","practice-conversation-v1",
                 "scenes",List.of(Map.of("sceneRunId",UUID.randomUUID(),"goalRef",goal,"sceneKind","BASE","startedAt",now,

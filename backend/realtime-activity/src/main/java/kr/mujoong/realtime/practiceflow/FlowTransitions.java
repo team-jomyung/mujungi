@@ -282,7 +282,7 @@ public final class FlowTransitions {
             case OPPORTUNITY -> JudgmentPoint.J2;
             case REASK -> JudgmentPoint.J3;
             case HELP_OFFER, VARIANT_OFFER -> JudgmentPoint.J4;
-            case RETRY -> JudgmentPoint.J5;
+            case PREPARATION, RETRY -> JudgmentPoint.J5;
             default -> null;
         };
     }

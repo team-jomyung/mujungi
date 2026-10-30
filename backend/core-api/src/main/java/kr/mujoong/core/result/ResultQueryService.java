@@ -42,7 +42,7 @@ public class ResultQueryService {
         if(record.isPresent()&&record.get().record().activityType().equals("PRACTICE")){
             var rows=scenes.find(stored.id());var helps=transcript(stored.helpJson());var goals=new ArrayList<Goal>();
             for(var goal:goals(practice(record.get().record().practiceJson()))){UUID id=uuid(goal.get("goalSelectionId"));if(id==null)continue;
-                var publicScenes=rows.stream().filter(s->s.goalSelectionId().equals(id)).map(s->PracticeRecordV2.VERSION.equals(s.flowVersion())?(Object)new TimedScene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneChipMapper.text(s.sceneChip(),s.notDoneReason()),s.notDoneReason(),s.timing()):new Scene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneChipMapper.text(s.sceneChip(),s.notDoneReason()),s.notDoneReason())).toList();
+                var publicScenes=rows.stream().filter(s->s.goalSelectionId().equals(id)).map(s->PracticeRecordV2.VERSION.equals(s.flowVersion())?(Object)new TimedScene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneReportMapper.publicText(s),s.notDoneReason(),s.timing()):new Scene(s.sceneNo(),s.exposureType(),s.sceneChip(),SceneReportMapper.publicText(s),s.notDoneReason())).toList();
                 var help=helps.stream().filter(h->id.toString().equals(h.get("goalSelectionId"))).findFirst().map(h->object(h.get("help"))).orElse(Map.of("count",0,"consent","NONE"));
                 String name=text(goal,"displayName");if(generated!=null&&PracticeRecordV2.VERSION.equals(goal.get("flowVersion")))name=generated.selection(guardian,id).filter(s->s.childId().equals(record.get().record().childId())).map(s->s.displayName()).orElse(name);
                 goals.add(new Goal(id,name,(int)number(goal,"order"),publicScenes,help));

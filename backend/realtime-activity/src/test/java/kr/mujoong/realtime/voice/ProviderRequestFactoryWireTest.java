@@ -72,10 +72,14 @@ class ProviderRequestFactoryWireTest {
     }
 
     @Test void aPracticeSessionStartCarriesTheWholePracticeSystemPromptOnceAndFreeTalkDoesNot() throws Exception {
+        assertThat(kr.mujoong.realtime.dialog.PracticeSystemPrompt.VERSION).isEqualTo("practice-system.v2");
+        assertThat(kr.mujoong.realtime.dialog.PracticeSystemPrompt.RESOURCE).isEqualTo("practice/practice-system.v2.txt");
         String original;
         try (var in = getClass().getClassLoader().getResourceAsStream(kr.mujoong.realtime.dialog.PracticeSystemPrompt.RESOURCE)) {
+            assertThat(in).as("선택한 연습 지침이 실행 자원에 포함된다").isNotNull();
             original = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip();
         }
+        assertThat(original).isNotBlank();
         var practice = wire(factory.practiceSessionStart(new ChildContext("하늘", 8, List.of("블록")), null));
         String instructions = practice.path("session").path("instructions").asString();
         assertThat(instructions).as("원문 그대로 한 번").contains(original).startsWith(DialogInstructions.role("하늘", 8, List.of("블록")));

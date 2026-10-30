@@ -23,11 +23,11 @@ public final class PracticeFlowTypes {
     /** 변형 생략 사유(BR6.2). {@code practice-record-v2} variantSkipReason(null 허용은 사유 없음). */
     public enum VariantSkipReason { NO_VARIANT, DECLINED, TIME_LIMIT, FOCUS_LIMIT, END_OR_REST }
 
-    /** 기록 사실 15종(FR7.3, {@code practice-record-v2} facts). 받는 쪽은 모르는 값을 무시한다. */
+    /** 기록 사실(FR7.3, {@code practice-record-v2} facts). 사전 연습과 장면 안 도움은 별개다. */
     public enum FactKind {
         REASK_RESOLVED, SITUATION_EXPLAINED, FOCUS_HELP, EXPRESSION_EXAMPLE, HELP_ACCEPTED, HELP_DECLINED, COACH_SWITCH,
         COACH_RETURN, ORIGINAL_SCENE_RETURN, VARIANT_PLAYED, VARIANT_SKIPPED, END_REQUEST, TIMEOUT, TRANSCRIPT_FAILED,
-        PLAYBACK_FAILED
+        PLAYBACK_FAILED, PREPRACTICE_PROVIDED, PREPRACTICE_ATTEMPTED
     }
 
     /** 도움 · 역할 전환 기록 종류. */

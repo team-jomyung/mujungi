@@ -1,5 +1,7 @@
 # AI 입출력 계약 뼈대 (ai-io.md)
 
+[편차 (PP-20261028-a)] 사전 표현 연습의 기록·시각 구간·reader 우선 배포는 `docs/practice-preparation-records.md`를 따른다.
+
 > 계약 9절(C14, WBS 1.7.3) + U1이 정하는 공급자 연결 · 선 형식 · 시드 사전 형식 · 승인 음성 형식. 소유: U5(D), 공급자 선 형식은 U1(B).
 > 1 ~ 5절은 형식만 고정한다. 판정 기준 본문 · 프롬프트 · 금지 표현 사전 v1 · 대기 문구 본문은 D 담당 AI 입출력 계약 문서가 채운다(OQ4 · OQ14 · OQ15). 6절은 U6 분석 AI 작업의 입력 · 출력 · 지시 요점 · 검사 규칙까지 정한다.
 > 공급자 선 형식(2 · 3절)은 U11이 실호출 3회(2026-10-16 ~ 17)로 관측한 형식으로 바꿨다(편차 (U11-a), 옛 J110 가정은 3.3절). 메시지 · 필드마다 출처를 적고, 관측되지 않은 것은 '미확인'이다.
@@ -350,7 +352,7 @@ U15 씨앗 v2는 GENERATED/DUPLICATE/NONE의 배타적 출력 분기를 사용�
 | `ai-seed-output.schema.json` | 새 씨앗 | core 씨앗 생성(U15) |
 | `guardrail-request.schema.json` | 제브 검사 요청(내부 형식, 어댑터가 공급자 형식으로 바꿈) | realtime 출력 게이트(U13) · `GuardrailClient` |
 | `guardrail-result.schema.json` | 제브 검사 결과(내부 형식) | 같음 |
-| `practice-record-v2.schema.json` | 기록 캡처 이벤트 `record.practice` 새 흐름 형식(`flowVersion` 필수) | U12가 채우고 U11이 발행, U14가 읽음 [U8 편차 (U8-d)] |
+| `practice-record-v2.schema.json` | 기록 캡처 이벤트 `record.practice` 새 흐름 형식(`flowVersion` 필수). 사전 연습 사실 `PREPRACTICE_PROVIDED`·`PREPRACTICE_ATTEMPTED`는 장면 안 도움과 구분 | U12가 채우고 U11이 발행, U14가 읽음 [U8 편차 (U8-d)] · [사전 연습 기록](../docs/practice-preparation-records.md) |
 
 - 진행 중 판정에는 출력 스키마가 없다. 판정은 Decisions API `choice` 질문 한 개이고 응답은 보낸 선택지 · 확률 규칙으로 검증한다(10.10). 이전 Responses 구조화 출력용 `ai-judgment-output.schema.json`은 지웠다 [편차 FT-1023-d].
 - 요청 스키마는 루트와 하위 객체 모두 `additionalProperties: false`로 닫는다. 아이 관련 문자열 필드의 `description`에는 "아이 이름은 '아이'로 치환된 값"을 적는다.

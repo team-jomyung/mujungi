@@ -23,11 +23,12 @@ public class RejudgmentGateway {
             if(goals.belongsToAnotherChild(child,scene.goalRef()))throw new ResultAiException("SCHEMA_INVALID");
             // Ephemeral UUID handles satisfy the schema without exposing stored scene/selection identifiers.
             String handle=UUID.randomUUID().toString();handles.put(handle,scene);
-            Map<String,Object> row=new LinkedHashMap<>();row.put("sceneRunId",handle);row.put("sceneKind",scene.sceneKind());row.put("facts",scene.facts());row.put("variantSkipReason",scene.variantSkipReason());
+            Map<String,Object> row=new LinkedHashMap<>();row.put("sceneRunId",handle);row.put("sceneKind",scene.sceneKind());row.put("startedAt",scene.startedAt().toString());if(scene.endedAt()!=null)row.put("endedAt",scene.endedAt().toString());row.put("facts",scene.facts());row.put("variantSkipReason",scene.variantSkipReason());
             goals.historical(child,scene.goalRef()).ifPresent(goal->{row.put("targetExpression",goal.targetExpression());row.put("fourElements",goal.fourElements());row.put("skillRef",goal.skillRef());});input.add(row);
         }
         access.run();LunaResult response;
-        try{response=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.REJUDGMENT,"rejudgment.v1","실제로 시작한 각 장면을 기록용으로 재판정한다. 입력 sceneRunId 집합을 정확히 한 번씩 반환한다. value는 functional/partial/none/uncertain, functional의 timing은 IMMEDIATE/AFTER_REASK/AFTER_HELP이고 나머지는 null이다. 단순 재발화 확인만으로 AFTER_REASK를 만들지 않는다. 진행 중 판정 라벨이나 확률을 추측하지 않는다.",Map.of("scenes",input,"transcript",transcript),aliases,deadline));}
+        transcript=PracticeEvidenceTranscript.forAnalysis(practice,transcript);
+        try{response=luna.orElseThrow(()->new ResultAiException("PROVIDER_UNAVAILABLE")).call(LunaRequest.of(LunaPurpose.REJUDGMENT,"rejudgment.v2","실제로 시작한 각 장면을 기록용으로 재판정한다. 입력 sceneRunId 집합을 정확히 한 번씩 반환한다. value는 functional/partial/none/uncertain, functional의 timing은 IMMEDIATE/AFTER_REASK/AFTER_HELP이고 나머지는 null이다. 단순 재발화 확인만으로 AFTER_REASK를 만들지 않는다. 진행 중 판정 라벨이나 확률을 추측하지 않는다. 각 장면의 startedAt~endedAt 안에 있는 아이 발화로만 판단한다. 해당 장면의 아이 발화가 없거나 해석할 수 없으면 uncertain이며 timing은 null이다. PREPRACTICE_PROVIDED와 PREPRACTICE_ATTEMPTED는 사전 표현 연습의 사실이다. 사전 연습에서 한 말은 상황극 수행 근거에서 제외한다. PREPRACTICE_PROVIDED 장면의 IMMEDIATE는 사전 연습 후 장면 첫 반응을 뜻하며, 평소 독립 능력이나 장기 향상이 아니다. 사전 연습만으로 장면 안 도움인 AFTER_HELP를 만들지 않는다.",Map.of("scenes",input,"transcript",transcript),aliases,deadline));}
         catch(LunaException failed){throw new ResultAiException(failed.reason()==LunaFailureReason.TIMEOUT?"TIMEOUT":"PROVIDER_ERROR");}
         return validated(object(json.read(response.outputJson(),Map.class)),handles);
     }

@@ -60,6 +60,14 @@ class HelpProjectionTest {
     }
 
     @Test
+    void prepracticeDoesNotInventAHelpOfferOrAChildRequestInsideTheScene() {
+        SceneRunFacts run = run("IMMEDIATE", List.of("PREPRACTICE_PROVIDED", "PREPRACTICE_ATTEMPTED"));
+        assertThat(HelpProjection.of(run)).isEqualTo(new HelpProjection.Result(Offer.NOT_OFFERED, null));
+        assertThat(HelpProjection.of(run("NONE", List.of("PREPRACTICE_PROVIDED"))))
+                .isEqualTo(new HelpProjection.Result(Offer.UNKNOWN, null));
+    }
+
+    @Test
     void roleReturnAndUnknownConsentValuesAreNotEvidence() {
         SceneRunFacts run = run("NONE", List.of(), help("ROLE_RETURN", "ACCEPT", false), help("ROLE_SWITCH", "MAYBE", false));
 

@@ -52,7 +52,9 @@ public class SessionResultHandler implements JobHandler {
     }
     private Outcome handleInScope(JobContext job){
         Input input=tx.execute(t->load(job));if(input==null)return Outcome.failed("INTERNAL",false);
-        var r=input.record();var transcript=input.transcript();var practice=input.practice();var quotes=childQuotes(transcript);
+        var r=input.record();var practice=input.practice();
+        var transcript="PRACTICE".equals(r.activityType())?PracticeEvidenceTranscript.forAnalysis(practice,input.transcript()):input.transcript();
+        var quotes=childQuotes(transcript);
         String level=ResultLevelCalculator.before(r,transcript,practice,input.consent());boolean insufficient=level.equals("INSUFFICIENT");
         boolean free=r.activityType().equals("FREE_TALK");
         Map<String,Object> experience=new LinkedHashMap<>();List<SceneJudgmentRepository.Scene> scenes=new ArrayList<>();
@@ -167,7 +169,7 @@ public class SessionResultHandler implements JobHandler {
         for(var s:PracticeRecordV2.read(practice)){int order=orders.computeIfAbsent(s.goalRef(),key->orders.size()+1);String reason=s.facts().contains("TIMEOUT")?"TIME_OVER":"ACTIVITY_ENDED";result.add(new SceneJudgmentRepository.Scene(s.goalRef(),order,s.sceneNo(),"BASE".equals(s.sceneKind())?"ORIGINAL":"NEW_SCENARIO",s.scenarioRef(),null,null,null,null,false,reason,"NOT_DONE",s.sceneRunId(),PracticeRecordV2.VERSION,s.facts(),s.variantSkipReason()));}
         return List.copyOf(result);
     }
-    private List<Map<String,Object>> publicScenes(List<SceneJudgmentRepository.Scene> scenes){return scenes.stream().map(s->Map.<String,Object>of("goalSelectionId",s.goalSelectionId(),"sceneNo",s.sceneNo(),"sceneChip",s.sceneChip(),"chipText",SceneChipMapper.text(s.sceneChip(),s.notDoneReason()))).toList();}
+    private List<Map<String,Object>> publicScenes(List<SceneJudgmentRepository.Scene> scenes){return scenes.stream().map(s->Map.<String,Object>of("goalSelectionId",s.goalSelectionId(),"sceneNo",s.sceneNo(),"sceneChip",s.sceneChip(),"chipText",SceneReportMapper.publicText(s))).toList();}
     private String template(StoredRecord r,Map<String,Object> goal,List<SceneJudgmentRepository.Scene> scenes){
         if(r.activityType().equals("FREE_TALK")){long minutes=r.recordFrom()==null||r.recordTo()==null?0:Math.max(0,Duration.between(r.recordFrom(),r.recordTo()).toMinutes());return minutes+"분 동안 이야기를 나눴어요.";}
         UUID id=uuid(goal.get("goalSelectionId"));boolean modern=PracticeRecordV2.VERSION.equals(goal.get("flowVersion"));long count=scenes.stream().filter(s->s.goalSelectionId().equals(id)&&!s.sceneChip().equals("NOT_DONE")).count();long total=modern?scenes.stream().filter(s->s.goalSelectionId().equals(id)).count():2;String expression=modern?safeGoalExpression(rejudgment==null?null:rejudgment.targetExpression(r.childId(),id).orElse(null),checker):text(goal,"displayName");return expression+" 연습을 했어요. 장면 "+total+"개 중 "+count+"개를 진행했어요.";
