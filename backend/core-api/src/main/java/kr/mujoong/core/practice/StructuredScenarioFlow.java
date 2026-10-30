@@ -100,8 +100,19 @@ public final class StructuredScenarioFlow {
             case "반 친구", "같은 반 친구" -> "CLASSMATE".equals(seedRelationship);
             case "선생님", "교사" -> "TEACHER".equals(seedRelationship);
             case "가족" -> "FAMILY".equals(seedRelationship);
-            default -> false;
+            default -> unnamedPartner(relation);
         };
         return equivalent?seedRelationship:relation;
+    }
+    /** 사람을 정하지 않는 상대 표현. 이 표현은 다른 관계가 아니므로 씨앗의 관계 코드로 좌표를 맞춘다(FT-1030-h). */
+    private static final java.util.regex.Pattern ROLE_WORDS=java.util.regex.Pattern.compile(
+            "친구|선생님|교사|가족|엄마|아빠|부모|형|누나|언니|오빠|동생|선배|후배|팀|모둠|동아리|어른|낯선");
+    /**
+     * 목표 후보의 상대가 "대화하는 상대" · "이야기를 나누는 상대"처럼 '상대'로 끝나고 누구인지 정하지 않으면, 정해진 관계 코드로 바꿔도 다른
+     * 사람이 되지 않는다. 그대로 두면 변형 계획이 관계 좌표를 몰라 늘 비었다(2026-10-30 실키, ScenarioGraphFallback_PLAN_EMPTY).
+     */
+    static boolean unnamedPartner(String relation){
+        String text=relation.strip();
+        return text.endsWith("상대")&&!ROLE_WORDS.matcher(text).find();
     }
 }
