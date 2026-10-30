@@ -1,6 +1,8 @@
-# mujoong-aidlc
+# 무중 (Mujoong)
 
-무중(6~12세 아이 화용 능력 지원 AI 음성 대화 서비스)을 AI-DLC(awslabs/aidlc-workflows 2.0)로 돌려 보는 저장소. 기준 문서는 화면 설계 v1.5j(2026-10-08).
+6~12세 아이의 화용 능력을 지원하는 AI 음성 대화 서비스의 애플리케이션·계약·개발 기록 저장소입니다.
+
+현재 구현을 이해하려면 [문서 읽는 순서](docs/README.md)와 [프로젝트 설명](docs/project-description.md)부터 확인하세요. 2026-10-08 화면 설계와 AI-DLC 산출물은 설계 당시의 근거이며, 이후 변경은 현재 코드·계약 및 [편차 기록](contracts/deviations.md)을 함께 봅니다.
 
 - `docs/project-description.md` : `/aidlc` 시작용 설명 한 장
 - `docs/aidlc_drafts/` : AI-DLC 산출물 이름에 맞춘 초안(Edit File 모드에서 붙여넣기용)
@@ -15,11 +17,11 @@ Claude Code를 이 폴더에서 열고:
 /aidlc knowledge onboard aidlc/spaces/default/knowledge/documents
 /aidlc Read ./docs/project-description.md and build what it describes
 ```
-스코프는 `classic`, 모드는 `Edit File`. 문서끼리 다르면 화면 설계가 맞다(개발전환_점검표 2절).
+초기 AI-DLC 작업은 `classic` · `Edit File`을 사용했다. 아래는 해당 작업 환경의 안내다. 기존 화면 설계와 현재 구현이 다르면 [편차 기록](contracts/deviations.md)과 관련 PR을 먼저 확인하고, 근거 없이 과거 설계를 현재 요구사항으로 덮어쓰지 않는다.
 
 ## 클라우드 세션(claude.ai/code)에서 이어가기
 클라우드 세션은 플랜 한도보다 클라우드 세션 크레딧을 먼저 쓴다. 작업 기록은 전부 git에 있으므로 어느 기계에서든 이어진다.
-1. claude.ai/code 에서 이 GitHub 레포(baikjunha/mujoong-aidlc)로 세션을 연다.
+1. claude.ai/code 에서 이 GitHub 레포(team-jomyung/mujungi)로 세션을 연다.
 2. 세션 안에서 `bash scripts/cloud-setup.sh` 를 실행한다(AI-DLC 설치 → `aidlc config --harness claude` → `aidlc doctor`).
 3. Claude Code를 재시작하고 `/aidlc` 를 입력하면 저장된 단계에서 이어진다. 게이트마다 "Approve" 또는 고칠 내용을 적는다.
 4. 끝나면 `git add aidlc/ && git commit && git push` 로 기록을 올린다. 로컬에서 이어 받을 때는 먼저 `git pull`.
@@ -42,7 +44,7 @@ exec powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:
 | 디렉터리 | 내용 |
 |---|---|
 | `backend/` | Gradle 멀티 프로젝트(Java 21 · Spring Boot): `contract-model` · `core-api` · `realtime-activity` · `test-support`(시험 전용) |
-| `frontend/` | Next.js App Router 한 앱(`/parent` · `/device`, Node 22) |
+| `frontend/` | Next.js App Router 한 앱(`/parent` · `/device` · `/admin`, Node 22) |
 | `contracts/` | 앱 사이 · 클라이언트 계약 정본(OpenAPI · AsyncAPI · JSON Schema) |
 | `infra/` | Compose · Nginx · PostgreSQL 초기화 · 배포 스크립트 |
 | `tools/` | 가짜 공급자 · 기기 시뮬레이터 · 끝-끝 시나리오(Node 22 ESM, 앱 이미지 밖) |
@@ -58,7 +60,7 @@ Neo4j는 전체 실행에서 기본 활성화되어 있다. [Neo4j 실행·검�
 호스트에서 실행하는 Core에는 생성된 `NEO4J_AUTH`와 `MUJOONG_KNOWLEDGE_NEO4J_ENDPOINT=http://127.0.0.1:7474`를 전달한다.
 CI와 그래프를 사용하지 않는 자동 시험만 명시적으로 비활성화한다.
 
-앱 셋은 IDE나 호스트 프로세스로 돌리고, DB만 Compose로 띄운다. 비밀 값은 실행 때 `build/dev/env/`에 생기고 저장소에는 없다(J127).
+앱 셋은 IDE나 호스트 프로세스로 돌리고, PostgreSQL·Neo4j를 Compose로 띄운다. 비밀 값은 실행 때 `build/dev/env/`에 생기고 저장소에는 없다(J127).
 
 ```bash
 bash infra/ci/gen-env.sh --out build/dev/env --origin http://localhost:3000 --keep-existing
