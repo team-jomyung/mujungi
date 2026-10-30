@@ -30,7 +30,7 @@ import type { InterruptedPlayback } from "../audio/player";
 /** 재생기 중 세션 처리가 쓰는 부분. */
 export interface SessionPlayer {
   prefetch(items: readonly ApprovedAudio[]): Promise<PrefetchFlag>;
-  beginStream(sessionId: string, playbackId: string): void;
+  beginStream(sessionId: string, playbackId: string, interruptible?: boolean): void;
   appendStream(payload: Uint8Array): void;
   endStream(playbackId: string): void;
   playApproved(sessionId: string, playbackId: string, contentCode: string, contentVersionId: string): Promise<void>;
@@ -161,7 +161,7 @@ export class DeviceSession {
       case "OUTPUT_BEGIN":
         if (this.isCurrent(message.sessionId)) {
           if (typeof message.text === "string") this.subtitles.set(message.playbackId, message.text);
-          this.deps.player.beginStream(message.sessionId, message.playbackId);
+          this.deps.player.beginStream(message.sessionId, message.playbackId, message.interruptible !== false);
         }
         return;
       case "OUTPUT_END":

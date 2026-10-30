@@ -260,6 +260,11 @@ public interface PracticeSessionExtension {
 
     /** 안내 수집 중 일반 입력은 대화 턴을 열지 않는다. 입력 기록과 종료·휴식 처리는 실행기가 계속한다. */
     default boolean collectingIntroduction() { return false; }
+    /**
+     * 첫 대본이 끝나 처음 아이 입력을 기다릴 때까지 아이 음성을 받지 않는가(FT-1030-b). 참이면 실행부가 입력을 무음으로 보내고, 그 사이 나가는
+     * 말은 기기가 끊지 않게 표시하며, 재생이 없을 때는 '생각 중'을 보인다. 종료 의도도 음성으로는 듣지 않는다(보호자 종료는 그대로).
+     */
+    default boolean holdsChildInput() { return false; }
     /** Whether an unplayed generated conversational response may yield to new child input without completing a task. */
     default boolean canYieldUnplayedSpeech() { return false; }
 

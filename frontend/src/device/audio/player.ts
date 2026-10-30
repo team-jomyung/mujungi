@@ -82,6 +82,8 @@ interface Playback {
   readonly kind: "stream" | "approved";
   /** 승인 음성이면 서버가 보낸 contentCode(스트림은 null). */
   readonly contentCode: string | null;
+  /** 아이 소리(끼어들기)로 끊어도 되는가. 서버가 OUTPUT_BEGIN.interruptible=false로 보낸 묶음만 거짓이다(FT-1030-b). */
+  readonly interruptible: boolean;
   readonly pieces: Piece[];
   /** OUTPUT_END를 받았거나(묶음) 조각 하나뿐인 승인 음성이면 true. */
   endReceived: boolean;
@@ -122,7 +124,7 @@ export class AudioPlayer<C extends AudioClip> {
   }
 
   /** OUTPUT_BEGIN: 이 묶음의 0x02만 받는다. 앞 묶음이 열려 있으면 더 받지 않게 닫는다. */
-  beginStream(sessionId: string, playbackId: string): void {
+  beginStream(sessionId: string, playbackId: string, interruptible = true): void {
     this.closeOpenStream();
     if (this.playbacks.has(playbackId)) {
       return;
@@ -132,6 +134,7 @@ export class AudioPlayer<C extends AudioClip> {
       sessionId,
       kind: "stream",
       contentCode: null,
+      interruptible,
       pieces: [],
       endReceived: false,
       state: "active",
@@ -180,6 +183,7 @@ export class AudioPlayer<C extends AudioClip> {
       sessionId,
       kind: "approved",
       contentCode,
+      interruptible: true,
       pieces: [],
       endReceived: true,
       state: "active",
@@ -258,6 +262,16 @@ export class AudioPlayer<C extends AudioClip> {
   get isPlayingNotice(): boolean {
     for (const playback of this.playbacks.values()) {
       if (playback.state === "active" && playback.contentCode !== null && NOTICE_CONTENT_CODES.has(playback.contentCode)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** 서버가 끊지 말라고 한 묶음(연습 첫 대본)이 재생 중이거나 대기 중인가(끼어들기로 끊지 않는다). */
+  get isPlayingUninterruptible(): boolean {
+    for (const playback of this.playbacks.values()) {
+      if (playback.state === "active" && !playback.interruptible) {
         return true;
       }
     }

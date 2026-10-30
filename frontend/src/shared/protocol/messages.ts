@@ -160,6 +160,8 @@ export interface OutputBeginMessage {
   readonly playbackId: string;
   /** 게이트를 통과한 이 말의 확정 글(기기 자막, 선택). 없거나 형식이 틀리면 null이고 자막 없이 재생한다. */
   readonly text?: string | null;
+  /** false면 아이 소리로 이 묶음 재생을 끊지 않는다(연습 첫 대본, FT-1030-b). 필드가 없거나 false가 아니면 true. */
+  readonly interruptible?: boolean;
 }
 
 /** OUTPUT_BEGIN.text 최대 글자 수(ws-messages.schema.json). */
@@ -303,7 +305,13 @@ export function parseServerMessage(envelope: InboundEnvelope): ServerMessage | n
       if (sessionId === null || !isUuid(playbackId)) {
         return null;
       }
-      return { type: "OUTPUT_BEGIN", sessionId, playbackId, text: readSubtitle(payload.text) };
+      return {
+        type: "OUTPUT_BEGIN",
+        sessionId,
+        playbackId,
+        text: readSubtitle(payload.text),
+        interruptible: payload.interruptible !== false,
+      };
     }
     case "OUTPUT_END": {
       const { playbackId } = payload;

@@ -355,4 +355,22 @@ describe("AudioPlayer — 참여 확인 안내 녹음 보호", () => {
     output.startAll();
     expect(player.isPlayingNotice).toBe(false);
   });
+
+  // FT-1030-b: 연습 첫 대본은 서버가 interruptible=false로 보내고, 그 묶음이 재생 · 대기 중인 동안만 끼어들기로 끊지 않는다.
+  it("끊지 말라고 한 스트림이 재생 · 대기 중인 동안만 isPlayingUninterruptible이 참이다", () => {
+    const { output, player } = setup();
+    player.beginStream(SESSION_ID, PLAYBACK_ID);
+    player.appendStream(pcmSeconds(0.2));
+    output.startAll();
+    expect(player.isPlayingUninterruptible).toBe(false);
+    player.stopAll("STOP_OUTPUT");
+    player.beginStream(SESSION_ID, OTHER_PLAYBACK, false);
+    player.appendStream(pcmSeconds(0.2));
+    expect(player.isPlayingUninterruptible).toBe(true);
+    output.startAll();
+    expect(player.isPlayingUninterruptible).toBe(true);
+    player.endStream(OTHER_PLAYBACK);
+    output.endAll();
+    expect(player.isPlayingUninterruptible).toBe(false);
+  });
 });

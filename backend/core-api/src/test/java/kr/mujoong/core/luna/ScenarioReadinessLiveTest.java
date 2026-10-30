@@ -89,7 +89,8 @@ class ScenarioReadinessLiveTest {
                 var result = real.review(call); record("review", result.review()); return result;
             }
         };
-        var payload = Map.<String, Object>of("ageYears", 8, "interests", List.of("책", "블록"),
+        // 운영처럼 관심사는 보내지 않는다(FT-1028-b)
+        var payload = Map.<String, Object>of("ageYears", 8,
                 "goal", Map.of("kind", "CANDIDATE", "skillRef", "NONE", "targetExpression", target,
                         "fourElements", Map.of("situation", situation, "partner", partner,
                                 "intent", intent, "expression", expression)),
@@ -102,12 +103,14 @@ class ScenarioReadinessLiveTest {
                     timing, executor, CoreLunaClient.SYSTEM_SLEEPER::sleep);
             int rounds = Integer.parseInt(System.getenv().getOrDefault("SCENARIO_READINESS_ROUNDS", "1"));
             // 비교 측정용(SCENARIO_READINESS_CONTINUE=true): 한 회차가 실패해도 결과를 남기고 다음 회차로 간다. 기본은 첫 실패에서 멈춘다
+            // 운영 상황 준비 예산과 같게 둔다(FT-1030-a 60초). 다른 값으로 비교할 때만 env로 바꾼다
+            var deadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("SCENARIO_READINESS_DEADLINE_SECONDS", "60")));
             boolean keepGoing = Boolean.parseBoolean(System.getenv().getOrDefault("SCENARIO_READINESS_CONTINUE", "false"));
             for (int round = 0; round < rounds; round++) {
                 record("round", Map.of("round", round));
                 try {
                     var result = generator.generate(new ScenarioScriptGenerator.Input(payload, Map.of(), rules, false, "{}"),
-                            new ScenarioDeadline(clock, clock.now().plusSeconds(30)));
+                            new ScenarioDeadline(clock, clock.now().plus(deadline)));
                     assertThat(result.details().review().verdict()).isEqualTo("APPROVE");
                     assertThat(result.details().scenes()).isNotEmpty();
                     record("outcome", Map.of("round", round, "result", "APPROVED", "calls", result.details().generation().calls()));

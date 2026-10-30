@@ -504,6 +504,8 @@ public final class SessionExecutor {
     private int currentTranscriptSeq;
     /** 확장이 요청한 '생각 중' 유지(닫힐 때 듣는 중으로 되돌리지 않는다). */
     private boolean practiceThinking;
+    /** 연습 첫 대본이 끝날 때까지 아이 음성을 받지 않는 중(FT-1030-b). 입력 무음 · 끊을 수 없는 출력 · '생각 중' 유지가 이것을 따른다. */
+    private boolean practiceInputHold;
     /** 종료 의도 판정기(세션 스냅숏의 종료 표현). */
     private final StopIntentJudge stopJudge;
     /** 지금 편지함 메시지를 처리하는 스레드(실행 스레드 또는 시험의 step 호출 스레드). 공급자 리스너가 이 스레드면 기다리지 않는다. */
@@ -1128,6 +1130,8 @@ public final class SessionExecutor {
         } catch (RuntimeException e) {
             practiceFailure("EXCEPTION", e);
             return;
+        } finally {
+            syncPracticeInputHold();
         }
         if (!signalsAllowed || signal == null || signal == PracticeSessionExtension.Signal.NONE) {
             return;
@@ -1161,6 +1165,7 @@ public final class SessionExecutor {
         practiceFailed = true;
         practice = null;
         practiceHold = false;
+        syncPracticeInputHold();
         cancelPracticeTimers();
         practicePlaybacks.clear();
     }
@@ -1338,6 +1343,7 @@ public final class SessionExecutor {
     private void stopPracticeProgress() {
         if (practice == null || !practice.controlsOutput()) return;
         practice.onStopping();
+        syncPracticeInputHold();
         streamedPractice = null;
         pendingPracticeSpeech = null;
         practiceAudio.clear();
@@ -2083,6 +2089,24 @@ public final class SessionExecutor {
     /** 출력 능력을 쓸 수 있는가(ACTIVE이고 정산 전, 확장점이 살아 있다). */
     private boolean practiceActive() {
         return ctx.status() == SessionStatus.ACTIVE && !ctx.settling() && !ctx.terminated() && practice != null;
+    }
+
+    /**
+     * 연습 첫 대본의 입력 차단을 확장 상태에 맞춘다(FT-1030-b). 차단 중에는 아이 음성을 무음으로 보내 공급자가 듣지 않게 하고, 재생이 없으면
+     * '생각 중'을 보인다. 풀리면 입력을 다시 받고 듣는 중으로 돌아간다. 확장 호출 뒤마다 부른다.
+     */
+    private void syncPracticeInputHold() {
+        boolean hold = practiceActive() && practice.holdsChildInput();
+        if (hold == practiceInputHold) return;
+        practiceInputHold = hold;
+        ctx.relay().setMuted(hold);
+        if (hold) {
+            if (ctx.view() == View.LISTENING && ctx.devicePlaying().isEmpty()) {
+                ctx.sendControl(new SessionState(View.THINKING));
+            }
+        } else if (!judgment.isOpen()) {
+            listeningAgain();
+        }
     }
 
     /** 실행기가 확장점에 주는 출력 능력. post 밖의 능력은 실행기 스레드에서만 부른다. */
@@ -3456,7 +3480,7 @@ public final class SessionExecutor {
 
     /** 재생이 모두 끝났거나 보낼 응답이 없다 — 생각 중 · 재생 뒤면 '듣는 중'으로 돌아간다. */
     private void listeningAgain() {
-        if (judgment.isOpen() || practiceThinking || guardrail.holdsThinking()) {
+        if (judgment.isOpen() || practiceThinking || practiceInputHold || guardrail.holdsThinking()) {
             // 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다.
             // 제브 검사 · 재지시 응답을 기다리는 동안도 같다
             return;
@@ -3634,7 +3658,7 @@ public final class SessionExecutor {
         }
         AudioRecordings.Session aiRecording = ctx.recording();
         OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
-                OutputBundle.frame(chunks), total / 48L, reservation.get(),
+                OutputBundle.frame(chunks), total / 48L, !practiceInputHold, reservation.get(),
                 () -> ctx.outputGeneration().get() == generation && ctx.outputAuthority() == authority
                         && hasOutputAuthority(authority, null),
                 firstFrameAt -> {
@@ -3919,7 +3943,7 @@ public final class SessionExecutor {
         // 세대가 올라 잘린 나머지 프레임은 기록하지 않는다
         AudioRecordings.Session aiRecording = ctx.recording();
         OutputBundle bundle = new OutputBundle(ctx.plan().sessionId(), playbackId, OutputBegin.Source.GPT_LIVE,
-                OutputBundle.frame(sealed.chunks()), sealed.totalMs(), reservation,
+                OutputBundle.frame(sealed.chunks()), sealed.totalMs(), !practiceInputHold, reservation,
                 () -> ctx.outputGeneration().get() == generation && ctx.outputAuthority() == authority
                         && hasOutputAuthority(authority, sealed),
                 firstFrameAt -> {

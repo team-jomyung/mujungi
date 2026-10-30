@@ -22,6 +22,22 @@
 .mj-practice__steps li + li { margin-top: calc(var(--space-unit) * 2); }
 .mj-practice__start { margin-top: auto; }
 .mj-practice__notice { font-size: 0.875rem; color: var(--color-text-secondary); text-align: center; }
+/* 상황 준비 중(최대 1분): 버튼을 흐리게 두지 않고 회전 표시로 작업 중임을 보인다(FT-1030-a) */
+.mj-practice__start-busy:disabled { opacity: 0.85; cursor: progress; }
+.mj-practice__start-busy .mj-spinner { margin-right: 0; }
+.mj-spinner {
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: mj-spin 0.9s linear infinite;
+}
+@keyframes mj-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mj-spinner { animation: none; border-top-color: currentColor; opacity: 0.6; } }
 .mj-practice__loading { color: var(--color-text-secondary); }
 .mj-practice__count { margin-inline-start: calc(var(--space-unit) * 2); font-weight: 400; }
 .mj-practice__pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-unit); margin-block: calc(var(--space-unit) * 3); }

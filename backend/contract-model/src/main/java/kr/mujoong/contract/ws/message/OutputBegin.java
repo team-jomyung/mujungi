@@ -11,8 +11,11 @@ import kr.mujoong.contract.ws.WsPayload;
  *
  * <p>{@code text}는 선택 필드로, 게이트를 통과한 그 말의 확정 글이다(기기 자막). 없으면 자막 없이 재생한다. 글은 로그에 남기지 않으므로
  * {@link #toString()}에는 길이만 쓴다(R-F14).
+ *
+ * <p>{@code interruptible}은 선택 필드로, {@code false}면 기기가 아이 소리(끼어들기)로 이 묶음 재생을 멈추지 않는다. 없으면 끊을 수 있다
+ * (연습 첫 대본, FT-1030-b).
  */
-public record OutputBegin(UUID playbackId, Source source, String text) implements WsPayload {
+public record OutputBegin(UUID playbackId, Source source, String text, Boolean interruptible) implements WsPayload {
 
     /** text 최대 글자 수(ws-messages.schema.json OUTPUT_BEGIN.text maxLength). */
     public static final int TEXT_MAX_CHARS = 500;
@@ -25,9 +28,14 @@ public record OutputBegin(UUID playbackId, Source source, String text) implement
         UNRECOGNIZED
     }
 
+    /** 끊을 수 있는 묶음. */
+    public OutputBegin(UUID playbackId, Source source, String text) {
+        this(playbackId, source, text, null);
+    }
+
     /** 자막 없는 묶음. */
     public OutputBegin(UUID playbackId, Source source) {
-        this(playbackId, source, null);
+        this(playbackId, source, null, null);
     }
 
     /** 자막 글을 계약 길이 안으로 다듬는다. 비었으면 null(필드 없음), 길면 코드 포인트 경계에서 자른다. */
@@ -68,6 +76,6 @@ public record OutputBegin(UUID playbackId, Source source, String text) implement
     @Override
     public String toString() {
         return "OutputBegin[playbackId=" + playbackId + ", source=" + source + ", textChars="
-                + (text == null ? 0 : text.length()) + "]";
+                + (text == null ? 0 : text.length()) + (interruptible == null ? "" : ", interruptible=" + interruptible) + "]";
     }
 }

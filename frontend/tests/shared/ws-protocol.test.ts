@@ -151,12 +151,22 @@ describe("messages — 서버 → 기기 읽기", () => {
     expect(begin(42)).toMatchObject({ text: null });
   });
 
+  it("OUTPUT_BEGIN.interruptible은 false일 때만 끊지 않는 묶음이다(FT-1030-b)", () => {
+    const begin = (interruptible: unknown) =>
+      parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID, interruptible }, { sessionId: SESSION_ID }));
+    expect(begin(false)).toMatchObject({ interruptible: false });
+    expect(begin(true)).toMatchObject({ interruptible: true });
+    expect(begin(undefined)).toMatchObject({ interruptible: true });
+    expect(begin("false")).toMatchObject({ interruptible: true });
+  });
+
   it("OUTPUT_BEGIN · OUTPUT_END · PLAY_APPROVED_CONTENT는 playbackId UUID가 있어야 한다", () => {
     expect(parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID }, { sessionId: SESSION_ID }))).toEqual({
       type: "OUTPUT_BEGIN",
       sessionId: SESSION_ID,
       playbackId: PLAYBACK_ID,
       text: null,
+      interruptible: true,
     });
     expect(parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID }))).toBeNull();
     expect(parseServerMessage(envelope("OUTPUT_END", { playbackId: PLAYBACK_ID }))).toMatchObject({ type: "OUTPUT_END", sessionId: null });

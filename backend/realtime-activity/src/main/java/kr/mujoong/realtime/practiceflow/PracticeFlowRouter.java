@@ -92,6 +92,9 @@ public final class PracticeFlowRouter implements PracticeSessionExtension {
     public boolean collectingIntroduction() {
         return delegate != null && delegate.collectingIntroduction();
     }
+    @Override public boolean holdsChildInput() {
+        return delegate != null && delegate.holdsChildInput();
+    }
     @Override public boolean canYieldUnplayedSpeech() {
         return delegate != null && delegate.canYieldUnplayedSpeech();
     }

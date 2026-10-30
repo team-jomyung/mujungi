@@ -21,6 +21,7 @@ import kr.mujoong.contract.ws.message.OutputBegin;
  * @param stillCurrent 출력 세대 확인(송신기 스레드에서 불린다)
  * @param onFirstFrameSent 첫 프레임 직후 시각 수신자(송신기 스레드)
  * @param onFrameSent 프레임 하나를 소켓에 쓴 직후 그 본문 수신자(송신기 스레드, 기다리지 않아야 한다)
+ * @param interruptible 기기가 아이 소리로 이 묶음 재생을 끊어도 되는가. 거짓이면 OUTPUT_BEGIN.interruptible=false로 보낸다(연습 첫 대본, FT-1030-b)
  * @param subtitle 게이트를 통과한 이 묶음의 글(OUTPUT_BEGIN.text, 기기 자막). 없으면 null. 로그 · 문자열 표현에 넣지 않는다(R-F14)
  */
 public record OutputBundle(
@@ -29,6 +30,7 @@ public record OutputBundle(
         OutputBegin.Source source,
         List<byte[]> frames,
         long totalMs,
+        boolean interruptible,
         DeviceLink.AudioReservation reservation,
         BooleanSupplier stillCurrent,
         Consumer<Instant> onFirstFrameSent,
@@ -51,6 +53,14 @@ public record OutputBundle(
         if (frames.isEmpty()) {
             throw new IllegalArgumentException("출력 묶음에 프레임이 없다");
         }
+    }
+
+    /** 끊을 수 있는 묶음. */
+    public OutputBundle(UUID sessionId, UUID playbackId, OutputBegin.Source source, List<byte[]> frames, long totalMs,
+            DeviceLink.AudioReservation reservation, BooleanSupplier stillCurrent, Consumer<Instant> onFirstFrameSent,
+            Consumer<byte[]> onFrameSent, String subtitle) {
+        this(sessionId, playbackId, source, frames, totalMs, true, reservation, stillCurrent, onFirstFrameSent, onFrameSent,
+                subtitle);
     }
 
     /** 자막 없는 묶음. */

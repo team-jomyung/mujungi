@@ -140,8 +140,8 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
   });
 
   capture?.setFrameHandler((frame) => {
-    // 참여 확인 안내 녹음 중에는 끼어들기로 보지 않는다(서버도 이 동안 아이 소리를 무음으로 바꿔 공급자에 보낸다)
-    bargeIn.feed(frame, player.isSpeaking && !player.isPlayingNotice);
+    // 참여 확인 안내 녹음 · 연습 첫 대본 중에는 끼어들기로 보지 않는다(서버도 이 동안 아이 소리를 무음으로 바꿔 공급자에 보낸다)
+    bargeIn.feed(frame, player.isSpeaking && !player.isPlayingNotice && !player.isPlayingUninterruptible);
     session.handleInputFrame(frame);
   });
   const wakeLock = holdScreenWakeLock(undefined, undefined, (held) =>
