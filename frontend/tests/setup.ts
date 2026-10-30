@@ -2,7 +2,10 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
+import { practiceStartStore } from "@/parent/features/practice/practiceStart";
 
 afterEach(() => {
   cleanup();
+  // 연습 시작 요청은 화면 밖에 남으므로(FT-1030-c) 시험끼리 섞이지 않게 지운다
+  practiceStartStore.clear();
 });

@@ -45,8 +45,8 @@
     },
     "scriptVersion": {"type": "string", "const": "scenario-script.v1"},
     "scenes": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["sceneKey", "sceneKind", "sceneDescription", "opportunitySentence", "reexplanation", "partnerRole"], "additionalProperties": true}},
-    "selfReview": {"type": "object", "required": ["verdict", "model", "promptVersion"], "properties": {"verdict": {"const": "APPROVE"}, "model": {"type": "string", "minLength": 1}, "promptVersion": {"enum": ["scenario-review.v1", "scenario-review.v2", "scenario-review.v3", "scenario-review.v4"]}}, "additionalProperties": false},
-    "generation": {"type": "object", "required": ["model", "promptVersion", "graphContextUsed", "calls"], "properties": {"model": {"type": "string", "minLength": 1}, "promptVersion": {"enum": ["scenario-generation.v2", "scenario-generation.v3", "scenario-generation.v4", "scenario-generation.v5"]}, "graphContextUsed": {"type": "boolean"}, "calls": {"type": "integer", "minimum": 2, "maximum": 6}, "kgVersion": {"type": ["string", "null"], "minLength": 1}}, "additionalProperties": false},
+    "selfReview": {"type": "object", "required": ["verdict", "model", "promptVersion"], "properties": {"verdict": {"const": "APPROVE"}, "model": {"type": "string", "minLength": 1}, "promptVersion": {"enum": ["scenario-review.v1", "scenario-review.v2", "scenario-review.v3", "scenario-review.v4", "scenario-review.v5"]}}, "additionalProperties": false},
+    "generation": {"type": "object", "required": ["model", "promptVersion", "graphContextUsed", "calls"], "properties": {"model": {"type": "string", "minLength": 1}, "promptVersion": {"enum": ["scenario-generation.v2", "scenario-generation.v3", "scenario-generation.v4", "scenario-generation.v5", "scenario-generation.v6"]}, "graphContextUsed": {"type": "boolean"}, "calls": {"type": "integer", "minimum": 2, "maximum": 6}, "kgVersion": {"type": ["string", "null"], "minLength": 1}}, "additionalProperties": false},
     "validation": {
       "type": "object",
       "required": [

@@ -597,10 +597,10 @@ assert_nginx_directives() {
   ws="$(awk '/location = \/ws\/device \{/{f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf")"
   grep -qF 'proxy_buffering off;' <<<"$ws" || problems+=('/ws/device에 proxy_buffering off 없음')
   grep -qF 'proxy_read_timeout 75s;' <<<"$ws" || problems+=('/ws/device 읽기 75초 아님')
-  # 연습 준비는 Core에서 최대 30초다. 일반 REST 15초를 상속하면 준비 중 504로 잘린다.
+  # 연습 준비는 Core에서 최대 60초다. 일반 REST 15초를 상속하면 준비 중 504로 잘린다.
   local practice_start
   practice_start="$(awk '/location = \/api\/activities\/practice \{/{f=1} f{print} f&&/^    \}/{exit}' "$dir/conf.d/https443.conf")"
-  grep -qF 'proxy_read_timeout 35s;' <<<"$practice_start" || problems+=('/api/activities/practice 읽기 35초 아님')
+  grep -qF 'proxy_read_timeout 65s;' <<<"$practice_start" || problems+=('/api/activities/practice 읽기 65초 아님')
   # /internal/ · /actuator/ 403
   local loc
   for loc in /internal/ /actuator/; do

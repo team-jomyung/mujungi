@@ -23,7 +23,7 @@ export const PRACTICE_COPY = {
   favoriteIcon: "★",
   notFavoriteIcon: "☆",
   deleteIcon: "×",
-  start: (n: number) => `선택한 ${n}개로 연습 시작`,
+  start: "연습 시작",
 } as const;
 
 /** no invented count or enabled start while integrations are absent. */

@@ -154,7 +154,7 @@ mujoong:
       google-keys-max-age: 6h
     # U5a 연습(timing.md 9절): C10 상황 생성 전체 예산(요청 선점 시한도 같다) · 목표 삭제 뒤 서버 복구 시한
     practice:
-      scenario-request-timeout: 30s
+      scenario-request-timeout: 60s
       scenario-history-timeout: 500ms
     goal:
       restore-window: 5s

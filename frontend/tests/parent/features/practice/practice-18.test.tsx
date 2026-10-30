@@ -39,10 +39,10 @@ describe("18 — list, selection and scope", () => {
     const harness=setup(()=>jsonResponse(200,{items:[...GOALS,fourth]}));await advance();
     expect(screen.getByText(/한 번에 목표 1개/)).toBeVisible();
     fireEvent.click(check());
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개");
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("연습 시작"); expect(screen.getByTestId("practice-start")).toBeEnabled();
     fireEvent.click(check("차례 기다리기"));
     expect(check("차례 기다리기")).toBeChecked();expect(check()).not.toBeChecked();
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개");
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("연습 시작"); expect(screen.getByTestId("practice-start")).toBeEnabled();
     expect(screen.getAllByRole("checkbox")).toHaveLength(4);
     expect(screen.getAllByRole("checkbox").filter((box) => (box as HTMLInputElement).checked)).toHaveLength(1);
     fireEvent.click(check("차례 기다리기"));
@@ -58,13 +58,13 @@ describe("18 — list, selection and scope", () => {
     expect(screen.getByTestId("practice-start")).toHaveTextContent("목표를 골라 주세요");
     fireEvent.click(check());
     fireEvent.click(check("차례 기다리기"));
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개로 연습 시작");
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("연습 시작");
     // U5b 통합 승인: 영구 비활성 자리 대신 선택 후 시작 가능, 선택만으로 전송하지 않음.
     expect(screen.getByTestId("practice-start")).toBeEnabled();
     expect(screen.queryByText("연습 시작 기능을 준비하고 있어요.")).toBeNull();
     expect(harness.requests(/activities/)).toHaveLength(0);
     fireEvent.click(check());
-    expect(screen.getByTestId("practice-start")).toHaveTextContent("선택한 1개로 연습 시작");
+    expect(screen.getByTestId("practice-start")).toHaveTextContent("연습 시작");
   });
 
   it("groups favorites first, preserves saved order, and formats truthful metadata", async () => {

@@ -598,7 +598,7 @@ class ConfigKeyContractTest {
                 TEST_RESOURCES.resolve("application-test.yml")).enabled()).isFalse();
         CoreProperties bound = bind(base);
         assertThat(bound.timing().result().attemptTimeout()).isEqualTo(Duration.ofSeconds(150)); // FT-1029-b: 90초에서 150초로
-        assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(bound.timing().practice().scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(60)); // FT-1030-a: 30초에서 60초로
         assertThat(bound.timing().goal().restoreWindow()).isEqualTo(Duration.ofSeconds(5));
     }
 
