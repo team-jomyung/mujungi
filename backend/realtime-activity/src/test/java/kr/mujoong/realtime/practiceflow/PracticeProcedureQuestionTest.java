@@ -12,7 +12,7 @@ class PracticeProcedureQuestionTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings={"무슨 놀이를 하고 싶어?", "어떤 놀이 같이 할까?", "나한테 물어봐도 돼?", "친구가 무슨 말을 하는 거야?", "같이 블록 놀이 하자", "응, 연습하자", "무중아 그만할래"})
+    @ValueSource(strings={"무슨 놀이를 하고 싶어?", "어떤 놀이 같이 할까?", "나한테 물어봐도 돼?", "친구가 무슨 말을 하는 거야?", "같이 블록 놀이 하자", "응, 연습하자", "무중아 그만할래", "뭐라고?", "그 색깔", "노란색", "지금 팔이 길다고 꼽 주는 거야?"})
     void ordinaryRoleQuestionsAndOtherIntentsAreLeftToTheJudge(String text) {
         assertThat(PracticeProcedureQuestion.matches(text)).isFalse();
     }

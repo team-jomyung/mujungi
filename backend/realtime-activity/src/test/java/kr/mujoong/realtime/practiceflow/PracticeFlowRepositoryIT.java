@@ -11,6 +11,7 @@ import java.util.Random;
 import java.util.UUID;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.contract.status.ActivityType;
+import kr.mujoong.realtime.admin.AdminFactsRepository;
 import kr.mujoong.realtime.common.db.DbRetry;
 import kr.mujoong.realtime.messaging.RealtimeDeletionParticipant;
 import kr.mujoong.realtime.practiceflow.PracticeFlowTypes.ConsentAnswer;
@@ -158,6 +159,31 @@ class PracticeFlowRepositoryIT {
     }
 
     @Test
+    void prepracticeHistorySurvivesDatabaseReadAndSettlementRecovery() {
+        SceneRunRecord started = run(session, guardian, SceneKind.BASE, 0);
+        db.inTransaction(() -> {
+            repository.insertSceneRun(started);
+            repository.appendFact(started.id(), FactKind.PREPRACTICE_PROVIDED, T0);
+            repository.appendFact(started.id(), FactKind.PREPRACTICE_ATTEMPTED, T0.plusSeconds(1));
+            repository.appendFact(started.id(), FactKind.PREPRACTICE_PROVIDED, T0.plusSeconds(2));
+            repository.appendFact(started.id(), FactKind.REASK_RESOLVED, T0.plusSeconds(3));
+            repository.updateOutcome(started.id(), T0.plusSeconds(4), LiveTiming.IMMEDIATE, null, 0, 0);
+        });
+        List<SceneRunRecord> restored = repository.findSceneRuns(session);
+        assertThat(restored.getFirst().facts()).extracting(Fact::kind)
+                .containsExactly(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED, FactKind.REASK_RESOLVED);
+        assertThat(restored.getFirst().facts().getFirst().at()).as("같은 사실을 다시 기록해도 최초 확정 시각 보존").isEqualTo(T0);
+        assertThat(db.single("select cast(facts as text) from realtime.realtime_practice_scene_run where id = :id",
+                new MapSqlParameterSource("id", started.id()), String.class)).isEqualTo("{REASK_RESOLVED}");
+        assertThat(new AdminFactsRepository(db.jdbc()).sceneRuns(List.of(session)).get(session).getFirst().facts())
+                .containsExactly("PREPRACTICE_PROVIDED", "PREPRACTICE_ATTEMPTED", "REASK_RESOLVED");
+        assertThat(restored.getFirst().liveTiming()).isEqualTo(LiveTiming.IMMEDIATE);
+        String captured = JsonCodec.shared().write(PracticeFlowRecordAssembler.assemble(restored));
+        assertThat(captured).contains("PREPRACTICE_PROVIDED", "PREPRACTICE_ATTEMPTED");
+        assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", captured)).isEmpty();
+    }
+
+    @Test
     void everyWriteRequiresAnActiveTransactionAndAMissingRowReportsFalse() {
         SceneRunRecord started = run(session, guardian, SceneKind.BASE, 0);
         assertThatThrownBy(() -> repository.insertSceneRun(started)).isInstanceOf(IllegalTransactionStateException.class);
@@ -171,6 +197,7 @@ class PracticeFlowRepositoryIT {
 
         UUID missing = UUID.randomUUID();
         assertThat(db.inTransaction(() -> repository.appendFact(missing, FactKind.TIMEOUT, T0))).isFalse();
+        assertThat(db.inTransaction(() -> repository.appendFact(missing, FactKind.PREPRACTICE_PROVIDED, T0))).isFalse();
         assertThat(db.inTransaction(() -> repository.updateOutcome(missing, null, null, null, 0, 0))).isFalse();
     }
 
@@ -216,6 +243,8 @@ class PracticeFlowRepositoryIT {
             repository.insertSceneRun(mine);
             repository.insertSceneRun(mineVariant);
             repository.insertSceneRun(theirs);
+            repository.appendFact(mine.id(), FactKind.PREPRACTICE_PROVIDED, T0);
+            repository.appendFact(theirs.id(), FactKind.PREPRACTICE_PROVIDED, T0);
             repository.insertHelp(help(mine.id(), guardian, HelpKind.FOCUS_HELP, FlowRole.COACH, 8, 5));
             repository.insertHelp(help(theirs.id(), otherGuardian, HelpKind.FOCUS_HELP, FlowRole.COACH, 8, 5));
         });
@@ -236,6 +265,10 @@ class PracticeFlowRepositoryIT {
         assertThat(repository.findHelps(session)).isEmpty();
         assertThat(repository.findSceneRuns(otherSession)).as("다른 보호자는 그대로").hasSize(1);
         assertThat(repository.findHelps(otherSession)).hasSize(1);
+        assertThat(db.single("select count(*) from realtime.realtime_practice_preparation where scene_run_id = :id",
+                new MapSqlParameterSource("id", mine.id()), Long.class)).isZero();
+        assertThat(db.single("select count(*) from realtime.realtime_practice_preparation where scene_run_id = :id",
+                new MapSqlParameterSource("id", theirs.id()), Long.class)).isEqualTo(1L);
         assertThat(db.inTransaction(() -> db.jdbc().update("delete from realtime.realtime_activity_session where id = :id",
                 new MapSqlParameterSource("id", session)))).isEqualTo(1);
         assertThat(participant.deleteByGuardian(guardian, UUID.randomUUID()).values()).as("다시 불러도 같다").containsOnly(0);

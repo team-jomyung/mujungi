@@ -93,11 +93,12 @@ public class AdminFactsRepository {
                                     rs.getBoolean("example_given")));
                 });
         jdbc.query("""
-                select id, session_id, scene_kind, live_timing, variant_skip_reason, retry_count, reexplain_count,
-                    cast(facts as text[]) as facts
-                from realtime.realtime_practice_scene_run
-                where session_id = any(:sessions)
-                order by session_id, started_at, id
+                select r.id, r.session_id, r.scene_kind, r.live_timing, r.variant_skip_reason, r.retry_count, r.reexplain_count,
+                    cast(r.facts as text[]) as facts, p.provided_at, p.attempted_at
+                from realtime.realtime_practice_scene_run r
+                left join realtime.realtime_practice_preparation p on p.scene_run_id = r.id
+                where r.session_id = any(:sessions)
+                order by r.session_id, r.started_at, r.id
                 """, params, rs -> {
                     UUID runId = ClockParams.uuid(rs, "id");
                     result.computeIfAbsent(ClockParams.uuid(rs, "session_id"), key -> new ArrayList<>())
@@ -127,12 +128,19 @@ public class AdminFactsRepository {
     }
 
     private static List<String> facts(ResultSet rs) throws SQLException {
-        java.sql.Array array = rs.getArray("facts");
-        if (array == null) {
-            return List.of();
+        List<String> facts = new ArrayList<>();
+        if (ClockParams.instant(rs, "provided_at") != null) {
+            facts.add("PREPRACTICE_PROVIDED");
         }
-        Object[] values = (Object[]) array.getArray();
-        return Arrays.stream(values).map(String::valueOf).toList();
+        if (ClockParams.instant(rs, "attempted_at") != null) {
+            facts.add("PREPRACTICE_ATTEMPTED");
+        }
+        java.sql.Array array = rs.getArray("facts");
+        if (array != null) {
+            Object[] values = (Object[]) array.getArray();
+            facts.addAll(Arrays.stream(values).map(String::valueOf).toList());
+        }
+        return List.copyOf(facts);
     }
 
     private static UsageSum usage(ResultSet rs, int n) throws SQLException {

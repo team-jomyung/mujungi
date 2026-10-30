@@ -58,11 +58,24 @@ class PracticeFlowRecordAssemblerTest {
         Map<String, Object> practice = PracticeFlowRecordAssembler.assemble(List.of(bare));
         Map<String, Object> scene = ((List<Map<String, Object>>) practice.get("scenes")).getFirst();
 
-        assertThat(scene).doesNotContainKeys("liveOutcome", "variantSkipReason");
+        assertThat(scene).doesNotContainKeys("liveOutcome", "variantSkipReason", "endedAt");
         assertThat(scene.get("facts")).isEqualTo(List.of());
         String json = JsonCodec.shared().write(practice);
         assertThat(json).doesNotContain("label", "probability", "transcript", "text");
         assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", json)).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void completedScenesExposeTheActualEndSoCoreCanExcludeTeachingAndReview() {
+        SceneRunRecord base = run(SceneKind.BASE, 0, LiveTiming.IMMEDIATE, null,
+                List.of(new Fact(FactKind.PREPRACTICE_PROVIDED, T0.minusSeconds(10))));
+        SceneRunRecord ended = new SceneRunRecord(base.id(), base.sessionId(), base.guardianId(), base.goalRef(), base.goalIndex(),
+                base.scenarioRef(), base.sceneKind(), base.startedAt(), T0.plusSeconds(20), base.liveTiming(), null, 0, 0, base.facts());
+        Map<String, Object> practice = PracticeFlowRecordAssembler.assemble(List.of(ended));
+        Map<String, Object> scene = ((List<Map<String, Object>>) practice.get("scenes")).getFirst();
+        assertThat(scene).containsEntry("startedAt", T0).containsEntry("endedAt", T0.plusSeconds(20));
+        assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", JsonCodec.shared().write(practice))).isEmpty();
     }
 
     @Test
@@ -74,7 +87,7 @@ class PracticeFlowRecordAssemblerTest {
 
         List<Fact> all = java.util.Arrays.stream(FactKind.values()).map(kind -> new Fact(kind, T0)).toList();
         Map<String, Object> every = PracticeFlowRecordAssembler.assemble(List.of(run(SceneKind.BASE, 0, LiveTiming.ABSTAINED, null, all)));
-        assertThat(FactKind.values()).as("계약 facts 15종").hasSize(15);
+        assertThat(FactKind.values()).contains(FactKind.PREPRACTICE_PROVIDED, FactKind.PREPRACTICE_ATTEMPTED);
         assertThat(InternalApi.schemaErrors("practice-record-v2.schema.json", JsonCodec.shared().write(every))).isEmpty();
     }
 }
