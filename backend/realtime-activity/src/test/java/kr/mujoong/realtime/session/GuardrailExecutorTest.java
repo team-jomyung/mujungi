@@ -527,13 +527,28 @@ class GuardrailExecutorTest {
         FakeGuardrailClient practiceGuard = practice.guard;
         practice.activate();
 
-        practice.speak("내 차례야. 이렇게 말해 봐.", 4800);
+        practice.speak("내 차례지.", 4800);
         practice.advance(Duration.ofMillis(801));
 
         assertThat(practiceGuard.count()).isEqualTo(1);
         assertThat(practice.link.outputs()).isEmpty();
         practiceGuard.block();
         practice.drain();
+        assertThat(practice.link.outputs()).isEmpty();
+    }
+
+    /** FT-1101-c: 승인 원문 뒤에 말을 덧붙인 낭독은 제브에 묻지도 않고 내지 않는다. */
+    @Test
+    void whilePracticeControlsTheOutputAddedWordsAreNotPlayedNorSentToTheChecker() {
+        SessionHarness practice = practiceHarness();
+        FakeGuardrailClient practiceGuard = practice.guard;
+        practice.activate();
+
+        practice.speak("내 차례야. 이렇게 말해 봐.", 4800);
+        practice.advance(Duration.ofMillis(801));
+        practice.drain();
+
+        assertThat(practiceGuard.count()).isZero();
         assertThat(practice.link.outputs()).isEmpty();
     }
 

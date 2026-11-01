@@ -1331,15 +1331,24 @@ public final class SessionExecutor {
 
     /** FT-1028-e: 승인 낭독이 원문과 다르게 읽혔지만 제브(연습 모드)가 ALLOW해 낸 단위가 있다(INFO, 원문 없음). */
     static final String REASON_APPROVED_TEXT_DIVERGED = "PracticeApprovedTextDivergedChecked";
+    /** FT-1101-c: 승인 낭독이 원문과 내용이 달라(다른 승인 문장 · 덧붙인 말) 제브로 넘기지 않고 원문 불일치로 버렸다(INFO, 원문 없음). */
+    static final String REASON_APPROVED_TEXT_DIVERGED_REJECTED = "PracticeApprovedTextDivergedRejected";
 
     /**
      * FT-1028-e: 승인 낭독 단위가 원문과 다르면 버리지 않고 생성형 발화처럼 제브(연습 모드) 검사로 넘긴다. ALLOW한 단위만 recheck → send로 나가고,
      * 막히면 제브의 기존 막힘 처리를 따른다. 원문 일치만으로 제브를 건너뛰는 길은 그대로다. 제브가 꺼져 있거나 ACTIVE가 아니면 검사할 수 없으므로
      * 거짓을 돌려 기존처럼 폐기한다(fail-closed).
+     *
+     * <p>FT-1101-c: 지금까지 받은 낭독 전체({@code received})가 원문 앞부분을 조금 다르게 읽은 것({@code PracticeSpeech#nearPrefix})일 때만
+     * 제브로 넘긴다. 장면 안내를 다시 읽거나 원문 뒤에 말을 덧붙인 낭독은 거짓을 돌려 원문 불일치로 버린다.
      */
     private boolean checkDivergedApprovedReading(SegmentBuffer.Sealed sealed, kr.mujoong.realtime.voice.PracticeSpeech speech,
-            boolean punctuationOnly, boolean streaming) {
+            String received, boolean punctuationOnly, boolean streaming) {
         if (!guardrail.enabled() || ctx.status() != SessionStatus.ACTIVE) return false;
+        if (!speech.nearPrefix(received)) {
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_TEXT_DIVERGED_REJECTED, EventCode.Level.INFO);
+            return false;
+        }
         if (!speech.equals(divergedApprovedReading)) {
             divergedApprovedReading = speech;
             ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, REASON_APPROVED_TEXT_DIVERGED, EventCode.Level.INFO);
@@ -3850,7 +3859,12 @@ public final class SessionExecutor {
                     recheckAndSend(sealed, null, true);
                     return;
                 }
-                if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, inspection.punctuationOnly(), streaming)) return;
+                if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, streamedApprovedText + unit,
+                        inspection.punctuationOnly(), streaming)) {
+                    // 다음 단위도 이 단위까지 이어 붙인 낭독 전체로 견준다
+                    streamedApprovedText.append(unit);
+                    return;
+                }
                 var rejectedSpeech = pendingPracticeSpeech;
                 guardrail.onDiscardedBeforeCheck();
                 recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true, DiscardDetail.APPROVED_TEXT_MISMATCH);
@@ -3861,7 +3875,8 @@ public final class SessionExecutor {
             if (practiceControlled
                     && (pendingPracticeSpeech == null || !pendingPracticeSpeech.matches(sealed.transcript()))) {
                 if (pendingPracticeSpeech != null && !pendingPracticeSpeech.generated()) {
-                    if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, inspection.punctuationOnly(), streaming)) return;
+                    if (checkDivergedApprovedReading(sealed, pendingPracticeSpeech, sealed.transcript(),
+                            inspection.punctuationOnly(), streaming)) return;
                     var rejectedSpeech = pendingPracticeSpeech;
                     guardrail.onDiscardedBeforeCheck();
                     recordDiscard(sealed, null, GateDecision.DiscardReason.GATE_PATTERN, true,

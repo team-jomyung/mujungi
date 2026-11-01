@@ -55,6 +55,23 @@ class PracticeSpeechMatchTest {
     }
 
     @Test
+    void aNearReadingAllowsEndingAndPunctuationDifferencesButNotAnotherSentenceOrAddedWords() {
+        // FT-1101-c: 끝맺음 · 문장부호만 다른 낭독은 제브로 넘기고, 다른 승인 문장을 다시 읽거나 말을 덧붙인 낭독은 버린다
+        var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "PEER",
+                "안녕, 나는 도서관에서 일하는 사서야. 오늘은 무슨 책을 찾으러 왔어?", PracticeSpeech.ReadingCue.PEER);
+        assertThat(speech.nearPrefix("안녕! 나는 도서관에서 일하는 사서야, 오늘은 무슨 책을 찾으러 왔니?")).isTrue();
+        assertThat(speech.nearPrefix("이런 말을 건넸어. 안녕 나는 도서관에서 일하는 사서야")).isTrue();
+        assertThat(speech.nearPrefix("안녕, 나는 도서관에서")).isTrue();
+        assertThat(speech.nearPrefix("")).isTrue();
+        assertThat(speech.nearPrefix("지금부터 상상 속 상황이야. 너는 도서관에 책을 빌리러 왔어. 안녕, 나는 도서관에서 일하는 사서야."))
+                .as("장면 안내를 다시 읽고 여는 말을 덧붙임").isFalse();
+        assertThat(speech.nearPrefix("안녕, 나는 도서관에서 일하는 사서야. 오늘은 무슨 책을 찾으러 왔어? 공룡 책은 저쪽에 있어."))
+                .as("원문 뒤에 말을 덧붙임").isFalse();
+        assertThat(speech.nearPrefix(null)).isFalse();
+        assertThat(PracticeSpeech.generatedSlot(UUID.randomUUID(), UUID.randomUUID(), 0, "PEER", "지시").nearPrefix("지시")).isFalse();
+    }
+
+    @Test
     void onlyFixedReadingLeadMayPrecedeTheEntireApprovedBody() {
         var speech = PracticeSpeech.scenario(UUID.randomUUID(), UUID.randomUUID(), 0, "친구", "이제 그만하자");
         assertThat(speech.text()).isEqualTo("이제 그만하자.");
