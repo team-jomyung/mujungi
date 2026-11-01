@@ -51,7 +51,7 @@
 
 1. **[실기기] FT-1030-q 확인**: 실기기 연습 뒤 realtime 기록에서 `PracticeChildInputDuringApprovedSpeech_*` · `PracticeChildInputTimeline_*` · `PracticeChildTranscriptEchoDropped`를 본다. 현상이 다시 나면 시간선 코드로 원인 조건(지시 구간 앞 · 안 · 뒤)을 좁히고, 정상 아이 말이 잘못 버려지지 않는지 본다.
 2. **변형 장면 품질**: 변형 라운드에서 `TRANSFER_MISMATCH`(기회 문장 구조 변경) 또는 모델이 VARIANT를 빼고 보냄. 변형 라운드 생성 지시에 "기회 문장 구조 유지 · VARIANT 반드시 출력"을 더하는 안. → 2026-11-02 코드 반영(FT-1102-a, 테스트 대역만 확인, 실호출 미확인): 생성 v8 변형 라운드 지시, VARIANT 없으면 검토 없이 승인 BASE 발급(`ScenarioVariantMissing`), 서버 변형 검사 실패 좌표 진단(`ScenarioVariantField_*`). 변형 발급률은 `practice-start-trial.py`나 `ScenarioVariantReviewLiveTest`로 다시 본다.
-3. **생성 품질**: 고쳐 쓸 때마다 새 이른 단서(`EARLY_CUE`, 여는 말이 답을 먼저 말함) · 목표 불일치가 나온다. 원문 진단으로 사례를 더 모아 생성 v7 점검 목록을 보완.
+3. **생성 품질**: 고쳐 쓸 때마다 새 이른 단서(`EARLY_CUE`, 여는 말이 답을 먼저 말함) · 목표 불일치가 나온다. 원문 진단으로 사례를 더 모아 생성 v7 점검 목록을 보완. → 2026-11-02 실호출(이 PC live, "질문에 맞게 반응하기" × 5, 3회 성공, 거절 8건 중 `REPETITION` 5건, 반복을 고치면 `GOAL_MISMATCH` · `EARLY_CUE`가 새로 나옴, 검토 승인 뒤 금지 내용 서버 검사로 호출을 남기고 실패 1건)을 근거로 FT-1102-b 반영(테스트 대역만 확인): 생성 v9 수정 절 보완, 고칠 수 있는 서버 내용 사유를 그 코드로 넘기고 마지막 수정 라운드 허용. 이 목표는 그래프 씨앗이 없어 변형 라운드(FT-1102-a)는 실호출로 확인하지 못했다.
 4. **3번 흐름 수정(사용자 결정: 제안대로 진행)** — 2026-11-01 코드 반영(FT-1101-a · b · c, 테스트 대역만 확인, 실기기 미확인):
    - 사전 연습에서 한 발화가 둘로 나뉘면 앞 조각만 판정되고, 뒤 조각은 판정 없이 사전 연습을 끝낸다(`PracticeConversation.judge` → `requestJudgment` 거절 → `finishPreparation(false)`). 나뉜 조각을 이어 판정한다. → FT-1101-a: 판정 중 확정된 뒤 조각을 보관해 앞 조각이 수행이 아니면 이어 판정한다.
    - 사전 연습 예시가 장면의 정답 물건을 쓴다(사전 연습 지시가 장면을 참고). 예시가 장면 정답을 쓰지 않게 한다. → FT-1101-b: 사전 연습 지시에서 `expressionExamples`를 뺐다.

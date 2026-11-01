@@ -141,7 +141,7 @@ public final class ScenarioScriptGenerator {
                     // 같은 사유로 또 거절됐다(2026-10-28 실키, FT-1028-c). 변형 판정은 BASE만 만드는 다음 생성과 무관해 넘기지 않는다
                     correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons());
                     correctionFindings=reviewed.review().findings();
-                    if(result==ScenarioScriptValidation.Result.INVALID_BASE)correctionReasons.add(result.name());
+                    if(result==ScenarioScriptValidation.Result.INVALID_BASE)correctionReasons.add(serverReason(result,inspection));
                     if(foreign)correctionReasons.add(FOREIGN_SCRIPT_REASON);
                     active=withoutGraph(current);preserved=null;continue;
                 }
@@ -162,7 +162,7 @@ public final class ScenarioScriptGenerator {
                         // BASE만 다시 만든다. 구조(보존) 사유는 그래프 없는 장면과 무관해 빼고 넘긴다(FT-1030-i)
                         correctionReasons=new java.util.ArrayList<>(reviewed.review().reasons().stream().filter(r->!variantReason(r)).toList());
                         correctionFindings=reviewed.review().findings().stream().filter(f->!variantReason(f.reason())).toList();
-                        if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
+                        if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(serverReason(result,inspection));
                         if(foreign)correctionReasons.add(FOREIGN_SCRIPT_REASON);
                         active=withoutGraph(current);preserved=null;
                         continue;
@@ -185,7 +185,7 @@ public final class ScenarioScriptGenerator {
                 if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioValidation_"+result.name());
                 if(!reviewed.review().approved())diagnoseReview(reviewed.review());
                 if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
-                if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(result.name());
+                if(result!=ScenarioScriptValidation.Result.VALID)correctionReasons.add(serverReason(result,inspection));
                 if(!script.scenes().isEmpty()&&script.scenes().getFirst().sceneDescription()!=null){
                     var base=script.scenes().getFirst();
                     String description=ScenarioContentPolicy.normalize(base.sceneDescription());
@@ -335,16 +335,28 @@ public final class ScenarioScriptGenerator {
     }
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
-        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v8");
+        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v9");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v6"),new Scenario.Generation(model,"scenario-generation.v8",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v6"),new Scenario.Generation(model,"scenario-generation.v9",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     /**
      * 마지막 수정 라운드를 쓸 수 있는 장면 보완 사유. 외국 문자는 생성이 다시 써서 고칠 수 있다(FT-1030-j). 반복은 장소 · 활동 · 핵심 사건을 새로
      * 골라 고칠 수 있다(FT-1030-l: 목표가 특정 물건에 묶이면 최근 노출과 겹치기 쉬워 두 라운드로는 고쳐지지 않았다).
      */
-    private static final java.util.Set<String> REPAIRABLE=java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH","FOREIGN_SCRIPT","REPETITION");
+    private static final java.util.Set<String> REPAIRABLE=java.util.Set.of("INCOMPLETE_SCENE","ANSWER_INCLUDED","EARLY_CUE","GOAL_MISMATCH","FOREIGN_SCRIPT","REPETITION",
+            "PRIVATE_OR_FORBIDDEN_CONTENT","TARGET_EXPRESSION_DISCLOSED","PRESSURE_OR_ANSWER");
+    /**
+     * 생성이 다시 써서 고칠 수 있는 서버 내용 검사 사유. 전에는 모두 INVALID_BASE 하나로 넘겨 무엇을 고칠지 알 수 없었고, 검토가 승인한 대본이
+     * 금지 내용 검사에 걸리면 마지막 수정 라운드를 못 쓰고 호출을 남긴 채 실패했다(2026-11-02 실호출, FT-1102-b). 사유 코드만 넘기고 대본 원문은 넘기지 않는다.
+     */
+    private static final java.util.Set<ScenarioScriptValidation.Reason> SERVER_REPAIRABLE=java.util.EnumSet.of(
+            ScenarioScriptValidation.Reason.PRIVATE_OR_FORBIDDEN_CONTENT,ScenarioScriptValidation.Reason.TARGET_EXPRESSION_DISCLOSED,
+            ScenarioScriptValidation.Reason.PRESSURE_OR_ANSWER);
+    /** BASE가 고칠 수 있는 서버 내용 검사에 걸렸으면 그 사유를, 아니면 지금처럼 검사 결과(INVALID_BASE 등)를 수정 사유로 쓴다. */
+    static String serverReason(ScenarioScriptValidation.Result result,ScenarioScriptValidation.Inspection inspection){
+        return result==ScenarioScriptValidation.Result.INVALID_BASE&&SERVER_REPAIRABLE.contains(inspection.reason())?inspection.reason().name():result.name();
+    }
     static final String FOREIGN_SCRIPT_REASON="FOREIGN_SCRIPT";
     private static final java.util.regex.Pattern FOREIGN_SCRIPT=java.util.regex.Pattern.compile("[\\u3040-\\u30ff\\u4e00-\\u9fff]");
     /** 아이가 듣거나 장면을 이루는 문장에 가나 · 한자가 들어 있는가(대본 원문은 남기지 않는다). */
