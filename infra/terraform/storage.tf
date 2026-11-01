@@ -1,50 +1,5 @@
-# 내 AWS 계정 정보 조회 (버킷 이름에 계정 ID 붙이려고 — 코드엔 안 드러남)
+# 내 AWS 계정 ID 조회 (SSM 파라미터 등의 ARN에 넣는다 — 계정 ID를 코드에 직접 쓰지 않으려고)
 data "aws_caller_identity" "current" {}
-
-# ──────────── S3: 음성 + 백업 ────────────
-resource "aws_s3_bucket" "media" {
-  bucket = "${local.name}-media-${data.aws_caller_identity.current.account_id}"
-
-  tags = { Name = "${local.name}-media" }
-}
-
-# 퍼블릭 접근 전부 차단
-resource "aws_s3_bucket_public_access_block" "media" {
-  bucket                  = aws_s3_bucket.media.id
-  block_public_acls       = true
-  ignore_public_acls      = true
-  block_public_policy     = true
-  restrict_public_buckets = true
-}
-
-# 서버 측 암호화
-resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
-  bucket = aws_s3_bucket.media.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# Lifecycle: 백업은 14일 지나면 자동 삭제
-resource "aws_s3_bucket_lifecycle_configuration" "media" {
-  bucket = aws_s3_bucket.media.id
-
-  rule {
-    id     = "expire-old-backups"
-    status = "Enabled"
-
-    filter {
-      prefix = "backup/"
-    }
-
-    expiration {
-      days = 14
-    }
-  }
-}
 
 # ──────────── ECR: 이미지 저장소 6개 ────────────
 resource "aws_ecr_repository" "app" {
