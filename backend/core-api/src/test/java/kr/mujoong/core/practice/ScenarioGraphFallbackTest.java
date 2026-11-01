@@ -110,6 +110,27 @@ import org.mockito.ArgumentCaptor;
         assertThat(result.details().generation().graphContextUsed()).isTrue();
         assertThat(result.details().generation().calls()).as("고쳐 생성 · 재검토 호출 없음").isEqualTo(4);
         verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    /** FT-1102-a: 변형 라운드가 VARIANT 없이 BASE만 돌려주면 검토를 다시 부르지 않고 승인된 BASE를 바로 발급한다. */
+    @Test void aVariantRoundWithoutAVariantIssuesTheApprovedBaseWithoutAnotherReview(){planReadyWithApprovedBaseFirst();
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"));
+        var codes=new ArrayList<String>();generator.diagnostics(codes::add);
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(result.details().generation().graphContextUsed()).isTrue();
+        assertThat(result.details().generation().calls()).isEqualTo(3);
+        verify(provider,times(2)).generate(any());verify(provider,times(1)).review(any());
+        assertThat(codes).contains("ScenarioVariantMissing","ScenarioVariantFailedApprovedIssued");}
+    /** FT-1102-a: 서버 변형 검사에 걸린 VARIANT는 계획과 어긋난 좌표를 진단 코드로 남기고, 승인된 BASE를 발급한다. */
+    @Test void aVariantFailingTheServerCheckNamesTheMismatchedCoordinate(){planReadyWithApprovedBaseFirst();
+        var planned=plan.context();
+        var elsewhere=new VariantPlanner.Context(planned.topic(),"도서관".equals(planned.place())?"운동장":"도서관",planned.participants(),planned.relationship(),planned.situation());
+        when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"),
+                new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base,scene(elsewhere,"variant","VARIANT"))),"fake"));
+        var codes=new ArrayList<String>();generator.diagnostics(codes::add);
+        var result=run();
+        assertThat(result.details().scenes()).extracting(ScenarioScript.Scene::sceneKind).containsExactly("BASE");
+        assertThat(codes).contains("ScenarioRule_VARIANT_STRUCTURE","ScenarioVariantField_PLACE")
+                .doesNotContain("ScenarioVariantField_TOPIC","ScenarioVariantField_GRADE","ScenarioVariantMissing");}
     @Test void aFailingVariantProviderStillIssuesTheApprovedScript(){planReadyWithApprovedBaseFirst();
         when(provider.generate(any())).thenReturn(new ScenarioScriptProvider.Generated(new ScenarioScript(List.of(base)),"fake"))
                 .thenThrow(new ScenarioScriptProvider.Failure(ScenarioScriptProvider.Failure.Kind.PERMANENT,Optional.empty()));

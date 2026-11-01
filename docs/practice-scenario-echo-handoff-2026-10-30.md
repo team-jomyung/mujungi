@@ -50,7 +50,7 @@
 ## 4. 남은 일
 
 1. **[실기기] FT-1030-q 확인**: 실기기 연습 뒤 realtime 기록에서 `PracticeChildInputDuringApprovedSpeech_*` · `PracticeChildInputTimeline_*` · `PracticeChildTranscriptEchoDropped`를 본다. 현상이 다시 나면 시간선 코드로 원인 조건(지시 구간 앞 · 안 · 뒤)을 좁히고, 정상 아이 말이 잘못 버려지지 않는지 본다.
-2. **변형 장면 품질**: 변형 라운드에서 `TRANSFER_MISMATCH`(기회 문장 구조 변경) 또는 모델이 VARIANT를 빼고 보냄. 변형 라운드 생성 지시에 "기회 문장 구조 유지 · VARIANT 반드시 출력"을 더하는 안.
+2. **변형 장면 품질**: 변형 라운드에서 `TRANSFER_MISMATCH`(기회 문장 구조 변경) 또는 모델이 VARIANT를 빼고 보냄. 변형 라운드 생성 지시에 "기회 문장 구조 유지 · VARIANT 반드시 출력"을 더하는 안. → 2026-11-02 코드 반영(FT-1102-a, 테스트 대역만 확인, 실호출 미확인): 생성 v8 변형 라운드 지시, VARIANT 없으면 검토 없이 승인 BASE 발급(`ScenarioVariantMissing`), 서버 변형 검사 실패 좌표 진단(`ScenarioVariantField_*`). 변형 발급률은 `practice-start-trial.py`나 `ScenarioVariantReviewLiveTest`로 다시 본다.
 3. **생성 품질**: 고쳐 쓸 때마다 새 이른 단서(`EARLY_CUE`, 여는 말이 답을 먼저 말함) · 목표 불일치가 나온다. 원문 진단으로 사례를 더 모아 생성 v7 점검 목록을 보완.
 4. **3번 흐름 수정(사용자 결정: 제안대로 진행)** — 2026-11-01 코드 반영(FT-1101-a · b · c, 테스트 대역만 확인, 실기기 미확인):
    - 사전 연습에서 한 발화가 둘로 나뉘면 앞 조각만 판정되고, 뒤 조각은 판정 없이 사전 연습을 끝낸다(`PracticeConversation.judge` → `requestJudgment` 거절 → `finishPreparation(false)`). 나뉜 조각을 이어 판정한다. → FT-1101-a: 판정 중 확정된 뒤 조각을 보관해 앞 조각이 수행이 아니면 이어 판정한다.

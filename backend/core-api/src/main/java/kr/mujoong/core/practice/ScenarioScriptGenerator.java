@@ -94,6 +94,12 @@ public final class ScenarioScriptGenerator {
                     // (2026-10-30 실키 4번 모두). 모델에게서는 VARIANT만 받고 BASE는 승인본으로 고정한다(FT-1030-o)
                     var pinned=pinBase(script,preserved);
                     if(pinned!=script){diagnose("ScenarioVariantBasePinned");script=pinned;}
+                    // 변형 라운드인데 VARIANT 없이 BASE만 돌아왔다(2026-10-30 실키). 다시 검토해도 승인된 BASE만 남으므로 검토 호출을 쓰지 않고
+                    // 그 BASE를 바로 발급한다. 첫 라운드 VARIANT가 서버 검사에 걸려 통째 승인본이 없으면 지금처럼 BASE만 검토한다(FT-1102-a)
+                    if(script.scenes().stream().noneMatch(s->"VARIANT".equals(s.sceneKind()))){
+                        diagnose("ScenarioVariantMissing");
+                        if(approvedBeforeVariant!=null)return issueApprovedBeforeVariant(approvedBeforeVariant,budget,deadline);
+                    }
                 }
                 scriptToRepair=script;
                 Input reviewedInput=current;
@@ -115,6 +121,7 @@ public final class ScenarioScriptGenerator {
                 var inspection=validation.inspectDetailed(script,current.rules());
                 var result=inspection.result();
                 if(result!=ScenarioScriptValidation.Result.VALID)diagnose("ScenarioRule_"+inspection.reason().name());
+                if(inspection.reason()==ScenarioScriptValidation.Reason.VARIANT_STRUCTURE)diagnoseVariantFields(script,current.rules());
                 if(current.graphContextUsed()&&script.scenes().size()>1&&!current.payload().containsKey("variantPlan")&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
                     result=ScenarioScriptValidation.Result.INVALID_VARIANT;
                 if(planMismatch&&script.scenes().size()>1&&result!=ScenarioScriptValidation.Result.INVALID_BASE)
@@ -220,6 +227,16 @@ public final class ScenarioScriptGenerator {
         throw new ContentExhausted();
     }
     /** 거절 판정 · 사유와, 사유마다 걸린 점검 항목 · 필드를 고정 코드로만 남긴다(대본 원문 없음, R-F14). */
+    /** 서버 변형 검사에 걸린 VARIANT가 계획과 어긋난 항목을 고정 코드로 남긴다(FT-1102-a). 장면 종류가 VARIANT가 아니면 KIND로 남긴다. */
+    private void diagnoseVariantFields(ScenarioScript script,ScenarioScriptValidation.Rules rules){
+        if(!(rules.variants() instanceof ScenarioGraphContext.Session graph)||script.scenes().size()<2)return;
+        var base=script.scenes().getFirst();
+        for(var scene:script.scenes().subList(1,script.scenes().size())){
+            if(!"VARIANT".equals(scene.sceneKind())){diagnose("ScenarioVariantField_KIND");return;}
+            var mismatches=graph.variantMismatches(base,scene);
+            if(!mismatches.isEmpty()){mismatches.forEach(code->diagnose("ScenarioVariantField_"+code));return;}
+        }
+    }
     private void diagnoseReview(kr.mujoong.core.textai.ScenarioReview review){
         diagnose("ScenarioReview_"+review.verdict());
         review.reasons().forEach(reason->diagnose("ScenarioReview_"+reason));
@@ -318,10 +335,10 @@ public final class ScenarioScriptGenerator {
     }
     private Result approved(ScenarioScript script,String model,String reviewModel,Input input,Budget budget,ScenarioDeadline deadline){
         deadline.check();var base=script.scenes().getFirst();
-        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v7");
+        var legacy=new GeneratedScenario(base.sceneDescription(),base.opportunitySentence(),input.rules().relation(),input.rules().opportunity(),model,"scenario-generation.v8");
         var scenes=script.scenes().stream().map(s->s.withPartnerRole(ScenarioContentPolicy.PARTNER_ROLE)).toList();
         String version=input.graphContextUsed()&&input.rules().variants() instanceof ScenarioGraphContext.Session graph?graph.graphVersion():null;
-        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v6"),new Scenario.Generation(model,"scenario-generation.v7",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
+        return new Result(legacy,new ScenarioRepository.Details("scenario-script.v1",scenes,new Scenario.Review("APPROVE",reviewModel,"scenario-review.v6"),new Scenario.Generation(model,"scenario-generation.v8",input.graphContextUsed(),budget.calls,version),input.goalContextJson()));
     }
     /**
      * 마지막 수정 라운드를 쓸 수 있는 장면 보완 사유. 외국 문자는 생성이 다시 써서 고칠 수 있다(FT-1030-j). 반복은 장소 · 활동 · 핵심 사건을 새로
