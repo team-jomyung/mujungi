@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SUBTITLE_HOLD_MS, useDeviceSubtitle } from "@/device/features/status/useDeviceSubtitle";
+import { SUBTITLE_HOLD_MS, joinSubtitle, useDeviceSubtitle } from "@/device/features/status/useDeviceSubtitle";
 
 // 기기 자막 상태: 나눠 보낸 응답의 묶음 사이 틈에서 깜빡이지 않고 이어 붙인다(docs/ui/device-subtitle.md).
 
@@ -80,5 +80,17 @@ describe("useDeviceSubtitle", () => {
       result.current.clear();
     });
     expect(result.current.talking).toBe(false);
+  });
+
+  it("낱말 중간에서 나뉜 조각은 띄어 쓰지 않고, 앞 공백이 있는 조각만 띄어 잇는다", () => {
+    let text = joinSubtitle(null, " 음,");
+    for (const piece of [" 무중", "이가 잠", "깐 놀이", "를", " 멈", "추고"]) text = joinSubtitle(text, piece);
+    expect(text).toBe("음, 무중이가 잠깐 놀이를 멈추고");
+  });
+
+  it("문장 부호 뒤에 바로 붙은 글은 한 칸 띄운다", () => {
+    expect(joinSubtitle(null, "놀이를 해 보자.친구는 아직")).toBe("놀이를 해 보자. 친구는 아직");
+    expect(joinSubtitle("응, 여기서.", "오늘 이야기 즐거웠어!")).toBe("응, 여기서. 오늘 이야기 즐거웠어!");
+    expect(joinSubtitle(null, "1.5배")).toBe("1.5배");
   });
 });

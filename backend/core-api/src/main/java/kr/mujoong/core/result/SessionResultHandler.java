@@ -103,6 +103,8 @@ public class SessionResultHandler implements JobHandler {
         // INSUFFICIENT는 이 목록이 비어 2차 분류도 호출하지 않는다.
         var checked=checker.check(checks,job.deadline(),()->requireAiAccess(job));
         for(var s:sentences){s.put("text",checked.get(s.remove("checkId")));}
+        // 두 문장이 모두 걸려 같은 고정 문장으로 바뀌면 한 번만 남긴다(목표별)
+        Set<String> seenSentences=new HashSet<>();sentences.removeIf(s->!seenSentences.add(s.get("goalSelectionId")+"|"+s.get("text")));
         List<CandidateRegistry.Candidate> candidates=new ArrayList<>();for(int i=0;i<candidateDrafts.size();i++)if(checked.get("c"+i)!=null)candidates.add(candidateDrafts.get(i));
         Set<String> keys=new LinkedHashSet<>();for(var goal:goals(practice))if(!text(goal,"behaviorKey").isBlank())keys.add(text(goal,"behaviorKey"));candidates.forEach(c->keys.add(c.behaviorKey()));
         var match=tips.match(keys);var help=goals(practice).stream().map(g->Map.of("goalSelectionId",text(g,"goalSelectionId"),"help",HelpSummarizer.summarize(g))).toList();

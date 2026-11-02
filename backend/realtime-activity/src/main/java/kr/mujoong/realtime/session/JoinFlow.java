@@ -106,7 +106,7 @@ final class JoinFlow {
             env.reportMissing(contentCode, now);
         } else {
             UUID playbackId = UUID.randomUUID();
-            if (ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+            if (ctx.sendControl(PlayApprovedContent.withSubtitle(playbackId, contentCode, item.get().contentVersionId(), item.get().text()))) {
                 // 안내를 재생하는 동안 아이 소리는 공급자에 들려주지 않는다(끝 표식이 풀어 준다)
                 ctx.relay().setMuted(true);
                 ctx.joinPromptPlaybackId(playbackId);
@@ -297,7 +297,7 @@ final class JoinFlow {
             return;
         }
         ctx.joinPromptPlaybackId(playback);
-        if (!ctx.sendControl(new PlayApprovedContent(playback, code, item.orElseThrow().contentVersionId()))) {
+        if (!ctx.sendControl(PlayApprovedContent.withSubtitle(playback, code, item.orElseThrow().contentVersionId(), item.orElseThrow().text()))) {
             failNotice(FailureCode.DEVICE_NO_ACK);
             return;
         }

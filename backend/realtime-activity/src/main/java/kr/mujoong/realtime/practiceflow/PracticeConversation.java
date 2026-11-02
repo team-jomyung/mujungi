@@ -432,8 +432,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         state.phase(Phase.PREPARATION, Sub.PREPARATION_PROMPT);
         earlyUtterance = null;
         output.schedule(TIMER_FOCUS_MAX, settings.focusMax());
-        speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(
-                pack.goals().get(state.goalIndex()).goalName(), currentScene, false));
+        GoalSpec goal = pack.goals().get(state.goalIndex());
+        speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(goal.goalName(), goal.judgmentCriteria(), currentScene, false));
     }
 
     private void finishPreparation(boolean performed) {
@@ -475,8 +475,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 && ("PARTIAL".equals(option) || "HELP".equals(option)
                 || "NOT_UNDERSTOOD".equals(option) || "IRRELEVANT".equals(option))) {
             state.phase(Phase.PREPARATION, Sub.PREPARATION_FEEDBACK);
-            speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(
-                    pack.goals().get(state.goalIndex()).goalName(), currentScene, true));
+            GoalSpec goal = pack.goals().get(state.goalIndex());
+            speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(goal.goalName(), goal.judgmentCriteria(), currentScene, true));
         } else {
             // 판정 장애·모르는 코드·인식 불확실성을 수행 실패로 기록하지 않는다.
             finishPreparation(false);

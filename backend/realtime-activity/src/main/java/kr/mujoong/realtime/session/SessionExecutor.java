@@ -2187,7 +2187,7 @@ public final class SessionExecutor {
                         playbackId, null)));
                 return true;
             }
-            if (!ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, item.get().contentVersionId()))) {
+            if (!ctx.sendControl(PlayApprovedContent.withSubtitle(playbackId, contentCode, item.get().contentVersionId(), item.get().text()))) {
                 return refusePractice("playApproved", "SEND_FAILED");
             }
             practicePlaybacks.put(playbackId, contentCode);
@@ -3236,19 +3236,27 @@ public final class SessionExecutor {
         }
         Instant now = ctx.services().clock().now();
         accountDrain(now);
-        if (!now.isBefore(deferred.deadline())) {
-            deferredPracticeInstruction = null;
-            practiceDrainStage("DRAIN_TIMEOUT", now);
-            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
-            if (deferred.job().onFailure != null) deferred.job().onFailure.run();
-            return;
-        }
+        boolean expired = !now.isBefore(deferred.deadline());
         Instant last = ctx.outputGen().lastDeltaAt();
         Instant ready = last == null ? now : last.plus(ctx.services().settings().segmentQuiet());
         // Let a pending child utterance reach stop/rest classification before starting more audio.
         drainLastBlocker = pendingOutputChunks.get() > 0 ? DrainBlocker.OUTPUT_PENDING
                 : inputGroupId != null ? DrainBlocker.CHILD_INPUT_OPEN
                 : now.isBefore(ready) ? DrainBlocker.OUTPUT_FLOWING : null;
+        if (expired) {
+            practiceDrainStage("DRAIN_TIMEOUT", now);
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainTimeout", EventCode.Level.WARN);
+            if (drainLastBlocker != null && drainLastBlocker != DrainBlocker.OUTPUT_FLOWING) {
+                // 아이가 말하는 중이거나 보낼 조각이 남았으면 지금처럼 이 발화를 실패로 닫는다
+                deferredPracticeInstruction = null;
+                if (deferred.job().onFailure != null) deferred.job().onFailure.run();
+                return;
+            }
+            // 공급자가 지시 없이 낸 말(이미 세대를 올려 버리는 중)이 계속 흘러 조용해지지 않을 뿐이면, 서버 안내를 건너뛰지 않고 지금 보낸다.
+            // 새 말의 시작은 지시 확인 사건 · 전사 시간선으로 가르므로 앞 말의 남은 조각은 낡은 세대로 버려진다(안내 누락 방지)
+            ctx.services().events().appError(EventLog.Component.OUTPUT_GATE, "PracticeOutputDrainForced", EventCode.Level.WARN);
+            drainLastBlocker = null;
+        }
         if (drainLastBlocker != null) {
             ctx.timers().arm(Kind.PRACTICE_OUTPUT_DRAIN, now.isBefore(ready)
                     ? Duration.between(now, ready) : ctx.services().settings().segmentQuiet());
@@ -3683,15 +3691,15 @@ public final class SessionExecutor {
         }
     }
 
-    /** 나눠 보내기에서 게이트를 통과했지만 아직 묶음에 싣지 않은 글. 다음 묶음의 OUTPUT_BEGIN.text로 한 번 나간다. */
+    /**
+     * 나눠 보내기에서 게이트를 통과했지만 아직 묶음에 싣지 않은 글. 다음 묶음의 OUTPUT_BEGIN.text로 한 번 나간다. 전사 조각은 낱말 중간에서
+     * 나뉠 수 있으므로 공백을 더하거나 지우지 않고 원래 글 그대로 잇는다(앞 공백은 {@link OutputBegin#subtitle}이 한 칸으로 남긴다).
+     */
     private void appendProgressiveSubtitle(String transcript) {
         if (transcript == null || transcript.isBlank()) {
             return;
         }
-        if (!progressiveSubtitle.isEmpty()) {
-            progressiveSubtitle.append(' ');
-        }
-        progressiveSubtitle.append(transcript.strip());
+        progressiveSubtitle.append(transcript);
     }
 
     private void pumpApprovedAudio() {
@@ -4204,8 +4212,8 @@ public final class SessionExecutor {
             return;
         }
         UUID playbackId = UUID.randomUUID();
-        if (ctx.sendControl(new PlayApprovedContent(playbackId, PlayApprovedContent.WAITING_FILLER,
-                ctx.plan().waitingFiller().contentVersionId()))) {
+        if (ctx.sendControl(PlayApprovedContent.withSubtitle(playbackId, PlayApprovedContent.WAITING_FILLER,
+                ctx.plan().waitingFiller().contentVersionId(), ctx.plan().waitingFiller().text()))) {
             ctx.playback().started(playbackId, PlayApprovedContent.WAITING_FILLER);
             ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
         }

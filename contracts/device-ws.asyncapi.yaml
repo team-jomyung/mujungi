@@ -184,7 +184,7 @@ components:
           payload: {"type": "SESSION_STATE", "seq": 4, "sentAt": "2026-10-15T09:02:02Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"view": "LISTENING"}}
     OUTPUT_BEGIN:
       name: OUTPUT_BEGIN
-      summary: "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 0x02가 이 묶음이다. 선택 text는 그 말의 확정 글(기기 자막, 500자 이하)이고 응답을 나눠 보내면 첫 묶음에만 싣는다. 선택 interruptible=false면 기기가 아이 소리로 재생을 멈추지 않는다(연습 첫 대본, FT-1030-b)"
+      summary: "서버 → 기기. 게이트를 통과한 AI 말 묶음 시작. 뒤따르는 0x02가 이 묶음이다. 선택 text는 그 말의 확정 글(기기 자막, 500자 이하)이고 응답을 나눠 보내면 각 묶음에 그 묶음의 글을 싣는다. 앞 공백 한 칸이 있으면 앞 묶음 글과 띄어 잇고, 없으면 붙여 잇는다(낱말 중간 경계). 선택 interruptible=false면 기기가 아이 소리로 재생을 멈추지 않는다(연습 첫 대본, FT-1030-b)"
       contentType: application/json
       x-payload-schema: "schemas/ws-messages.schema.json#/$defs/OUTPUT_BEGIN"
       payload:
@@ -204,7 +204,7 @@ components:
           payload: {"type": "OUTPUT_END", "seq": 6, "sentAt": "2026-10-15T09:02:12Z", "sessionId": "00000000-0000-4000-8000-000000000020", "payload": {"playbackId": "00000000-0000-4000-8000-000000000080", "totalMs": 1800}}
     PLAY_APPROVED_CONTENT:
       name: PLAY_APPROVED_CONTENT
-      summary: "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER"
+      summary: "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER. 선택 text는 그 문구의 글(기기 자막, 500자 이하)이며 없으면 자막 없이 재생한다"
       contentType: application/json
       x-payload-schema: "schemas/ws-messages.schema.json#/$defs/PLAY_APPROVED_CONTENT"
       payload:
