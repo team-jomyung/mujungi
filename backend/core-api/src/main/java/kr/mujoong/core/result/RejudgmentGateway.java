@@ -15,7 +15,6 @@ public class RejudgmentGateway {
     private final PinnedSavedGoalReader goals;
     private final JsonCodec json=JsonCodec.shared();
     public RejudgmentGateway(Optional<CoreLunaClient> luna,PinnedSavedGoalReader goals){this.luna=luna;this.goals=goals;}
-    Optional<String> targetExpression(UUID child,UUID selection){return goals.historical(child,selection).map(goal->goal.targetExpression());}
     public List<SceneJudgmentRepository.Scene> judge(UUID child,Map<String,Object> practice,List<Map<String,Object>> transcript,Map<String,String> aliases,Instant deadline,Runnable access){
         var scenes=PracticeRecordV2.read(practice);if(scenes.isEmpty())return List.of();
         Map<String,PracticeRecordV2.Scene> handles=new LinkedHashMap<>();List<Map<String,Object>> input=new ArrayList<>();

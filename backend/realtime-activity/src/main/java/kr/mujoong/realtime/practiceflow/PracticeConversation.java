@@ -121,6 +121,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean generatedAudioRetried;
     private boolean awaitingNotice;
     private boolean inputReady;
+    /** 기기에 알린 차례(FT-1102-j): 참이면 아이 차례('듣는 중'), 거짓이면 '생각 중'. 아직 알리지 않았으면 null. */
+    private Boolean childTurnShown;
     private Utterance earlyUtterance;
     /**
      * FT-1101-a: 사전 연습 판정이 열린 동안 확정된 뒤 조각(한 발화가 둘로 나뉜 것). 앞 조각 판정이 수행이 아니면 이 조각을 앞 조각에 이어 다시
@@ -527,6 +529,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     }
 
     private void closing(boolean byRequest) {
+        showChildTurn(false);
         if (!byRequest && beginGoalRecap(false)) return;
         output.cancel(TIMER_GOAL_LIMIT);
         output.cancel(TIMER_FOCUS_MAX);
@@ -599,6 +602,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
     // ---- 아이 말 · 판정 ----
 
     private void judge(Utterance utterance) {
+        showChildTurn(false);
         if (state.phase() == Phase.PREPARATION) {
             if (utterance.uncertain()) {
                 // 불명확한 음성에는 정답을 가르치거나 시도를 채점하지 않는다.
@@ -1072,7 +1076,18 @@ public final class PracticeConversation implements PracticeSessionExtension {
             judge(early);
             return;
         }
+        showChildTurn(true);
         armNoResponse();
+    }
+
+    /**
+     * FT-1102-j: 연습 대화에서는 아이가 말할 차례에만 기기를 '듣는 중'으로 두고, 그 밖(무중이 말 준비 · 재생 · 판정 · 출력 대기)은 '생각 중'으로 둔다.
+     * 같은 값이면 다시 알리지 않는다.
+     */
+    private void showChildTurn(boolean turn) {
+        if (Boolean.valueOf(turn).equals(childTurnShown)) return;
+        childTurnShown = turn;
+        output.setThinking(!turn);
     }
 
     private void armNoResponse() {
@@ -1243,6 +1258,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         if (approvedSpeechCodes.contains(code) && output.announceRoleSwitch(toRole.name())) {
             awaitingNotice = true;
             inputReady = false;
+            showChildTurn(false);
             output.schedule(TIMER_NOTICE_GUARD, settings.slotGuard());
             return;
         }
@@ -1326,6 +1342,7 @@ public final class PracticeConversation implements PracticeSessionExtension {
         openSlot = correlation;
         openSlotPlaying = false;
         inputReady = false;
+        showChildTurn(false);
         if (!output.managesSpeechTimeouts()) output.schedule(slotGuardName(), settings.slotGuard());
     }
 

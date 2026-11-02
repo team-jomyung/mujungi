@@ -3551,6 +3551,11 @@ public final class SessionExecutor {
         if (judgment.isOpen() || practiceThinking || practiceInputHold || guardrail.holdsThinking()) {
             // 열린 판정 턴(또는 확장이 요청한 생각 중 유지) 동안은 듣는 중으로 되돌리지 않는다.
             // 제브 검사 · 재지시 응답을 기다리는 동안도 같다
+            // FT-1102-j: 재생 중에 '생각 중'을 요청받았으면 재생이 끝난 지금 '생각 중'으로 바꾼다(듣는 중으로 남지 않게)
+            if (practiceThinking && ctx.status() == SessionStatus.ACTIVE && ctx.view() == View.LISTENING
+                    && ctx.devicePlaying().isEmpty() && !ctx.playback().isPlaying()) {
+                ctx.sendControl(new SessionState(View.THINKING));
+            }
             return;
         }
         if (ctx.status() == SessionStatus.ACTIVE && ctx.view() != View.LISTENING && ctx.devicePlaying().isEmpty()
