@@ -227,7 +227,7 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 - level: 범위 안 활동의 결과 수준(6.4)이 모두 INSUFFICIENT면 INSUFFICIENT, 하나라도 FULL이 아니면 PARTIAL, 모두 FULL이면 FULL.
 - 응답 모양(`report-response.schema.json`) · 화면 · PDF 모양은 바뀌지 않는다.
 
-### 6.6 금지 표현 2단계 (결과 문장 · 생활 팁)
+### 6.6 금지 표현 2단계 (결과 문장)
 
 - 1차: 4절 형식의 사전 중 appliesTo에 RESULT_TEXT 또는 PDF가 있는 항목. 정식 사전 v1에 더할 초안은 아래 표다(분류는 4절의 category 7개로 묶는다).
 
@@ -241,8 +241,8 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 | EMOTION_CLAIM | 고 싶었던 거, 때문에 속상, 화가 났던 것 같, 성격이, 일부러 |
 | PRESSURE | 꼭 좋아, 반드시, 효과가 있, 이렇게 말해야 해, 고쳐야, 매일 해야, 꾸준히 해야, 계속 해야 |
 
-- 2차(U6-J 초안): 1차를 통과한 결과 문장 · 후보 이유를 작업당 한 번에 묶는다(리포트는 2차 분류를 부르지 않는다 [편차 FT-1023-c]). 입력 `{ "sentences": [{"id":"s1", "text":"…"}] }`, 출력 `{ "results": [{"id":"s1", "violation":true, "category":"EMOTION_CLAIM", "span":"…"}] }`. 모든 요청 id가 정확히 한 번 나와야 한다. 지시: "아래 문장이 금지 중 하나에 해당하는지 판단하라. 저장 전사와 대조를 통과한 직접 인용은 금지가 아니다. 해당하면 분류와 문제 구간을 돌려준다." 승인 생활 팁은 1차 사전만 적용한다(BR7.2).
-- 걸리면: 결과 문장은 고정 템플릿(6.3), 생활 팁은 보여 주지 않는다(FR6.3 '추가 관찰 필요').
+- 2차(U6-J 초안): 1차를 통과한 결과 문장 · 후보 이유를 작업당 한 번에 묶는다(리포트는 2차 분류를 부르지 않는다 [편차 FT-1023-c]). 입력 `{ "sentences": [{"id":"s1", "text":"…"}] }`, 출력 `{ "results": [{"id":"s1", "violation":true, "category":"EMOTION_CLAIM", "span":"…"}] }`. 모든 요청 id가 정확히 한 번 나와야 한다. 지시: "아래 문장이 금지 중 하나에 해당하는지 판단하라. 저장 전사와 대조를 통과한 직접 인용은 금지가 아니다. 해당하면 분류와 문제 구간을 돌려준다."
+- 걸리면: 결과 문장은 고정 템플릿(6.3). (생활 팁은 쓰지 않는다 [편차 FT-1102-h].)
 
 ### 6.7 경험 구조화 (U6-J 초안)
 
@@ -296,9 +296,9 @@ FR7.11 표대로 FULL · PARTIAL · INSUFFICIENT를 정한다. 내용 있는 아
 
 검사 기준 · 순서 · 남기는 후보는 바꾸지 않았다. 진단 줄은 검사가 끝난 뒤 쓰기만 한다.
 
-### 6.9 U6 호출 예산과 생활 팁
+### 6.9 U6 호출 예산
 
-결과 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁은 레거시 목표 · 검증 후보 behaviorKey와 승인 항목의 교집합을 서버에서 찾고, 생성 후보를 임의 behaviorKey로 바꾸지 않는다. title · condition · content · limitation에 1차 금지 사전을 적용한다.
+결과 호출은 `mujoong.text-ai.result.request-timeout`과 작업 시도 잔여 시간 중 작은 값으로 제한한다. 게이트웨이 재시도 없이 작업당 최초 1회와 추가 최대 3회, 총 4회 시도하며 지연은 5·15·30초다(U14·FR7.6). INSUFFICIENT 사전 판정이면 AI 없이 DONE이다. 생활 팁(승인 항목 `core_support_item` 매칭)은 쓰지 않는다 [편차 FT-1102-h].
 
 ## 7. U5a TextAiGateway (U5a-d)
 

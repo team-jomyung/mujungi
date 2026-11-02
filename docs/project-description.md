@@ -1,29 +1,31 @@
-# 무중 (Mujoong) — 프로젝트 설명
+# 무중 (Mujoong) — 현재 프로젝트 설명
 
-6~12세 아이의 화용 능력(상황과 상대에 맞게 말하기)을 집에서 돕는 AI 음성 대화 서비스. 보호자는 폰 웹에서 활동을 준비 · 관찰 · 기록하고, 아이는 별도 음성 기기(지금은 웹 클라이언트)에서 AI '무중'과 자유대화와 연습을 한다. 진단이나 치료 효과 판단은 하지 않는다. LG CNS AM Inspire Camp 5기 최종 프로젝트, 2026-11-05 제출.
+6~12세 아이의 화용 능력(상황과 상대에 맞게 말하기)을 집에서 돕는 AI 음성 대화 서비스다. 보호자는 웹에서 활동을 준비·관찰하고 기록을 확인하며, 아이는 기기 웹에서 AI 무중과 자유대화·연습대화를 한다. 진단이나 치료 효과 판단을 제공하는 서비스로 설명하지 않는다.
 
-## 사용자
-- 보호자: 구글 계정 하나로 로그인. 한 계정에 아이 하나, 기기 하나. 형제는 계정을 따로 쓴다.
-- 아이: 기기 「켜기」만 조작. 말로 참여하고 "무중아 그만할래"로 끝낸다.
+대조 기준: 2026-10-30 main `08eb7cb0`. 원래 화면 설계·일정과 구현 당시 기록은 [문서 읽는 순서](README.md)에 구분했다.
 
-## 핵심 흐름 (화면 설계 v1.5j, 카드 25장)
-1. 처음 한 번: 01 구글 로그인 → 02 동의(4항목 전부 필수, 약관 시트) → 03 아이 정보(이름 · 나이 · 관심사) → 04 홈.
-2. 홈: 아이 · 대화 기기 · 지금 활동 세 구역. 기기가 안정이 아니면 자유대화 · 연습 탭 잠김. 05 기기 두 줄(등록 · 네트워크) + 판정 카드, 05a 8자리 코드 등록, SET-01 종료 표현.
-3. 자유대화: 08 배경 네 칸(모두 선택) → 12 진행(자유대화 · 연습 공통, 끝내기 P1, 끊김 P2, 아이 무응답 P3) → 17 끝(마무리 중 → 정리 중 → 정리 끝).
-4. 연습: 18 담은 목표(즐겨찾기 · 삭제) 골라 시작 → 12 연습 → 17. 방식은 2안(상황 반응 조절형) + 제브 판정.
-5. 기록: 26 달력 → 27 상세(대화 기록 · 생활 팁 · 연습 목표 후보 「담기」) → 28 리포트 범위 → 30 PDF 저장(아이 정보 + 날짜별 대화 원문, AI 요약 없음).
-6. 아이 기기 웹: D0 처음 켜기(코드) · T19 상태(켜기 · 끄기, 대기 · 듣는 중 · 말하는 중 · 끊김).
+## 사용자 흐름
 
-## 구조 (ADR_2S)
-Core API Spring + Realtime Activity Spring, Next.js 한 앱 두 접점(/parent · /device), PostgreSQL 1대(core · realtime 스키마), Neo4j(화용 지식), GPT-Live 중계 B안 + 출력 게이트, 내부 HTTP + Outbox/Inbox, EC2 1대 Docker Compose.
+1. 보호자는 로그인·동의 후 아이 정보를 등록한다. 생년월일 저장 구조는 [V11 마이그레이션](../backend/core-api/src/main/resources/db/migration/core/V11__child_birth_date.sql)에 있다.
+2. 기기를 등록·연결하고 자유대화 또는 연습을 시작한다. 기기와 보호자 화면은 각각 `/device`, `/parent`이며 관리자 화면은 `/admin`이다.
+3. 자유대화의 결과 처리에서 목표 후보를 만들고, 유효한 자유대화 생성 목표를 연습 목록에 자동으로 담는다. 자동으로 담기는 것과 보호자가 실제 연습할 목표를 체크하는 것은 다르다. [후처리 구현](../backend/core-api/src/main/java/kr/mujoong/core/practicegoal/CandidateSeedDelivery.java)을 따른다.
+4. 연습은 한 번에 목표 1개를 선택한다. 활성 즐겨찾기는 보호자별 최대 5개이고 일반 담은 목표는 페이지당 5개씩 표시한다. [시작 요청 검증](../backend/core-api/src/main/java/kr/mujoong/core/practice/start/PracticeStartRequest.java)과 [목표 목록 계약](../contracts/practice-goal-list.md)을 확인한다.
+5. 연습에서는 참여 확인 후 활동 안내·새 상황·상대 역할 대화·필요한 도움·마무리를 진행한다. 세부 분기는 [연습 흐름](adaptive-practice-dialogue.md)에 있다.
+6. 기록에서 활동과 결과를 보고 상담용 리포트를 만든다. 리포트의 대화 선택은 1개 이상이며 개수 상한은 없다. 화면의 10개는 페이지 크기다. [요청 스키마](../contracts/schemas/report-create-request.schema.json), [선택 화면](../frontend/src/parent/features/reports/ReportRangeScreen.tsx)을 근거로 한다.
 
-## 기준과 미결
-- 화면 설계 v1.5j가 기준이다. ADR · ERD · WBS와 어긋나는 21곳과 제안은 knowledge/documents/80_점검표_1008.
-- 10/9 스크럼에서 확인할 일곱 묶음: 기기 코드 등록 + Device 테이블 / 원음 저장 / 상태 · 사유 · 시간값 / 보호자 끝내기 인사 / 12 말풍선 폴링 · 푸시 / 연습 목표 수 / 결과 소유권.
-- 제브 판정의 단계 값 · 판정 기준 · 프롬프트는 AI 입출력 계약(WBS 1.7.3)에서.
+## 서비스 구성과 책임
 
-## 일정
-구현 10/15~27(7일) · 통합시험 10/29 · 결함 수정 10/30 · 동결 11/2 · 문서 11/3 · 제출 11/5. 팀 5명: A 계정 / B 음성 / C 연습 / D AI / E 결과.
+| 구성 | 책임·근거 |
+| --- | --- |
+| Core API | 보호자·기기·목표·상황 생성·결과·리포트·관리자 API. [REST 계약](../contracts/parent-api.yaml) |
+| Realtime Activity | 기기 음성 연결, 실시간 대화 상태, 연습 진행과 출력 제어. [기기 WSS 계약](../contracts/device-ws.asyncapi.yaml) |
+| Next.js | 보호자·아이 기기·관리자 화면. [앱 라우트](../frontend/src/app) |
+| PostgreSQL | Core와 Realtime 스키마를 분리해 영속 데이터·Inbox/Outbox 관리. [현재 DB 안내](erd/README.md) |
+| Neo4j | 목표·상황 생성에 필요한 지식과 관계 조회. 전체 실행은 기본 활성화하되 요청별 그래프 사용 여부는 별도 확인. [실행 안내](neo4j-runtime.md) |
+| AI 연결 | GPT-Live 음성 대화, 별도 텍스트 상황 생성·검토, Decisions API 진행 판정, Jev 출력 검사. [AI 계약](../contracts/ai-io.md) |
 
-## 참고 문서
-aidlc/spaces/default/knowledge/documents/ 의 00_읽는순서.md 부터.
+진행 판정과 출력 안전 검사는 역할이 다르다. 서버가 판정 요청을 구성하고 결과를 검증해 다음 동작을 정한다. Jev는 생성 발화 출력 검사 경로에 있으며, 실제 사용 여부는 실행 설정과 [구성 코드](../backend/realtime-activity/src/main/java/kr/mujoong/realtime/guardrail/GuardrailConfiguration.java)를 확인해야 한다. 로컬의 STUB 시험 결과를 실제 Jev 검증 결과로 표시하지 않는다.
+
+앱 사이 통신에는 내부 HTTP와 영속 이벤트 Inbox/Outbox가 쓰인다. [내부 HTTP](../contracts/internal-api.yaml)와 [이벤트 계약](../contracts/events.asyncapi.yaml)은 별도 계약이다.
+
+로컬 실행은 [Compose 구성](../infra/compose.demo.yml)과 [실키 실행 안내](live-run.md)를 따른다. 저장소에는 [ECS 서비스 Terraform 정의](../infra/terraform/ecs_services.tf)도 있으므로 모든 환경을 ‘EC2 한 대의 Compose’로 단정하지 않는다. 여기서는 실제 AWS 배포 상태를 확인하지 않았다.

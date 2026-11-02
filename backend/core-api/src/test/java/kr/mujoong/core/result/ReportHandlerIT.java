@@ -50,7 +50,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
             var record=new ActivityRecordRepository.StoredRecord(session,guardian,child,type,"ENDED","CHILD_STOP",true,clock.now().minusSeconds(120),clock.now(),clock.now(),clock.now().minusSeconds(120),clock.now(),JsonCodec.shared().write(transcript),"[]",practice,"hash",clock.now());
             when(reader.find(session,guardian)).thenReturn(Optional.of(new ResultRecordReader.Input(record,"ENDED",null,true)));
             states.insert(session,guardian,child,type,true,clock.now());var resultJob=jobs.submit("SESSION_RESULT",session,guardian,"SR:"+session,"RECONCILE",null,clock.now());states.attach(session,resultJob.id(),1,clock.now());var claimed=jobs.claim("SESSION_RESULT",1,clock.now(),Duration.ofSeconds(30)).getFirst();
-            var result=results.insert(session,claimed.id(),"FULL",free?"[{\"text\":\"2분 동안 이야기를 나눴어요.\"}]":"[]","[]","[]",null,"{}","[]",clock.now());
+            var result=results.insert(session,claimed.id(),"FULL",free?"[{\"text\":\"2분 동안 이야기를 나눴어요.\"}]":"[]","[]","{}","[]",clock.now());
             if(free)structures.insert(result.id(),session,"{\"situation\":{\"text\":\"같이 블록\",\"source\":\"CHILD_RECALL\",\"utteranceSeq\":1},\"explanation\":{\"text\":\"보호자가 전한 상황\",\"source\":\"GUARDIAN_INPUT\"}}",clock.now());
             else scenes.insert(result.id(),session,new SceneJudgmentRepository.Scene(goal,1,1,"ORIGINAL",null,"functional","IMMEDIATE",null,null,false,null,"DONE_IMMEDIATE"),clock.now());
             jobs.transition(claimed,"DONE",null,null,clock.now(),"SUCCEEDED");

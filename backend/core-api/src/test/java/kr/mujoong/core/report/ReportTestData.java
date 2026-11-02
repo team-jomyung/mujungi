@@ -9,7 +9,7 @@ final class ReportTestData {
     static ReportInput input(int no,String type,int lines,String status,String level){
         UUID session=UUID.randomUUID();List<Map<String,Object>> transcript=new ArrayList<>();for(int i=1;i<=lines;i++)transcript.add(Map.of("seq",i,"speaker","CHILD","text",i==1?"응":"함께 블록 쌓자","startedAt",NOW.minusSeconds(no).toString(),"uncertain",false));
         var record=new StoredRecord(session,UUID.randomUUID(),UUID.randomUUID(),type,"ENDED","CHILD_STOP",true,NOW.minusSeconds(120),NOW,NOW.minusSeconds(no),NOW.minusSeconds(120),NOW,JsonCodec.shared().write(transcript),"[]",null,"hash",NOW);
-        var result=new ActivityResultRepository.Result(UUID.randomUUID(),session,1,UUID.randomUUID(),level,"[]","[]","[]",null,"{}","[]",NOW,NOW,null);
+        var result=new ActivityResultRepository.Result(UUID.randomUUID(),session,1,UUID.randomUUID(),level,"[]","[]","{}","[]",NOW,NOW,null);
         return new ReportInput(no,record,status,result,List.of(),Map.of(),List.of());
     }
     static ReportInput practice(int no,String status,String level,UUID goal,List<Map<String,Object>> cues){
@@ -30,7 +30,7 @@ final class ReportTestData {
     static ReportInput withSentences(ReportInput in,List<String> sentences){
         var r=in.result();
         var result=new ActivityResultRepository.Result(r.id(),r.sessionId(),r.version(),r.jobId(),r.level(),JsonCodec.shared().write(sentences.stream().map(s->Map.of("text",s)).toList()),
-                r.helpJson(),r.tipsJson(),r.noTipReason(),r.matchingLogJson(),r.pendingCandidatesJson(),r.candidatesRegisteredAt(),r.createdAt(),r.invalidatedAt());
+                r.helpJson(),r.matchingLogJson(),r.pendingCandidatesJson(),r.candidatesRegisteredAt(),r.createdAt(),r.invalidatedAt());
         return new ReportInput(in.activityNo(),in.record(),in.status(),result,in.scenes(),in.structured(),in.definitions());
     }
     static ReportInput withScenes(ReportInput in,List<SceneJudgmentRepository.Scene> scenes){return new ReportInput(in.activityNo(),in.record(),in.status(),in.result(),scenes,in.structured(),in.definitions());}

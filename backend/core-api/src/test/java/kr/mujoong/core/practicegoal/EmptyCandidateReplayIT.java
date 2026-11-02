@@ -19,7 +19,7 @@ class EmptyCandidateReplayIT {
     CandidateSeedReplayIT f;
     @BeforeEach void setup(){f=new CandidateSeedReplayIT();f.setup();}
     @AfterEach void close(){f.close();}
-    UUID emptyResult(){UUID id=f.results.insert(f.session,f.job,"INSUFFICIENT","[]","[]","[]",null,"{}",JsonCodec.shared().write(CandidateSeedDelivery.Pending.of(List.of())),f.clock.now()).id();return id;}
+    UUID emptyResult(){UUID id=f.results.insert(f.session,f.job,"INSUFFICIENT","[]","[]","{}",JsonCodec.shared().write(CandidateSeedDelivery.Pending.of(List.of())),f.clock.now()).id();return id;}
     void clear(UUID id){f.delivery.deliver(f.guardian,f.child,f.session,id,CandidateSeedDelivery.Pending.of(List.of()));}
     void withdraw(){when(f.consent.check(f.guardian)).thenReturn(new ConsentPolicyService.GateResult(false,null,new ConsentPolicyService.Snapshot("v1",false,true,true,true)));}
     @Test void emptyReplacementInvalidatesOldHandleButPreservesPinnedSnapshot(){f.deliver(f.result);var old=f.goals.candidates(f.child,f.session).getFirst();UUID selected=f.db.inTx(t->f.goals.select(f.guardian,old,f.clock.now()));clear(emptyResult());assertThat(f.goals.version(f.child,old.id())).isEmpty();assertThat(f.goals.saved(f.child,selected).orElseThrow().candidateVersion()).isEqualTo(1);}

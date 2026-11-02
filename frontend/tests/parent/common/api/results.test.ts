@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseResult } from "../../../../src/parent/common/api/results";
 
-function response() { return { jobStatus: "DONE", resultLevel: "FULL", sentences: [], practice: null as null | { goals: object[] }, tips: [], candidates: [{ recommendationId: "version-handle", displayName: "물어보기", displayEvidence: "합성 놀이 장면", evidence: [], selected: false, goalSelectionId: null }] as Record<string, unknown>[] }; }
+function response() { return { jobStatus: "DONE", resultLevel: "FULL", sentences: [], practice: null as null | { goals: object[] }, candidates: [{ recommendationId: "version-handle", displayName: "물어보기", displayEvidence: "합성 놀이 장면", evidence: [], selected: false, goalSelectionId: null }] as Record<string, unknown>[] }; }
 
 describe("U14 result adapter", () => {
   it("maps safe displayEvidence to the existing 27 view model", () => { expect(parseResult(response()).candidates[0].reasonText).toBe("합성 놀이 장면"); });
