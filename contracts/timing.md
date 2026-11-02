@@ -39,6 +39,8 @@
 | `mujoong.timing.device.playback-mark-interval` | `1s` | web | 재생 중 PLAYBACK_MARK PROGRESS 송신 주기(끝 · 멈춤 표식은 즉시) | 계약 PlaybackMark · U3 |
 | `mujoong.timing.gate.barge-in-stop` | `500ms` | web | 재생 중 아이 음성이 이 시간 이어지면 재생을 멈추고 STOPPED 표식을 보낸다(끼어들기, U3) | BR7 · U3-J20 |
 | `mujoong.timing.gate.local-voice-min` | `200ms` | web | 끼어들기 판정에 넣는 최소 음성 길이(이보다 짧은 소리는 무시) | U3-J20 |
+| `mujoong.timing.gate.input-hangover` | `600ms` | web | 기기 입력 음량 관문: 기준 아래 소리가 이 시간 이어지면 닫고 무음 프레임을 보낸다 [편차 FT-1102-g] | FT-1102-g |
+| `mujoong.timing.gate.input-preroll` | `200ms` | web | 기기 입력 음량 관문: 열릴 때 그 앞 소리를 이 길이만큼 먼저 보내 말머리를 살린다 [편차 FT-1102-g] | FT-1102-g |
 | `mujoong.timing.device.cookie-max-age` | `400d` | core-api | `GET /api/device/me` 성공마다 MUJOONG_DEVICE 쿠키 수명을 다시 이 값으로(서버 토큰은 만료 없음) | BR3.5 · B4 · J29 |
 | `mujoong.timing.core.device-status-stale` | `30s` | core-api | Core가 마지막 보고를 받은 시각 → '기기 상태 확인 불가'(BR4.3 ③), 12 stale(BR6.15) | B6 · RD-6 |
 | `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 및 홈 SSE 장애 시 보완 조회 주기 | A2 · BR6.15 · JIRA-274 |

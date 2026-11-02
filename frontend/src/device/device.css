@@ -254,6 +254,53 @@
   padding-left: calc(var(--space-unit) * 5);
 }
 
+/* 입력 음량 관문 측정값(FT-1102-g) */
+.mj-debug__gate {
+  margin-top: calc(var(--space-unit) * 2);
+  min-width: 200px;
+}
+
+.mj-debug__meter {
+  position: relative;
+  height: 10px;
+  margin-bottom: var(--space-unit);
+  border: 1px solid var(--color-border-default);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mj-debug__meter-level {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background-color: var(--color-border-default);
+}
+
+.mj-debug__meter-level[data-open="true"] {
+  background-color: currentColor;
+}
+
+.mj-debug__meter-threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: currentColor;
+}
+
+.mj-debug__gate-rows {
+  margin: 0;
+}
+
+.mj-debug__gate-row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(var(--space-unit) * 2);
+}
+
+.mj-debug__gate-row dd {
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mj-character {
     transition: none;

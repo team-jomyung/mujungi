@@ -42,6 +42,10 @@ export interface Timing {
   readonly gateBargeInStopMs: number;
   /** 끼어들기 판정에 넣는 최소 음성 길이(mujoong.timing.gate.local-voice-min, U3-J20). */
   readonly gateLocalVoiceMinMs: number;
+  /** 입력 음량 관문이 기준 아래 소리가 이만큼 이어지면 닫는다(mujoong.timing.gate.input-hangover, FT-1102-g). */
+  readonly gateInputHangoverMs: number;
+  /** 입력 음량 관문이 열릴 때 먼저 보내는 앞 소리 길이(mujoong.timing.gate.input-preroll, FT-1102-g). */
+  readonly gateInputPrerollMs: number;
   /** 조작 없는 토스트가 떠 있는 시간(ui.toast-duration, interaction-spec 1절 · 가정 C5). */
   readonly toastDurationMs: number;
   /** 조작이 달린 토스트의 최소 표시 시간(ui.toast-action-min, interaction-spec 1절 · B25). */
@@ -86,6 +90,8 @@ export const TIMING_KEYS: readonly TimingKeySpec[] = [
   contractKey("devicePlaybackMarkIntervalMs", "mujoong.timing.device.playback-mark-interval"),
   contractKey("gateBargeInStopMs", "mujoong.timing.gate.barge-in-stop"),
   contractKey("gateLocalVoiceMinMs", "mujoong.timing.gate.local-voice-min"),
+  contractKey("gateInputHangoverMs", "mujoong.timing.gate.input-hangover"),
+  contractKey("gateInputPrerollMs", "mujoong.timing.gate.input-preroll"),
   { field: "toastDurationMs", configKey: "ui.toast-duration", envVar: null },
   { field: "toastActionMinMs", configKey: "ui.toast-action-min", envVar: null },
 ];

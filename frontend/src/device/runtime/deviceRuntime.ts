@@ -1,5 +1,6 @@
 import { BargeInDetector } from "../audio/bargeIn";
 import { startCapture, type CapturePipeline } from "../audio/capture";
+import { InputGate, type InputGateSnapshot } from "../audio/inputGate";
 import { AudioPlayer, createWebAudioOutput, fetchApprovedAudio, type AudioClip, type AudioOutput } from "../audio/player";
 import { holdScreenWakeLock } from "../power/wakeLock";
 import { DeviceSession } from "../ws/deviceSession";
@@ -25,7 +26,12 @@ export interface DeviceRuntimeEvents {
   readonly onSpeaking: (speaking: boolean) => void;
   /** 무중이 말 자막(OUTPUT_BEGIN.text). 소리가 시작될 때 글, 끊기면 null. 없는 재생은 앞 자막을 둔다. */
   readonly onSubtitle?: (text: string | null) => void;
+  /** debug 화면용 입력 음량 관문 상태(FT-1102-g). 프레임 GATE_REPORT_FRAMES개마다 한 번. 없으면 보고하지 않는다. */
+  readonly onInputGate?: (snapshot: InputGateSnapshot) => void;
 }
+
+/** 관문 상태를 debug 화면에 알리는 간격(20ms 프레임 10개 = 0.2초). */
+const GATE_REPORT_FRAMES = 10;
 
 export interface DeviceRuntimeOptions {
   readonly audioContext: AudioContext | null;
@@ -126,6 +132,10 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
     () => player.stopAll("LOCAL_VOICE_ACTIVITY"),
   );
 
+  // 입력 음량 관문(FT-1102-g): 시작 안내 재생 중 잰 소음 바닥보다 충분히 큰 소리만 보내고, 나머지는 무음 프레임으로 바꾼다
+  const inputGate = new InputGate({ hangoverMs: timing.gateInputHangoverMs, prerollMs: timing.gateInputPrerollMs });
+  let gateFrames = 0;
+
   const session = new DeviceSession({
     send: (type, payload, sessionId) => client?.send(type, payload, sessionId),
     sendBinary: (frame) => client?.sendBinary(frame),
@@ -134,7 +144,10 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
       mic: capture !== null && capture.active ? "OK" : "UNAVAILABLE",
       player: output.available && audioContext?.state !== "closed" ? "OK" : "UNAVAILABLE",
     }),
-    onInputWindowChange: () => capture?.resetBuffer(),
+    onInputWindowChange: () => {
+      capture?.resetBuffer();
+      inputGate.reset();
+    },
     onView: events.onView,
     nowMs,
   });
@@ -142,7 +155,14 @@ export async function startDeviceRuntime(options: DeviceRuntimeOptions): Promise
   capture?.setFrameHandler((frame) => {
     // 참여 확인 안내 녹음 · 연습 첫 대본 중에는 끼어들기로 보지 않는다(서버도 이 동안 아이 소리를 무음으로 바꿔 공급자에 보낸다)
     bargeIn.feed(frame, player.isSpeaking && !player.isPlayingNotice && !player.isPlayingUninterruptible);
-    session.handleInputFrame(frame);
+    for (const gated of inputGate.process(frame, player.isPlayingNotice)) session.handleInputFrame(gated);
+    if (events.onInputGate !== undefined) {
+      gateFrames += 1;
+      if (gateFrames >= GATE_REPORT_FRAMES) {
+        gateFrames = 0;
+        events.onInputGate(inputGate.takeSnapshot());
+      }
+    }
   });
   const wakeLock = holdScreenWakeLock(undefined, undefined, (held) =>
     reporter.update({ wakeLock: held ? "HELD" : "RELEASED" }),
