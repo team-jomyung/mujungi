@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { createDeviceApi, type DeviceApi } from "./api/deviceApi";
 import { createAudioContextInGesture } from "./audio/audioContext";
+import type { InputGateSnapshot } from "./audio/inputGate";
 import { DebugLog } from "./features/debug/DebugLog";
 import { FirstBootView, type FirstBootDisplay } from "./features/first-boot/FirstBootView";
 import { useDeviceSubtitle } from "./features/status/useDeviceSubtitle";
@@ -137,6 +138,8 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
   // 무중이 말 자막(OUTPUT_BEGIN.text). 화면에만 두고 상태 기계 · 기록에는 넣지 않는다
   const subtitles = useDeviceSubtitle();
   const { show: showSubtitle, speakingChanged, clear: clearSubtitle } = subtitles;
+  // debug 화면의 입력 음량 관문 측정값(FT-1102-g). debug일 때만 받는다
+  const [inputGate, setInputGate] = useState<InputGateSnapshot | null>(null);
   const runtimeRef = useRef<DeviceRuntime | null>(null);
   const connectStepRef = useRef(0);
   const turnOnBusyRef = useRef(false);
@@ -237,6 +240,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
               dispatch({ type: "SPEAKING", speaking });
             },
             onSubtitle: showSubtitle,
+            onInputGate: debug ? setInputGate : undefined,
           },
         });
         releaseRuntime(runtimeRef, false);
@@ -249,7 +253,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
         turnOnBusyRef.current = false;
       }
     })();
-  }, [timing, speakingChanged, showSubtitle, clearSubtitle]);
+  }, [timing, speakingChanged, showSubtitle, clearSubtitle, debug]);
 
   const handleTurnOff = useCallback(() => {
     clearSubtitle();
@@ -272,7 +276,7 @@ export function DeviceApp({ debug, api: injectedApi }: DeviceAppProps) {
           onTurnOff={handleTurnOff}
         />
       )}
-      {debug ? <DebugLog trail={state.trail} /> : null}
+      {debug ? <DebugLog trail={state.trail} inputGate={inputGate} /> : null}
     </main>
   );
 }

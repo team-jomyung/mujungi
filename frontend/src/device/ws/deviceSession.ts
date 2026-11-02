@@ -169,6 +169,8 @@ export class DeviceSession {
         return;
       case "PLAY_APPROVED_CONTENT":
         if (this.isCurrent(message.sessionId)) {
+          // 고정 안내도 무중이 말과 같이 자막으로 보인다(재생 STARTED 때 띄운다)
+          if (typeof message.text === "string") this.subtitles.set(message.playbackId, message.text);
           void this.deps.player.playApproved(
             message.sessionId,
             message.playbackId,

@@ -44,6 +44,8 @@ describe("timing — 기본값과 계약", () => {
       devicePlaybackMarkIntervalMs: 1_000,
       gateBargeInStopMs: 500,
       gateLocalVoiceMinMs: 200,
+      gateInputHangoverMs: 600,
+      gateInputPrerollMs: 200,
       toastDurationMs: 4_000,
       toastActionMinMs: 3_000,
     } satisfies Timing);

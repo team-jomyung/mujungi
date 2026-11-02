@@ -167,12 +167,19 @@ export interface OutputBeginMessage {
 /** OUTPUT_BEGIN.text 최대 글자 수(ws-messages.schema.json). */
 export const OUTPUT_TEXT_MAX_CHARS = 500;
 
+/**
+ * 자막 글을 읽는다. 앞 공백 하나는 남긴다: 한 말을 여러 묶음으로 나눠 보내면 묶음 경계가 낱말 중간일 수 있어,
+ * 앞 공백이 있을 때만 앞 묶음 글과 띄어 잇는다(useDeviceSubtitle). 끝 공백은 지운다.
+ */
 function readSubtitle(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
-  const text = value.trim();
-  return text.length > 0 && [...text].length <= OUTPUT_TEXT_MAX_CHARS ? text : null;
+  const body = value.trim();
+  if (body.length === 0 || [...body].length > OUTPUT_TEXT_MAX_CHARS) {
+    return null;
+  }
+  return /^\s/.test(value) ? ` ${body}` : body;
 }
 
 export interface OutputEndMessage {
@@ -188,6 +195,8 @@ export interface PlayApprovedContentMessage {
   readonly playbackId: string;
   readonly contentCode: string;
   readonly contentVersionId: string;
+  /** 승인 문구의 글(기기 자막, 선택). 없거나 형식이 틀리면 null이고 자막 없이 재생한다. */
+  readonly text?: string | null;
 }
 
 export interface StopOutputMessage {
@@ -331,7 +340,15 @@ export function parseServerMessage(envelope: InboundEnvelope): ServerMessage | n
       ) {
         return null;
       }
-      return { type: "PLAY_APPROVED_CONTENT", opId, sessionId, playbackId, contentCode, contentVersionId };
+      return {
+        type: "PLAY_APPROVED_CONTENT",
+        opId,
+        sessionId,
+        playbackId,
+        contentCode,
+        contentVersionId,
+        text: readSubtitle(payload.text)?.trimStart() ?? null,
+      };
     }
     case "STOP_OUTPUT":
     case "CLOSE_TRANSPORT": {

@@ -871,7 +871,8 @@ public final class EndingFlow {
 
             @Override
             public boolean playApproved(UUID playbackId, String contentCode, UUID contentVersionId) {
-                boolean sent = ctx.sendControl(new PlayApprovedContent(playbackId, contentCode, contentVersionId));
+                boolean sent = ctx.sendControl(PlayApprovedContent.withSubtitle(playbackId, contentCode, contentVersionId,
+                        ctx.plan().approvedItem(contentCode).map(SessionExecutor.ApprovedItem::text).orElse(null)));
                 if (sent && ctx.link() != null) ctx.goodbyeAttempt(ctx.link().connectionId(),
                         ctx.services().clock().now().plus(ctx.services().settings().playbackExpiry()));
                 if (sent) ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());

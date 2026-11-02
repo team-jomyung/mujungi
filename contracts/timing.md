@@ -39,6 +39,8 @@
 | `mujoong.timing.device.playback-mark-interval` | `1s` | web | 재생 중 PLAYBACK_MARK PROGRESS 송신 주기(끝 · 멈춤 표식은 즉시) | 계약 PlaybackMark · U3 |
 | `mujoong.timing.gate.barge-in-stop` | `500ms` | web | 재생 중 아이 음성이 이 시간 이어지면 재생을 멈추고 STOPPED 표식을 보낸다(끼어들기, U3) | BR7 · U3-J20 |
 | `mujoong.timing.gate.local-voice-min` | `200ms` | web | 끼어들기 판정에 넣는 최소 음성 길이(이보다 짧은 소리는 무시) | U3-J20 |
+| `mujoong.timing.gate.input-hangover` | `600ms` | web | 기기 입력 음량 관문: 기준 아래 소리가 이 시간 이어지면 닫고 무음 프레임을 보낸다 [편차 FT-1102-g] | FT-1102-g |
+| `mujoong.timing.gate.input-preroll` | `200ms` | web | 기기 입력 음량 관문: 열릴 때 그 앞 소리를 이 길이만큼 먼저 보내 말머리를 살린다 [편차 FT-1102-g] | FT-1102-g |
 | `mujoong.timing.device.cookie-max-age` | `400d` | core-api | `GET /api/device/me` 성공마다 MUJOONG_DEVICE 쿠키 수명을 다시 이 값으로(서버 토큰은 만료 없음) | BR3.5 · B4 · J29 |
 | `mujoong.timing.core.device-status-stale` | `30s` | core-api | Core가 마지막 보고를 받은 시각 → '기기 상태 확인 불가'(BR4.3 ③), 12 stale(BR6.15) | B6 · RD-6 |
 | `mujoong.timing.parent.poll-interval` | `2s` | web | 12 진행 화면 및 홈 SSE 장애 시 보완 조회 주기 | A2 · BR6.15 · JIRA-274 |
@@ -161,6 +163,7 @@ WSS 텍스트 프레임 8KB(`mujoong.limits.ws-text-frame-max`, 넘으면 4400 [
 | 키 | 기본값 | 소유 앱 | 뜻 | 근거 |
 |---|---|---|---|---|
 | `mujoong.text-ai.request-timeout` | `10s` | core-api | 호출 한 번의 상한 | U5a-J7 |
+| `mujoong.text-ai.scenario.request-timeout` | `15s` | core-api | 연습 상황 생성 · 검토 호출 한 번의 상한(나머지 텍스트 AI 호출은 위 10초). 그래프 맥락 · 최근 노출 · 수정 요청이 붙으면 7 ~ 10초가 걸려 10초에 자주 걸렸다. 상황 준비 전체 예산(`scenario-request-timeout` 60초)은 그대로다 | FT-1030-n |
 | `mujoong.text-ai.retry.max-retries` | `1` | core-api | 일시적 오류의 재시도 횟수 | U5a-J7 |
 | `mujoong.text-ai.retry.backoff` | `250ms` | core-api | 기술 재시도 사이 간격 | U5a-J7 |
 | `mujoong.timing.practice.scenario-request-timeout` | `60s` | core-api | C10 전체 생성/재생성/재시도 예산과 요청 선점 시한. 독립 검토·보완을 포함한다. 30초에서 60초로 늘렸다 | U5a-J18 · 연습 시작 신뢰성 보완 · FT-1030-a |

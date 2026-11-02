@@ -161,6 +161,16 @@ export const TEMP_COPY = {
   back: "뒤로", // 머리 「←」의 보조기기 이름(화면 글 아님)
   codeGroupLabel: "등록 코드 8자리", // 05a 코드 칸 묶음의 보조기기 이름(화면 글 아님)
   debugLogTitle: "상태 로그", // /device?debug=1 상태 로그 머리(BR9.6 · AC6.2.9, 디버그 전용)
+  debugInputGate: {
+    title: "입력 음량 관문", // FT-1102-g 측정값(디버그 전용)
+    level: "지금 음량", // 최근 0.2초의 가장 큰 평균 절대 진폭
+    floor: "소음 바닥", // 시작 안내 중 잰 하위 20% 음량
+    threshold: "기준", // 소음 바닥 × 3, 300 ~ 1500
+    calibrationFrames: "측정 프레임", // 마지막 측정에 쓴 20ms 프레임 수
+    state: "상태",
+    notMeasured: "측정 전",
+    states: { calibrating: "측정 중", open: "열림", closed: "닫힘" },
+  },
   devLogin: {
     title: "시험 로그인", // J119 · BR8.4 (dev 프로필 전용 화면)
     body: "개발 · 시험 환경에서만 쓰는 로그인이에요.", // J119

@@ -189,6 +189,76 @@ class PracticePreparationTest {
     }
 
     @Test
+    void aSplitAnswerIsJudgedAgainAsOneAnswerWhenTheFirstFragmentFallsShort() {
+        // FT-1101-a: 판정 중 이어진 뒤 조각을 버리지 않고, 앞 조각이 부족하면 뒤 조각을 이어 판정한다(대답 한 번으로 센다)
+        Harness h = listening();
+        h.child("파란");
+        var first = h.out.lastJudgment();
+        h.child("상자를 줘");
+        assertThat(h.out.judgments).as("판정 중에는 새 판정을 열지 않는다").hasSize(1);
+        h.result(first.correlationId(), "J5", "PARTIAL");
+        assertThat(h.out.judgments).hasSize(2);
+        var continuation = h.out.lastJudgment();
+        assertThat(continuation.seq()).isEqualTo(first.seq() + 1);
+        assertThat((String) continuation.criteria().get("judgmentCriteria")).contains("직전 아이 말과 이어");
+        assertThat(h.ext.state().sub()).as("앞 조각만으로 고쳐 주지 않는다").isEqualTo(FlowState.Sub.NONE);
+        h.result("J5", "PARTIAL");
+        assertThat(h.ext.state().sub()).as("나뉜 조각은 한 번의 대답이라 한 번 더 시도할 수 있다")
+                .isEqualTo(FlowState.Sub.PREPARATION_FEEDBACK);
+    }
+
+    @Test
+    void aSplitAnswerContinuesAfterTheFirstFragmentJudgmentIsWithheld() {
+        Harness h = listening();
+        h.child("파란");
+        h.child("상자를 줘");
+        h.abstained("J5");
+        assertThat(h.out.judgments).hasSize(2);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        h.result("J5", "FULL");
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PREPARATION_FINISH);
+        enterScene(h);
+        assertThat(h.recorder.factKinds(h.recorder.only())).contains(FactKind.PREPRACTICE_ATTEMPTED);
+    }
+
+    @Test
+    void aFollowingFragmentIsNotJudgedAgainWhenTheFirstFragmentAlreadyPerformed() {
+        Harness h = listening();
+        h.child("파란 상자를 줘");
+        var first = h.out.lastJudgment();
+        h.child("빨리");
+        h.result(first.correlationId(), "J5", "FULL");
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PREPARATION_FINISH);
+    }
+
+    @Test
+    void anUncertainFollowingFragmentLeavesTheFirstFragmentResultInPlace() {
+        Harness h = listening();
+        h.child("파란");
+        var first = h.out.lastJudgment();
+        h.ext.onChildUtterance(new Utterance(++h.seq, h.clock.now(), "상자", true, false), h.out);
+        h.result(first.correlationId(), "J5", "PARTIAL");
+        assertThat(h.out.judgments).hasSize(1);
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PREPARATION_FEEDBACK);
+    }
+
+    @Test
+    void thePreparationPromptNeverCarriesTheSceneExpressionExample() {
+        // FT-1101-b: 장면의 표현 예시는 상황극 정답이라 사전 연습 지시에 넣지 않는다
+        Harness h = fresh(true);
+        h.activate();
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PREPARATION_PROMPT);
+        assertThat(h.out.lastSlot().text()).doesNotContain("파란 상자를 줘").contains("어느 것인지 말하기");
+        h.played();
+        h.child("몰라");
+        h.result("J5", "NOT_UNDERSTOOD");
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.PREPARATION_FEEDBACK);
+        assertThat(h.out.lastSlot().text()).doesNotContain("파란 상자를 줘");
+    }
+
+    @Test
     void silenceMovesOnWithoutInventingAnAttemptOrWeakness() {
         Harness h = listening();
         h.advance(Duration.ofSeconds(10));

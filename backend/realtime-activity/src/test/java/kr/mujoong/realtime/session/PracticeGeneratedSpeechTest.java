@@ -200,6 +200,35 @@ class PracticeGeneratedSpeechTest {
                 .anySatisfy(attrs -> assertThat(attrs).containsEntry("errorKind", SessionExecutor.REASON_APPROVED_TEXT_DIVERGED));
     }
 
+    /** FT-1101-c: 다른 문장(장면 안내)을 읽은 승인 낭독은 제브에 묻지 않고 원문 불일치로 버려 같은 원문을 다시 요청하게 한다. */
+    @Test
+    void anApprovedReadingOfAnotherSentenceIsRejectedWithoutJev() {
+        var speech = startApprovedStream();
+        approvedUnit("지금부터 상상 속 상황이야. 친구가 상자 두 개를 들고 있어. ", 0);
+        assertThat(h.link.outputs()).isEmpty();
+        assertThat(guard.count()).isZero();
+        assertThat(extension.mismatches).as("확장이 같은 원문 재요청을 정한다").isNotEmpty();
+        assertThat(extension.endFacts(speech.correlationId())).isEmpty();
+        assertThat(errorKinds()).contains(SessionExecutor.REASON_APPROVED_TEXT_DIVERGED_REJECTED)
+                .doesNotContain(SessionExecutor.REASON_APPROVED_TEXT_DIVERGED);
+    }
+
+    /** FT-1101-c: 원문을 다 읽은 뒤 덧붙인 말은 내지 않고 나간 부분까지 재생됨으로 닫는다. */
+    @Test
+    void wordsAddedAfterTheApprovedReadingAreDroppedAndTheSentPartCloses() {
+        var speech = startApprovedStream();
+        approvedUnit("나는 블록 놀이를 하고 싶어. ", 0);
+        approvedUnit("너는 무슨 놀이가 좋아? 같이 하자.", 1);
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(guard.count()).isZero();
+        mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
+        h.advance(Duration.ofMillis(801));
+        assertThat(h.link.outputs()).hasSize(1);
+        assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
+        assertThat(extension.mismatches).isEmpty();
+        assertThat(errorKinds()).contains(SessionExecutor.REASON_APPROVED_TEXT_DIVERGED_REJECTED);
+    }
+
     @Test
     void aBlockedDivergedApprovedUnitIsNotPlayed() {
         startApprovedStream();
@@ -235,6 +264,55 @@ class PracticeGeneratedSpeechTest {
         mark(h.link.outputs().getFirst().playbackId(), PlaybackMark.Status.COMPLETED);
         assertThat(extension.endFacts(speech.correlationId())).containsExactly(PracticePorts.Playback.COMPLETED);
         assertThat(extension.mismatches).isEmpty();
+    }
+
+    // FT-1030-q: 승인 낭독 대기 중 그 문장과 같은 입력 전사는 아이 말로 받지 않고(기록 · 판정 없음) 사유 코드만 남긴다
+    @Test
+    void anInputTranscriptEchoingThePendingApprovedSpeechIsDropped() {
+        startApprovedStream();
+        int before = childRows().size();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "나는 블록 놀이를", 100, 900));
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, " 하고", 900, 1200));
+        h.drain();
+        assertThat(childRows()).as("확정 전에도 조각을 기록하지 않는다").hasSize(before);
+        h.advance(h.settings.inputTranscriptQuiet().plusMillis(1));
+        assertThat(childRows()).hasSize(before);
+        assertThat(extension.utterances).isEmpty();
+        assertThat(errorKinds()).contains("PracticeChildInputDuringApprovedSpeech_MATCH", "PracticeChildTranscriptEchoDropped",
+                "PracticeChildInputTimeline_AFTER_APPEND");
+    }
+
+    @Test
+    void aDifferentChildInputDuringTheApprovedSpeechIsStillHeardAndRecorded() {
+        startApprovedStream();
+        int before = childRows().size();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "무슨 놀이를 하고 싶어", 100, 900));
+        h.drain();
+        assertThat(childRows()).as("낭독 대기 중에는 확정 때 기록한다").hasSize(before);
+        h.advance(h.settings.inputTranscriptQuiet().plusMillis(1));
+        assertThat(childRows()).hasSize(before + 1);
+        assertThat(childRows().getLast().text()).isEqualTo("무슨 놀이를 하고 싶어");
+        assertThat(extension.utterances).containsExactly("무슨 놀이를 하고 싶어");
+        assertThat(errorKinds()).contains("PracticeChildInputDuringApprovedSpeech_NO_MATCH").doesNotContain("PracticeChildTranscriptEchoDropped");
+    }
+
+    @Test
+    void aShortAnswerContainedInTheApprovedSpeechIsNotTreatedAsAnEcho() {
+        startApprovedStream();
+        h.provider.last().emit(new ProviderEvent.InputTranscriptDelta(null, "블록", 100, 400));
+        h.drain();
+        h.advance(h.settings.inputTranscriptQuiet().plusMillis(1));
+        assertThat(extension.utterances).containsExactly("블록");
+        assertThat(errorKinds()).doesNotContain("PracticeChildTranscriptEchoDropped");
+    }
+
+    private List<kr.mujoong.realtime.log.TranscriptEntry> childRows() {
+        return h.store.transcripts.stream().filter(row -> row.speaker() == kr.mujoong.realtime.log.TranscriptEntry.Speaker.CHILD).toList();
+    }
+
+    private List<String> errorKinds() {
+        return h.logs.events(kr.mujoong.contract.log.EventCode.APP_ERROR).stream()
+                .map(event -> String.valueOf(kr.mujoong.testsupport.log.LogCapture.attrs(event).get("errorKind"))).toList();
     }
 
     private PracticeSpeech startApprovedStream() {
@@ -568,11 +646,12 @@ class PracticeGeneratedSpeechTest {
         h.drain();
         h.speak(" 들고 있어. 다른 말을 덧붙였어.",4800);
         h.advance(Duration.ofMillis(801));
-        // FT-1028-e: 원문과 달라진 낭독은 제브 검사 없이 재생되지 않는다. 제브가 막으면 끝까지 내지 않는다
+        // FT-1028-e · FT-1101-c: 원문과 달라진 낭독은 제브 검사 없이 재생되지 않는다. 말을 덧붙인 낭독은 제브에 묻지도 않고 원문 불일치로 버린다
         assertThat(h.link.outputs()).isEmpty();
         assertThat(extension.endFacts(slot)).isEmpty();
-        assertThat(guard.count()).isEqualTo(1);
-        guard.block(); h.drain();
+        assertThat(guard.count()).isZero();
+        assertThat(extension.mismatches).isNotEmpty();
+        h.drain();
         assertThat(h.link.outputs()).isEmpty();
     }
 
@@ -623,6 +702,7 @@ class PracticeGeneratedSpeechTest {
         final List<GuardrailBlockedEvent> blocked = new ArrayList<>();
         final List<ExtensionEvent> mismatches = new ArrayList<>();
         final List<ExtensionEvent> events = new ArrayList<>();
+        final List<String> utterances = new ArrayList<>();
 
         List<PracticePorts.Playback> endFacts(UUID correlationId) {
             return facts.stream().filter(fact -> !fact.started())
@@ -647,6 +727,7 @@ class PracticeGeneratedSpeechTest {
 
         @Override
         public Signal onChildUtterance(Utterance utterance, PracticeOutput output) {
+            utterances.add(utterance.text());
             if(replySlot!=null){UUID slot=replySlot;replySlot=null;output.speakGenerated(slot,"PEER",INSTRUCTION);}
             return Signal.NONE;
         }

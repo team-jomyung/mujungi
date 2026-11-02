@@ -25,7 +25,7 @@ import org.springframework.core.io.ClassPathResource;
 
 /**
  * 목표 후보 진단 측정(수동, lunaLiveTest 전용). 결과 작업과 같은 모양의 입력 파일(env {@code GOAL_PROBE_INPUT}: transcript · structured · endReason ·
- * scenes)을 현재 지시문(goal-candidates.v4)과 운영과 같은 전처리(불확실 행 · AI 되풀이 구간 제외)로 Luna에 보내, 모델이 낸 후보와 운영 서버 검사(GoalCandidateValidator)의 통과 여부 · 탈락 사유 코드를
+ * scenes)을 현재 지시문(goal-candidates.v5)과 운영과 같은 전처리(불확실 행 · AI 되풀이 구간 제외)로 Luna에 보내, 모델이 낸 후보와 운영 서버 검사(GoalCandidateValidator)의 통과 여부 · 탈락 사유 코드를
  * 보고서(env {@code GOAL_PROBE_REPORT})에 쓴다. 입력 파일과 보고서는 저장소 밖에 둔다. 입력에 seedSummaries가 없으면 비워 보낸다.
  */
 @Tag("luna-live")
@@ -82,14 +82,14 @@ class GoalCandidateProbeLiveTest {
         // env GOAL_PROBE_PROMPT가 있으면 그 파일의 지시문으로 비교 측정한다(저장소의 지시문은 바꾸지 않는다)
         String override = System.getenv("GOAL_PROBE_PROMPT");
         String prompt = override != null ? Files.readString(Path.of(override))
-                : new ClassPathResource("prompts/goal/goal-candidates.v4.txt").getContentAsString(StandardCharsets.UTF_8);
+                : new ClassPathResource("prompts/goal/goal-candidates.v5.txt").getContentAsString(StandardCharsets.UTF_8);
 
         Files.createDirectories(report.toAbsolutePath().getParent());
         long started = System.nanoTime();
         LunaResult result;
         try {
             // 마감은 재시도 1회까지 들어가게 시한의 두 배로 둔다
-            result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v4", prompt, input, Map.of(),
+            result = client.call(LunaRequest.of(LunaPurpose.GOAL_CANDIDATES, "goal-candidates.v5", prompt, input, Map.of(),
                     clock.now().plus(callTimeout.multipliedBy(2))));
         } catch (LunaException failed) {
             Files.writeString(report, JSON.write(Map.of("failure", failed.reason().name(), "elapsedMs", (System.nanoTime() - started) / 1_000_000,

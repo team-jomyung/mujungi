@@ -40,4 +40,14 @@ class OutputCheckerTest {
         when(gateway.call(eq("classify"),anyMap(),anyMap(),eq(deadline),any(Runnable.class))).thenReturn(Map.of("results",List.of()));
         assertThatThrownBy(()->checker.check(List.of(proposal("“무슨 뜻이야?” 하고 물어보기")),deadline)).hasMessage("SCHEMA_INVALID");
     }
+
+    @Test void rejectionsLeaveOnlyTheStageAndCategoryInTheLog(){
+        var events=mock(kr.mujoong.core.observability.EventLogger.class);var logged=new OutputChecker(new ForbiddenDictionary(),gateway,events);
+        when(gateway.call(eq("classify"),anyMap(),anyMap(),eq(deadline),any(Runnable.class))).thenReturn(Map.of("results",List.of(Map.of("id","s3","violation",true,"category","EMOTION_CLAIM","span","기뻤"))));
+        logged.check(List.of(draft("s1","\"내가 좋아\"라고 했어요"),draft("s2","1등을 했어요"),draft("s3","기뻤어요")),deadline);
+        var component=kr.mujoong.contract.log.EventLog.Component.CORE_MAINTENANCE;
+        verify(events).appError(component,"ResultTextRejectedQuote");
+        verify(events).appError(component,"ResultTextRejectedNumber");
+        verify(events).appError(component,"ResultTextRejectedClassifyEmotionClaim");
+    }
 }

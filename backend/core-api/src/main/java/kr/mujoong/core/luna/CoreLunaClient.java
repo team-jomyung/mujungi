@@ -273,7 +273,10 @@ public class CoreLunaClient {
     }
 
     private Duration purposeTimeout(LunaPurpose purpose) {
-        return purpose.usesResultTimeout() ? timing.result().requestTimeout() : timing.requestTimeout();
+        if (purpose.usesResultTimeout()) return timing.result().requestTimeout();
+        // 연습 상황 생성 · 검토는 따로 둔 상한을 쓴다(FT-1030-n)
+        return purpose == LunaPurpose.SCENARIO_GENERATION || purpose == LunaPurpose.SCENARIO_REVIEW
+                ? timing.scenarioRequestTimeout() : timing.requestTimeout();
     }
 
     private Duration remaining(Instant deadline) {

@@ -590,6 +590,7 @@ class ConfigKeyContractTest {
         }
         TextAiProperties ai = bindRecord(TextAiProperties.class, "mujoong.text-ai", base);
         assertThat(ai.requestTimeout()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(ai.scenarioRequestTimeout()).isEqualTo(Duration.ofSeconds(15)); // FT-1030-n: 장면 생성 · 검토만 15초
         assertThat(ai.result().requestTimeout()).isEqualTo(Duration.ofSeconds(90)); // FT-1029-b: 40초에서 90초로
         assertThat(ai.retry().maxRetries()).isEqualTo(1);
         assertThat(ai.retry().backoff()).isEqualTo(Duration.ofMillis(250));

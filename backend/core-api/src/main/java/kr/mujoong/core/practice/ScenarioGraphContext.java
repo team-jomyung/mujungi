@@ -63,18 +63,32 @@ public final class ScenarioGraphContext {
             catch(RuntimeException failure){deadline.check();unavailable=true;readFailed=true;return Optional.empty();}
             finally{remaining=remaining.minus(clock.elapsedSince(start));}
         }
-        @Override public boolean valid(Scene base,Scene variant){
-            if(context.isEmpty()||base.preservation()==null||variant.preservation()==null)return false;
+        @Override public boolean valid(Scene base,Scene variant){return variantMismatches(base,variant).isEmpty();}
+        /**
+         * 변형이 계획과 어긋난 항목을 고정 코드로 돌려준다(빈 목록이면 유효). 서버 검사 실패가 라벨 · 좌표 때문인지 가려 진단으로 남기려고
+         * 나눴다(2026-10-30 실키: 변형 장면이 한 번도 발급되지 않았는데 기록으로 원인을 가릴 수 없었다). 계획 조회 전 조건이 틀리면 그 코드 하나만 낸다.
+         */
+        public List<String> variantMismatches(Scene base,Scene variant){
+            if(context.isEmpty())return List.of("NO_CONTEXT");
+            if(base.preservation()==null||variant.preservation()==null)return List.of("NO_PRESERVATION");
             var p=base.preservation();var v=variant.preservation();var seed=context.get().seed();
-            if(!skill.equals(p.skillRef())||!skill.equals(v.skillRef())
-                    ||!seed.invariantSentence().equals(p.invariantSentence())||!seed.invariantSentence().equals(v.invariantSentence())
-                    ||!seed.preservationRule().equals(p.preservationRule())||!seed.preservationRule().equals(v.preservationRule()))return false;
+            if(!skill.equals(p.skillRef())||!skill.equals(v.skillRef()))return List.of("SKILL");
+            if(!seed.invariantSentence().equals(p.invariantSentence())||!seed.invariantSentence().equals(v.invariantSentence()))return List.of("INVARIANT");
+            if(!seed.preservationRule().equals(p.preservationRule())||!seed.preservationRule().equals(v.preservationRule()))return List.of("PRESERVATION_RULE");
             var plan=plan(base);
-            if(plan.isEmpty())return false;
+            if(plan.isEmpty())return List.of("NO_PLAN");
             var expected=plan.get();
-            return expected.signature().equals(seed.signature())&&expected.recoverable()&&"LOW".equals(expected.misreadCost())
-                    &&expected.grade().equals(v.transferDistance())&&expected.changedField().equals(v.changedElement())
-                    &&expected.context().equals(coordinates(variant));
+            if(!expected.signature().equals(seed.signature())||!expected.recoverable()||!"LOW".equals(expected.misreadCost()))return List.of("PLAN_UNUSABLE");
+            var mismatches=new java.util.ArrayList<String>();
+            if(!expected.grade().equals(v.transferDistance()))mismatches.add("GRADE");
+            if(!expected.changedField().equals(v.changedElement()))mismatches.add("CHANGED_FIELD");
+            var want=expected.context();var actual=coordinates(variant);
+            if(!java.util.Objects.equals(want.topic(),actual.topic()))mismatches.add("TOPIC");
+            if(!java.util.Objects.equals(want.place(),actual.place()))mismatches.add("PLACE");
+            if(!java.util.Objects.equals(want.participants(),actual.participants()))mismatches.add("PARTICIPANTS");
+            if(!java.util.Objects.equals(want.relationship(),actual.relationship()))mismatches.add("RELATION");
+            if(!java.util.Objects.equals(want.situation(),actual.situation()))mismatches.add("SITUATION");
+            return List.copyOf(mismatches);
         }
     }
     static VariantPlanner.Context coordinates(Scene scene){

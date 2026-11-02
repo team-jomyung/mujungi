@@ -98,6 +98,49 @@ public record PracticeSpeech(UUID correlationId, UUID scenarioId, long generatio
         return false;
     }
 
+    /** 다르게 읽힌 승인 낭독을 '같은 문장을 조금 다르게 읽음'으로 볼 최소 허용 편집 수. */
+    static final int NEAR_READING_MIN_EDITS = 3;
+    /** 허용 편집 수를 받은 글자 수의 이 몫만큼 늘린다(받은 글자 8자마다 1). */
+    static final int NEAR_READING_CHARS_PER_EDIT = 8;
+
+    /**
+     * FT-1101-c: 원문과 다르게 읽힌 승인 낭독(지금까지 받은 전사 전체)이 원문 앞부분을 조금 다르게 읽은 것인가. 공백 · 문장부호를 지우고, 앞에 서버 고정
+     * 안내의 끝부분이 와도 되며, 원문의 어느 앞부분과 견줘 편집 수가 {@code max(3, 글자 수 / 8)} 이하면 참이다. 끝맺음 · 조사 차이는 참이고, 다른
+     * 승인 문장(장면 안내)을 다시 읽거나 원문 뒤에 말을 덧붙이면 거짓이다. 생성형 슬롯은 언제나 거짓.
+     */
+    public boolean nearPrefix(String actual) {
+        if (generated || actual == null) return false;
+        String received = compact(actual);
+        if (received.isEmpty()) return true;
+        String lead = compact(readingCue.text());
+        String expected = lead + compact(text);
+        int allowed = Math.max(NEAR_READING_MIN_EDITS, received.length() / NEAR_READING_CHARS_PER_EDIT);
+        // 받은 전사와 '안내 끝부분 + 원문 앞부분' 사이 최소 편집 수: 안내 안 어디서 시작해도 비용 0, 원문의 어느 앞부분에서 끝나도 된다
+        int[] previous = new int[expected.length() + 1];
+        int[] current = new int[expected.length() + 1];
+        for (int j = 0; j <= expected.length(); j++) previous[j] = Math.max(0, j - lead.length());
+        for (int i = 1; i <= received.length(); i++) {
+            current[0] = i;
+            int rowMin = current[0];
+            for (int j = 1; j <= expected.length(); j++) {
+                int substitute = previous[j - 1] + (received.charAt(i - 1) == expected.charAt(j - 1) ? 0 : 1);
+                current[j] = Math.min(substitute, Math.min(previous[j] + 1, current[j - 1] + 1));
+                rowMin = Math.min(rowMin, current[j]);
+            }
+            if (rowMin > allowed) return false;
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        int best = Integer.MAX_VALUE;
+        for (int j = 0; j <= expected.length(); j++) best = Math.min(best, previous[j]);
+        return best <= allowed;
+    }
+
+    private static String compact(String text) {
+        return text.replaceAll("[\\s\\p{Punct}…“”‘’·~～]", "");
+    }
+
     private static String sentence(String text) {
         if (text == null || text.isBlank()) return text;
         return text.matches("(?s).*[.!?。！？…][\"”’']?$") ? text : text + ".";

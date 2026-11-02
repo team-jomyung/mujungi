@@ -26,6 +26,15 @@ class ScenarioRelationshipTest {
         assertThat(StructuredScenarioFlow.graphRelation("친한 친구","FRIEND_CASUAL")).isEqualTo("친한 친구");
         assertThat(StructuredScenarioFlow.graphRelation("낯선 사람","FRIEND_CLOSE")).isEqualTo("낯선 사람");
     }
+    // FT-1030-h: 누구인지 정하지 않은 '…상대' 표현은 씨앗의 관계 코드로 좌표를 맞춘다. 특정 사람을 가리키면 지금처럼 바꾸지 않는다
+    @Test void anUnnamedPartnerTakesTheSeedRelationshipCode(){
+        assertThat(StructuredScenarioFlow.graphRelation("대화하는 상대","FRIEND_CASUAL")).isEqualTo("FRIEND_CASUAL");
+        assertThat(StructuredScenarioFlow.graphRelation("이야기를 나누는 상대","CLASSMATE")).isEqualTo("CLASSMATE");
+        assertThat(StructuredScenarioFlow.graphRelation("응답을 기다리는 대화 상대","TEACHER")).isEqualTo("TEACHER");
+        assertThat(StructuredScenarioFlow.graphRelation("친구인 대화 상대","TEACHER")).isEqualTo("친구인 대화 상대");
+        assertThat(StructuredScenarioFlow.graphRelation("선생님 같은 상대","FRIEND_CLOSE")).isEqualTo("선생님 같은 상대");
+        assertThat(StructuredScenarioFlow.graphRelation("대화하는 상대",null)).isEqualTo("대화하는 상대");
+    }
     @Test void withoutGraphTheOriginalRelationshipIsPreserved(){
         assertThat(StructuredScenarioFlow.graphRelation("친구",null)).isEqualTo("친구");
         assertThat(StructuredScenarioFlow.graphRelation("같이 놀 친구",null)).isEqualTo("같이 놀 친구");

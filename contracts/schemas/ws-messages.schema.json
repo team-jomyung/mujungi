@@ -135,7 +135,7 @@
       "properties": {
         "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
         "source": { "type": "string", "enum": ["GPT_LIVE", "SCENARIO_SCRIPT"] },
-        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "게이트를 통과한 이 말의 확정 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "게이트를 통과한 이 말의 확정 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다. 응답을 나눠 보내면 묶음 경계가 낱말 중간일 수 있어, 앞 공백 한 칸이 있을 때만 앞 묶음 글과 띄어 잇는다(끝 공백은 없다)" },
         "interruptible": { "type": "boolean", "description": "false면 기기가 아이 소리(끼어들기)로 이 묶음 재생을 멈추지 않는다. 선택 필드라 없으면 끊을 수 있다. 연습 첫 대본(목표 안내 · 장면 도입 · 여는 말)에 쓴다 [FT-1030-b]" }
       }
     },
@@ -150,14 +150,15 @@
       }
     },
     "PLAY_APPROVED_CONTENT": {
-      "description": "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER를 쓴다(BR6.10 · BR7.4)",
+      "description": "서버 → 기기. 승인 문구 재생(opId 필수). U1은 CLOSING · WAITING_FILLER를 쓴다(BR6.10 · BR7.4). 선택 text는 그 문구의 글(기기 자막)이다",
       "type": "object",
       "additionalProperties": false,
       "required": ["playbackId", "contentCode", "contentVersionId"],
       "properties": {
         "playbackId": { "$ref": "common.schema.json#/$defs/Uuid" },
         "contentCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
-        "contentVersionId": { "$ref": "common.schema.json#/$defs/Uuid" }
+        "contentVersionId": { "$ref": "common.schema.json#/$defs/Uuid" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500, "description": "그 승인 문구의 글(기기 자막). 선택 필드라 없으면 자막 없이 재생한다. 기기는 STARTED 때 띄우고 STOPPED · COMPLETED 뒤에 지운다" }
       }
     },
     "STOP_OUTPUT": {

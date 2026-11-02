@@ -23,7 +23,7 @@ public class GoalCandidateGateway {
     private final Optional<CoreLunaClient> luna;
     private final ChildKnowledgeService knowledge;
     private final GoalCandidateValidator validator;
-    private static final String PROMPT_VERSION="goal-candidates.v4";
+    private static final String PROMPT_VERSION="goal-candidates.v5";
     /** 화용 지표 코드(FT-1029-b, ai-goal-candidate-output.schema.json assessment). */
     private static final List<String> INDICATORS=List.of("P1","P2","P3","P4","P5","U5");
     private static final Map<String,String> CHECK_FIELDS=Map.of("goal-reason","REASON_TEXT","goal-display","DISPLAY_EVIDENCE","goal-name","DISPLAY_NAME","goal-target","TARGET_EXPRESSION");

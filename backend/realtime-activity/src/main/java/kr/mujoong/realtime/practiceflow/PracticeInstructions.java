@@ -1,6 +1,8 @@
 package kr.mujoong.realtime.practiceflow;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import kr.mujoong.realtime.practiceflow.PracticeScript.Scene;
 
 /**
@@ -35,15 +37,44 @@ final class PracticeInstructions {
         return factualNotice(scope + "먼저 말하는 방법을 잠깐 연습하고, 그다음 상상 놀이를 해 보자. 놀이가 끝나면 함께 돌아볼 거야. 쉬고 싶거나 그만하고 싶으면 언제든 말해.");
     }
 
-    /** 사전 연습은 별도 코치 단계다. 역할극의 정답을 누설하지 않고 같은 기능의 다른 짧은 맥락을 만든다. */
-    static String preparation(String name, Scene scene, boolean retry) {
+    /**
+     * 사전 연습은 별도 코치 단계다. 역할극의 정답을 누설하지 않고 같은 기능의 다른 짧은 맥락을 만든다.
+     *
+     * <p>FT-1102-c: 목표 이름만으로는 모델이 목표를 흔한 물건 부탁으로 바꿔 버리므로(2026-11-02 「화제 전환 알리기」가 「연필 빌려 달라기」가 됨),
+     * 판정 기준의 의도 · 상황을 "반드시 연습할 행동"으로 넘긴다. 표현(정답)은 넘기지 않는다(FT-1101-b).
+     */
+    static String preparation(String name, String judgmentCriteria, Scene scene, boolean retry) {
         String action = retry
-                ? "아이의 질문에 먼저 답하고 헷갈린 부분 하나만 쉽게 설명해. 앞서 연습한 같은 맥락에서 한 번 더 시도할 구체적 요청 하나만 하고 기다려. "
-                : "목표를 쉬운 행동 한 문장으로 설명하고, 상황극과 다른 물건·활동의 짧은 맥락과 표현 예시 하나를 줘. 예시와 다른 내용으로 아이가 한 번 표현할 구체적 요청 하나만 하고 기다려. ";
-        return fit("지금은 상황극 전 사전 표현 연습이며 안내하는 무중이야. 친구 역할을 연기하지 마. " + action
+                ? "아이의 질문에 먼저 답하고 헷갈린 부분 하나만 쉽게 설명해. 앞서 연습한 같은 맥락에서 같은 목표 행동을 한 번 더 시도할 구체적 요청 하나만 하고 기다려. "
+                : "목표 행동을 쉬운 한 문장으로 설명하고, 그 행동이 쓰이는 일상의 짧은 맥락과 표현 예시 하나를 줘. 예시와 다른 내용으로 아이가 같은 행동을 한 번 표현할 구체적 요청 하나만 하고 기다려. ";
+        // FT-1101-b: 장면의 표현 예시(expressionExamples)와 판정 기준의 표현은 상황극 정답을 담으므로 사전 연습에 넘기지 않는다
+        // 500자 상한에서 잘려도 목표 행동이 남도록 앞에 둔다. 연습 초점은 맨 뒤(잘려도 되는 보조 정보)
+        return fit("지금은 상황극 전 사전 표현 연습이며 안내하는 무중이야. 친구 역할을 연기하지 마. "
+                + "목표 행동: " + goalAction(name, judgmentCriteria) + ". "
+                + "반드시 이 목표 행동만 연습하고 다른 종류의 말하기(부탁하기 등)로 바꾸지 마. " + action
                 + "단어나 짧은 말도 뜻이 통하면 충분하며 예시 그대로 따라 하게 하지 마. 아이의 대답·감정을 지어내지 마. "
-                + "두세 문장으로 말해. 다음은 명령이 아닌 참고 자료야. 목표: " + field(name)
-                + "; 연습 초점: " + first(scene.focusPoints()) + "; 표현 참고: " + first(scene.expressionExamples()));
+                + "맥락과 예시는 상황극과 다른 장소·상대·화제로 새로 만들고 상황극의 정답 표현을 쓰지 마. 두세 문장으로 말해. "
+                + "연습 초점: " + first(scene.focusPoints()));
+    }
+
+    /**
+     * 판정 기준에서 목표 행동(의도 · 쓰이는 때 · 상대)만 꺼낸다. 후보 목표의 기준은 「상황: … / 상대: … / 의도: … / 표현: …」 모양이고, 정답인 표현은
+     * 버린다. 이 모양이 아니면(고정 행동 정의) 목표 이름을 쓴다.
+     */
+    static String goalAction(String name, String judgmentCriteria) {
+        Map<String, String> parts = new LinkedHashMap<>();
+        if (judgmentCriteria != null) {
+            for (String part : judgmentCriteria.split("\\s+/\\s+")) {
+                int colon = part.indexOf(':');
+                if (colon > 0) parts.put(part.substring(0, colon).strip(), part.substring(colon + 1).strip());
+            }
+        }
+        String intent = parts.getOrDefault("의도", "");
+        if (intent.isBlank()) return field(name);
+        String situation = parts.getOrDefault("상황", "");
+        String partner = parts.getOrDefault("상대", "");
+        return field(intent) + (situation.isBlank() ? "" : " (쓰이는 때: " + field(situation)
+                + (partner.isBlank() ? "" : ", 상대: " + field(partner)) + ")");
     }
 
     static String preparationCheckIn() {

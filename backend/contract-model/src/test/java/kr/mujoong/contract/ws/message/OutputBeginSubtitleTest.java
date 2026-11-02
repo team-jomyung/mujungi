@@ -21,8 +21,16 @@ class OutputBeginSubtitleTest {
     }
 
     @Test
-    void 앞뒤_공백을_지우고_그대로_싣는다() {
-        assertThat(OutputBegin.subtitle("  같이 놀자고 말해 볼까?  ")).isEqualTo("같이 놀자고 말해 볼까?");
+    void 끝_공백은_지우고_앞_공백은_한_칸으로_남긴다() {
+        assertThat(OutputBegin.subtitle("같이 놀자고 말해 볼까?  ")).isEqualTo("같이 놀자고 말해 볼까?");
+        assertThat(OutputBegin.subtitle("  같이 놀자고 말해 볼까?  ")).isEqualTo(" 같이 놀자고 말해 볼까?");
+    }
+
+    @Test
+    void 앞_공백이_있는_긴_글도_계약_길이를_넘지_않는다() {
+        String cut = OutputBegin.subtitle(" " + "가".repeat(OutputBegin.TEXT_MAX_CHARS + 5));
+        assertThat(cut).startsWith(" 가");
+        assertThat(new OutputBegin(PLAYBACK_ID, OutputBegin.Source.GPT_LIVE, cut).problems()).isEmpty();
     }
 
     @Test

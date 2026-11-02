@@ -10,6 +10,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** 말하기가 끝난 뒤 자막을 두는 시간. 묶음 사이 틈보다 길고, 아이 차례로 넘어가는 것을 늦추지 않을 만큼 짧다. */
 export const SUBTITLE_HOLD_MS = 1200;
 
+/**
+ * 이어 붙일 자막 글을 잇는다. 서버는 조각의 원래 앞 공백을 남겨 보내므로(낱말 중간에서 나뉜 조각은 앞 공백이 없다)
+ * 조각마다 공백을 넣지 않고 그대로 잇는다. 문장 부호 바로 뒤에 글이 붙으면 한 칸 띄운다(공급자 전사가 「보자.친구는」처럼 붙여 낼 때).
+ */
+export function joinSubtitle(current: string | null, text: string): string {
+  const joined = current === null ? text.trimStart() : `${current}${text}`;
+  return joined.replace(/([.!?])(?=["“'‘(가-힣A-Za-z])/g, "$1 ");
+}
+
 export interface DeviceSubtitle {
   readonly subtitle: string | null;
   /** 무중이 발화 중인가. 말하기가 시작되면 참, 묶음 사이 틈(SUBTITLE_HOLD_MS)이 지나 발화가 끝나거나 끊기면 거짓. */
@@ -48,7 +57,7 @@ export function useDeviceSubtitle(): DeviceSubtitle {
       }
       const continuing = speaking.current || holdTimer.current !== null;
       cancelHold();
-      setSubtitle((current) => (continuing && current !== null ? `${current} ${text}` : text));
+      setSubtitle((current) => joinSubtitle(continuing ? current : null, text));
     },
     [cancelHold, clear],
   );

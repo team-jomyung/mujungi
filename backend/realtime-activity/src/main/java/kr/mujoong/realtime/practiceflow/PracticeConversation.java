@@ -122,6 +122,13 @@ public final class PracticeConversation implements PracticeSessionExtension {
     private boolean awaitingNotice;
     private boolean inputReady;
     private Utterance earlyUtterance;
+    /**
+     * FT-1101-a: 사전 연습 판정이 열린 동안 확정된 뒤 조각(한 발화가 둘로 나뉜 것). 앞 조각 판정이 수행이 아니면 이 조각을 앞 조각에 이어 다시
+     * 판정한다(앞 조각은 판정 문맥의 직전 아이 말로 들어간다).
+     */
+    private Utterance preparationFollowUp;
+    /** 지금 열린 사전 연습 판정이 나뉜 조각을 이어 보는 판정인가(판정 기준에 그 사실을 싣는다). */
+    private boolean preparationContinuation;
     private UUID judgmentCorrelation;
     private boolean judgmentAsksProcedure;
     private ConsentAnswer pendingConsent;
@@ -238,6 +245,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 earlyUtterance = utterance;
             } else if (!state.judgmentOpen()) {
                 judge(utterance);
+            } else if (phase == Phase.PREPARATION) {
+                // 판정 중 이어진 조각은 버리지 않고 앞 조각 판정 결과를 본 뒤 이어서 판정한다(FT-1101-a)
+                preparationFollowUp = utterance;
             }
         } else if (phase.awaitsInput() && (state.sub() == Sub.REEXPLAIN || state.sub() == Sub.DIALOGUE_REPLY
                 || state.sub() == Sub.OPPORTUNITY_LINE || state.sub() == Sub.RESTATEMENT_REPLY || state.sub() == Sub.CLARIFICATION_REPLY || state.sub() == Sub.INPUT_CONFIRMATION)) {
@@ -376,6 +386,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         preparationResponses = 0;
         preparationProvidedAt = preparationAttemptedAt = null;
         preparationPlaybackFailed = false;
+        preparationFollowUp = null;
+        preparationContinuation = false;
         goalRecapped = false;
         reviewPerformed = reviewAfterHelp = reviewClarified = reviewHelpProvided = reviewInterrupted = false;
         output.schedule(TIMER_GOAL_LIMIT, settings.goalActiveLimit());
@@ -420,8 +432,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
         state.phase(Phase.PREPARATION, Sub.PREPARATION_PROMPT);
         earlyUtterance = null;
         output.schedule(TIMER_FOCUS_MAX, settings.focusMax());
-        speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(
-                pack.goals().get(state.goalIndex()).goalName(), currentScene, false));
+        GoalSpec goal = pack.goals().get(state.goalIndex());
+        speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(goal.goalName(), goal.judgmentCriteria(), currentScene, false));
     }
 
     private void finishPreparation(boolean performed) {
@@ -430,8 +442,27 @@ public final class PracticeConversation implements PracticeSessionExtension {
         cancelOpenSlot();
         dropJudgment();
         earlyUtterance = null;
+        preparationFollowUp = null;
         state.phase(Phase.PREPARATION, Sub.PREPARATION_FINISH);
         speakGenerated(FlowRole.COACH, PracticeInstructions.preparationFinish(performed));
+    }
+
+    /**
+     * FT-1101-a: 판정 중 뒤 조각이 왔고 앞 조각 판정이 수행(FULL · COPIED)이 아니면 앞 조각 결과를 쓰지 않고 뒤 조각을 이어 판정한다. 나뉜 조각은
+     * 대답 한 번으로 센다. 뒤 조각이 불명확하면 잇지 않고 앞 조각 결과를 쓴다.
+     *
+     * @param option 앞 조각 판정 결과(보류 · 장애면 null)
+     * @return 이어 판정을 시작했으면 참
+     */
+    private boolean judgePreparationFollowUp(String option, boolean asksProcedure) {
+        Utterance followUp = preparationFollowUp;
+        preparationFollowUp = null;
+        if (followUp == null || followUp.uncertain()) return false;
+        if (!asksProcedure && ("FULL".equals(option) || "COPIED".equals(option))) return false;
+        if (preparationResponses > 0) preparationResponses--;
+        preparationContinuation = true;
+        judge(followUp);
+        return true;
     }
 
     private void preparationJudgment(String option, boolean asksProcedure) {
@@ -444,8 +475,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
                 && ("PARTIAL".equals(option) || "HELP".equals(option)
                 || "NOT_UNDERSTOOD".equals(option) || "IRRELEVANT".equals(option))) {
             state.phase(Phase.PREPARATION, Sub.PREPARATION_FEEDBACK);
-            speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(
-                    pack.goals().get(state.goalIndex()).goalName(), currentScene, true));
+            GoalSpec goal = pack.goals().get(state.goalIndex());
+            speakGenerated(FlowRole.COACH, PracticeInstructions.preparation(goal.goalName(), goal.judgmentCriteria(), currentScene, true));
         } else {
             // 판정 장애·모르는 코드·인식 불확실성을 수행 실패로 기록하지 않는다.
             finishPreparation(false);
@@ -581,12 +612,14 @@ public final class PracticeConversation implements PracticeSessionExtension {
             return;
         }
         JudgmentPoint point = expectedJudgmentPoint();
+        Map<String, Object> criteria = criteriaFor(point);
+        preparationContinuation = false;
         UUID correlation = UUID.randomUUID();
         output.cancel(TIMER_NO_RESPONSE);
         judgmentCorrelation = correlation;
         judgmentAsksProcedure = PracticeProcedureQuestion.matches(utterance.text());
         state.judgmentOpen(true);
-        boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteriaFor(point));
+        boolean accepted = output.requestJudgment(point, utterance.seq(), correlation, criteria);
         if (!accepted) {
             // 거절(열린 턴 · 공급자 없음 · 전사 범위 밖 등)은 보류와 같게 이어 간다. 연습은 멈추지 않는다(BR3.7)
             judgmentCorrelation = null;
@@ -603,8 +636,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
                     "상황극 전 사전 표현 연습이다. 직전 코치의 작은 연습 요청에 실제 필요한 뜻을 표현했는지만 본다. "
                     + "설명에 대한 수용만 한 말, 질문 반복·진행 질문은 수행이 아니다. 응·좋아도 요청된 동의 표현이면 인정한다. 짧은 답은 길이보다 문맥에서 필요한 뜻이 통하는지 본다. "
                     + "지금 사용한 연습 맥락을 기준으로 보며 이후 역할극의 물건·상대가 같을 필요는 없다. "
-                    + "이 결과는 교육 전 독립 능력이나 역할극 수행 근거가 아니다. 연습할 기능: "
-                    + pack.goals().get(state.goalIndex()).judgmentCriteria());
+                    + "이 결과는 교육 전 독립 능력이나 역할극 수행 근거가 아니다. "
+                    + (preparationContinuation ? "이 말은 직전 아이 말에 이어진 같은 대답의 뒷부분일 수 있으니 직전 아이 말과 이어 하나의 대답으로 본다. " : "")
+                    + "연습할 기능: " + pack.goals().get(state.goalIndex()).judgmentCriteria());
         }
         if (settings.flexibleDialogue() && goalAchieved && state.phase() == Phase.OPPORTUNITY) {
             return Map.of("coreFunction", "ROLE_DIALOGUE_CLOSURE", "judgmentCriteria",
@@ -635,7 +669,9 @@ public final class PracticeConversation implements PracticeSessionExtension {
         Object first = value.get("firstOption");
         String option = first == null ? null : first.toString();
         if (state.phase() == Phase.PREPARATION) {
-            preparationJudgment(point == JudgmentPoint.J5 ? option : null, asksProcedure);
+            String preparationOption = point == JudgmentPoint.J5 ? option : null;
+            if (judgePreparationFollowUp(preparationOption, asksProcedure)) return;
+            preparationJudgment(preparationOption, asksProcedure);
             return;
         }
         if (settings.flexibleDialogue() && flexibleJudgment(point, option, asksProcedure)) return;
@@ -661,7 +697,8 @@ public final class PracticeConversation implements PracticeSessionExtension {
 
     private void unavailableJudgment(JudgmentPoint point) {
         if (state.phase() == Phase.PREPARATION) {
-            finishPreparation(false);
+            // 앞 조각 판정이 보류 · 거절돼도 이어진 뒤 조각이 있으면 그 조각으로 판정한다(FT-1101-a)
+            if (!judgePreparationFollowUp(null, false)) finishPreparation(false);
         } else if (settings.flexibleDialogue() && state.phase() == Phase.OPPORTUNITY && goalAchieved) {
             // 목표는 이미 해냈고 남은 것은 대화 정리뿐이다: 정리 판정 보류는 '정리됨'으로 보고 마무리 답으로 닫는다
             closeAchievedScene();

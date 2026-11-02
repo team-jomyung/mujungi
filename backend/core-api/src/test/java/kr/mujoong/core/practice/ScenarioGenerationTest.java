@@ -22,6 +22,15 @@ class ScenarioGenerationTest {
         when(provider.review(any())).thenReturn(reject("GOAL_MISMATCH"),approve());
         run();assertThat(codes).containsExactly("ScenarioReview_REJECT","ScenarioReview_GOAL_MISMATCH");
     }
+    // 2026-10-30 합성 실호출: 한국어 장면에 일본어 문장이 섞여 나왔다. 가나 · 한자가 들어 있으면 사유 코드로 남기고, 한글 · 문장부호만이면 남기지 않는다
+    @Test void foreignScriptInChildFacingTextIsDetected(){
+        var korean=new ScenarioScript(List.of(base()));
+        assertThat(ScenarioScriptGenerator.foreignScript(korean)).isFalse();
+        var kana=new ScenarioScript(List.of(base().withDescription(base().sceneDescription()+" 今日はそこまでにしようかな")));
+        assertThat(ScenarioScriptGenerator.foreignScript(kana)).isTrue();
+        var hanzi=new ScenarioScript(List.of(base().withDescription(base().sceneDescription()+" 友達")));
+        assertThat(ScenarioScriptGenerator.foreignScript(hanzi)).isTrue();
+    }
     /** FT-1028-c: 거절 사유마다 걸린 점검 항목 · 필드를 고정 코드로 남긴다. */
     @Test void reviewFindingsAreRecordedAsFixedCodes(){
         var codes=new java.util.ArrayList<String>();generator.diagnostics(codes::add);
@@ -91,7 +100,35 @@ class ScenarioGenerationTest {
         assertThat(result.details().scenes().getFirst().sceneDescription()).isEqualTo(base().sceneDescription());
     }
     @Test void rejectionUsesOneContentCorrectionThenSeparateReview(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());assertThat(run().details().generation().calls()).isEqualTo(4);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
-    @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    // FT-1030-l: 반복도 마지막 수정 라운드를 쓴다. 세 라운드 모두 거절되면 여전히 발급하지 않는다
+    @Test void twiceRejectedNeverReturnsIssuableScript(){when(provider.review(any())).thenReturn(reject("REPETITION"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());}
+    /** FT-1102-b: 검토가 승인해도 금지 내용 검사에 걸린 BASE는 그 사유 코드로 고쳐 쓰게 하고, 두 번 걸려도 마지막 수정 라운드를 쓴다. */
+    @Test void aServerContentFailureIsRepairedWithItsOwnReasonAndMayUseTheLastRound(){
+        var named=base().withDescription(base().sceneDescription()+" 합성아이가 웃는다.");
+        when(provider.generate(any())).thenReturn(generated(named),generated(named),generated(base()));
+        var result=run();
+        assertThat(result.details().generation().calls()).isEqualTo(6);
+        assertThat(result.details().scenes().getFirst().sceneDescription()).doesNotContain("합성아이");
+        var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
+        verify(provider,times(3)).generate(calls.capture());
+        assertThat(calls.getAllValues().get(1).input()).containsEntry("correctionReasons",List.of("PRIVATE_OR_FORBIDDEN_CONTENT"));
+        assertThat(calls.getAllValues().get(2).input()).containsEntry("correctionReasons",List.of("PRIVATE_OR_FORBIDDEN_CONTENT"));
+    }
+    @Test void aServerContentFailureIsNeverIssuedEvenWhenTheReviewApproves(){
+        var named=base().withDescription(base().sceneDescription()+" 합성아이가 웃는다.");
+        when(provider.generate(any())).thenReturn(generated(named));
+        assertThatThrownBy(this::run).isInstanceOf(ScenarioScriptGenerator.ContentExhausted.class);
+        verify(provider,times(3)).generate(any());
+    }
+    @Test void onlyRepairableServerReasonsReplaceTheGenericResult(){
+        var forbidden=new ScenarioScriptValidation.Inspection(ScenarioScriptValidation.Result.INVALID_BASE,ScenarioScriptValidation.Reason.PRIVATE_OR_FORBIDDEN_CONTENT);
+        assertThat(ScenarioScriptGenerator.serverReason(forbidden.result(),forbidden)).isEqualTo("PRIVATE_OR_FORBIDDEN_CONTENT");
+        var layout=new ScenarioScriptValidation.Inspection(ScenarioScriptValidation.Result.INVALID_BASE,ScenarioScriptValidation.Reason.BASE_LAYOUT);
+        assertThat(ScenarioScriptGenerator.serverReason(layout.result(),layout)).isEqualTo("INVALID_BASE");
+        var variant=new ScenarioScriptValidation.Inspection(ScenarioScriptValidation.Result.INVALID_VARIANT,ScenarioScriptValidation.Reason.PRIVATE_OR_FORBIDDEN_CONTENT);
+        assertThat(ScenarioScriptGenerator.serverReason(variant.result(),variant)).isEqualTo("INVALID_VARIANT");
+    }
+    @Test void nonRepairableRejectionStillStopsAfterTwoRounds(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
     @Test void correctionReceivesTheRejectionReasonWithoutAcceptingTheRejectedScript(){
         when(provider.review(any())).thenReturn(reject("REPETITION"),approve());
         run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);
@@ -168,7 +205,8 @@ class ScenarioGenerationTest {
         when(provider.generate(any())).thenReturn(generated(withStart));
         assertThat(run().details().scenes().getFirst().openingLine()).isEqualTo("우와, 너도 블록 놀이 하러 왔어?");
     }
-    @Test void approvedButInvalidBaseStillFailsIndependentServerChecks(){var bad=new ScenarioScript.Scene("base","BASE","정답은 잠깐 쉬자", "말", "설명",null,null,"PEER","교실","놀이",null,null);when(provider.generate(any())).thenReturn(generated(bad));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(2)).generate(any());verify(provider,times(2)).review(any());}
+    // FT-1102-b: 고칠 수 있는 서버 내용 사유(목표 표현 노출)는 마지막 수정 라운드도 쓴다. 승인돼도 서버 검사를 못 넘으면 발급하지 않는 것은 그대로다
+    @Test void approvedButInvalidBaseStillFailsIndependentServerChecks(){var bad=new ScenarioScript.Scene("base","BASE","정답은 잠깐 쉬자", "말", "설명",null,null,"PEER","교실","놀이",null,null);when(provider.generate(any())).thenReturn(generated(bad));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).generate(any());verify(provider,times(3)).review(any());}
     @Test void invalidVariantIsCorrectedOnceThenBaseOnlyReviewed(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));var result=run();assertThat(result.details().scenes()).hasSize(1);assertThat(result.details().generation().calls()).isEqualTo(5);var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(3)).review(calls.capture());assertThat(((ScenarioScript)calls.getAllValues().getLast().input().get("script")).scenes()).hasSize(1);verify(provider,times(2)).generate(any());}
     @Test void baseOnlyMustReceiveItsOwnApproval(){var base=base();var variant=new ScenarioScript.Scene("variant","VARIANT",base.sceneDescription(),base.opportunitySentence(),base.reexplanation(),null,null,"PEER","운동장","놀이",null,null);when(provider.generate(any())).thenReturn(generated(base,variant));when(provider.review(any())).thenReturn(approve(),approve(),reject("AGE_MISMATCH"));assertThatThrownBy(this::run).isInstanceOf(kr.mujoong.core.common.error.CoreApiException.class);verify(provider,times(3)).review(any());}
     @Test void ageAndSameHistoryReachEveryReviewAndCorrection(){when(provider.review(any())).thenReturn(reject("AGE_MISMATCH"),approve());run();var calls=ArgumentCaptor.forClass(ScenarioScriptProvider.Call.class);verify(provider,times(2)).review(calls.capture());assertThat(calls.getAllValues()).allSatisfy(c->assertThat(c.input()).containsEntry("age",8).containsEntry("history",List.of()));}

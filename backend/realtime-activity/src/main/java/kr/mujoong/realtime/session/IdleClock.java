@@ -163,7 +163,7 @@ public final class IdleClock {
             return;
         }
         UUID playbackId = UUID.randomUUID();
-        if (ctx.sendControl(new PlayApprovedContent(playbackId, SessionExecutor.SILENCE_WARNING, item.get().contentVersionId()))) {
+        if (ctx.sendControl(PlayApprovedContent.withSubtitle(playbackId, SessionExecutor.SILENCE_WARNING, item.get().contentVersionId(), item.get().text()))) {
             ctx.playback().started(playbackId, SessionExecutor.SILENCE_WARNING);
             ctx.timers().arm(Kind.PLAYBACK_EXPIRY, ctx.services().settings().playbackExpiry());
             env.approvedBubble(item.get(), now);
