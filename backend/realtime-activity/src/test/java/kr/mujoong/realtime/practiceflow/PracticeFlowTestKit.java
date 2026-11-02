@@ -61,6 +61,8 @@ final class PracticeFlowTestKit {
         final List<String> cancelLog = new ArrayList<>();
         final List<UUID> cancelledSpeech = new ArrayList<>();
         final List<Boolean> holds = new ArrayList<>();
+        /** setThinking 요청 순서(FT-1102-j). */
+        final List<Boolean> thinking = new ArrayList<>();
         final List<Map.Entry<String, Object>> posted = new ArrayList<>();
         final Map<String, Instant> timers = new LinkedHashMap<>();
         int calls;
@@ -113,6 +115,12 @@ final class PracticeFlowTestKit {
         public boolean cancelResponse() {
             calls++;
             return false;
+        }
+
+        @Override
+        public boolean setThinking(boolean on) {
+            thinking.add(on);
+            return true;
         }
 
         @Override

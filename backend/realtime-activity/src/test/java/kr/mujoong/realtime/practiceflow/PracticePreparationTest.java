@@ -385,4 +385,19 @@ class PracticePreparationTest {
         assertThat(h.ext.state().phase()).isEqualTo(FlowState.Phase.OPPORTUNITY);
         assertThat(h.out.judgments).isEmpty();
     }
+
+    @Test
+    void theDeviceShowsListeningOnlyOnTheChildsTurn() {
+        // FT-1102-j: 무중이 말을 준비 · 재생하는 동안은 '생각 중', 아이 차례에만 '듣는 중', 아이가 말하면 판정 동안 다시 '생각 중'
+        Harness h = fresh(false);
+        h.activate();
+        assertThat(h.out.thinking).containsExactly(true);
+        h.played();
+        assertThat(h.out.thinking).containsExactly(true);
+        h.played();
+        assertThat(h.ext.state().sub()).isEqualTo(FlowState.Sub.NONE);
+        assertThat(h.out.thinking).containsExactly(true, false);
+        h.child("파란 상자 줘");
+        assertThat(h.out.thinking).containsExactly(true, false, true);
+    }
 }

@@ -173,10 +173,15 @@ public class SessionResultHandler implements JobHandler {
     private List<Map<String,Object>> publicScenes(List<SceneJudgmentRepository.Scene> scenes){return scenes.stream().map(s->Map.<String,Object>of("goalSelectionId",s.goalSelectionId(),"sceneNo",s.sceneNo(),"sceneChip",s.sceneChip(),"chipText",SceneReportMapper.publicText(s))).toList();}
     private String template(StoredRecord r,Map<String,Object> goal,List<SceneJudgmentRepository.Scene> scenes){
         if(r.activityType().equals("FREE_TALK")){long minutes=r.recordFrom()==null||r.recordTo()==null?0:Math.max(0,Duration.between(r.recordFrom(),r.recordTo()).toMinutes());return minutes+"분 동안 이야기를 나눴어요.";}
-        UUID id=uuid(goal.get("goalSelectionId"));boolean modern=PracticeRecordV2.VERSION.equals(goal.get("flowVersion"));long count=scenes.stream().filter(s->s.goalSelectionId().equals(id)&&!s.sceneChip().equals("NOT_DONE")).count();long total=modern?scenes.stream().filter(s->s.goalSelectionId().equals(id)).count():2;String expression=modern?safeGoalExpression(rejudgment==null?null:rejudgment.targetExpression(r.childId(),id).orElse(null),checker):text(goal,"displayName");return expression+" 연습을 했어요. 장면 "+total+"개 중 "+count+"개를 진행했어요.";
+        UUID id=uuid(goal.get("goalSelectionId"));boolean modern=PracticeRecordV2.VERSION.equals(goal.get("flowVersion"));long count=scenes.stream().filter(s->s.goalSelectionId().equals(id)&&!s.sceneChip().equals("NOT_DONE")).count();long total=modern?scenes.stream().filter(s->s.goalSelectionId().equals(id)).count():2;String name=safeGoalName(text(goal,"displayName"),checker);return name+" 연습을 했어요. 장면 "+total+"개 중 "+count+"개를 진행했어요.";
     }
-    static String safeGoalExpression(String text,OutputChecker checker){
-        if(text==null||text.isBlank()||!checker.firstPass(new OutputChecker.Draft("goal-expression",text,List.of(),null)))return "전달";
-        return text.substring(0,text.offsetByCodePoints(0,Math.min(8,text.codePointCount(0,text.length()))));
+    /**
+     * 고정 문장에 넣을 목표 이름(FT-1102-i). 목표 표현(「나는 ○○라고 느꼈어.」)을 잘라 쓰면 자리 표시와 공백이 그대로 보이므로 목표 이름을 쓴다.
+     * 비었거나 1차 검사(사전 · 숫자)에 걸리면 「목표」로 쓴다. 공백은 한 칸으로 줄인다.
+     */
+    static String safeGoalName(String text,OutputChecker checker){
+        String name=text==null?"":text.strip().replaceAll("\\s+"," ");
+        if(name.isEmpty()||!checker.firstPass(new OutputChecker.Draft("goal-name",name,List.of(),null)))return "목표";
+        return name;
     }
 }

@@ -151,7 +151,7 @@ owner_psql() {
 # 005: 새 승인 음성 판 8종(INTRO_FREE_TALK v3 등)을 넣고 이전 판을 RETIRED로 바꾼다. 자유대화 첫 안내는 이 판의 음성이
 #   service-policy/notice-assets.json과 맞아야 재생된다(맞지 않으면 C8에서 안내가 오지 않는다). 매 회차 001 ~ 004 뒤에 둔다
 for i in 1 2; do
-  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql 005-spoken-audio-reference.sql; do
+  for seed in 001-reference.sql 002-u2-reference.sql 003-u4a-reference.sql 004-u8-reference.sql 005-spoken-audio-reference.sql 006-guardian-view-terms-v2.sql; do
     if ! owner_psql --single-transaction -f "/seed/$seed"; then
       die_assert B2.seed "시드 $seed ${i}회차 실패"
     fi
