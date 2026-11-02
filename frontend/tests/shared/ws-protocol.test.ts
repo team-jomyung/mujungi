@@ -144,7 +144,9 @@ describe("messages — 서버 → 기기 읽기", () => {
   it("OUTPUT_BEGIN.text(기기 자막)는 다듬어 싣고 비었거나 500자를 넘거나 문자열이 아니면 null이다", () => {
     const begin = (text: unknown) =>
       parseServerMessage(envelope("OUTPUT_BEGIN", { playbackId: PLAYBACK_ID, text }, { sessionId: SESSION_ID }));
-    expect(begin("  같이 놀자고 말해 볼까?  ")).toMatchObject({ type: "OUTPUT_BEGIN", text: "같이 놀자고 말해 볼까?" });
+    expect(begin("같이 놀자고 말해 볼까?  ")).toMatchObject({ type: "OUTPUT_BEGIN", text: "같이 놀자고 말해 볼까?" });
+    // FT-1102-f: 앞 공백은 한 칸으로 남긴다(나눠 보낸 묶음을 띄어 이으라는 뜻)
+    expect(begin("  같이 놀자고 말해 볼까?  ")).toMatchObject({ type: "OUTPUT_BEGIN", text: " 같이 놀자고 말해 볼까?" });
     expect(begin("😀".repeat(500))).toMatchObject({ text: "😀".repeat(500) });
     expect(begin("가".repeat(501))).toMatchObject({ text: null });
     expect(begin("   ")).toMatchObject({ text: null });
@@ -177,7 +179,13 @@ describe("messages — 서버 → 기기 읽기", () => {
       opId: OP_ID,
       sessionId: SESSION_ID,
       ...play,
+      text: null,
     });
+    // FT-1102-f: 고정 안내 자막(선택 text)은 앞뒤 공백을 지워 싣고, 형식이 틀리면 null이다
+    expect(parseServerMessage(envelope("PLAY_APPROVED_CONTENT", { ...play, text: "  잠깐만 기다려 줘  " }, { opId: OP_ID, sessionId: SESSION_ID }))).toMatchObject({
+      text: "잠깐만 기다려 줘",
+    });
+    expect(parseServerMessage(envelope("PLAY_APPROVED_CONTENT", { ...play, text: 42 }, { opId: OP_ID, sessionId: SESSION_ID }))).toMatchObject({ text: null });
     expect(parseServerMessage(envelope("PLAY_APPROVED_CONTENT", { ...play, contentVersionId: 1 }, { opId: OP_ID, sessionId: SESSION_ID }))).toBeNull();
   });
 

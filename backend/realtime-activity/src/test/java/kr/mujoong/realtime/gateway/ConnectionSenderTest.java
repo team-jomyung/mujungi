@@ -130,7 +130,8 @@ class ConnectionSenderTest {
 
         List<String> begins = transport.texts.stream().filter(text -> text.contains("OUTPUT_BEGIN")).toList();
         assertThat(begins).hasSize(2);
-        assertThat(begins.get(0)).contains("\"text\":\"같이 놀자고 말해 볼까?\"");
+        // FT-1102-f: 끝 공백은 지우고 앞 공백은 한 칸으로 남긴다(나눠 보낸 묶음을 띄어 이으라는 뜻)
+        assertThat(begins.get(0)).contains("\"text\":\" 같이 놀자고 말해 볼까?\"");
         assertThat(begins.get(1)).doesNotContain("\"text\"");
         sender.close(CloseCode.DEVICE_OFF);
         worker.join(WAIT.toMillis());
