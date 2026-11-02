@@ -62,10 +62,6 @@ public class PragmaticsKnowledge {
         }
     }
 
-    public List<SupportItem> supportItems(String behaviorKey) {
-        return repository.findApprovedSupport(behaviorKey);
-    }
-
     public List<String> relatedBehaviorKeys(String behaviorKey) {
         return graph.map(adapter -> List.copyOf(adapter.findRelatedBehaviorKeys(behaviorKey))).orElseGet(List::of);
     }

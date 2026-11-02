@@ -25,7 +25,7 @@ public class ResultQueryService {
     public record GeneratedCandidate(UUID recommendationId,String displayName,String displayEvidence,List<CandidateRegistry.Evidence> evidence,boolean selected,UUID goalSelectionId){}
     public record Goal(UUID goalSelectionId,String displayName,int order,List<?> scenes,Map<String,Object> help){}
     public record Practice(List<Goal> goals){}
-    public record Result(String jobStatus,String resultLevel,List<Sentence> sentences,Practice practice,List<Map<String,Object>> tips,String noTipReason,List<?> candidates){@Override public String toString(){return "Result[jobStatus="+jobStatus+"]";}}
+    public record Result(String jobStatus,String resultLevel,List<Sentence> sentences,Practice practice,List<?> candidates){@Override public String toString(){return "Result[jobStatus="+jobStatus+"]";}}
     public Status status(UUID guardian,UUID session){
         var copy=copies.findOwned(session,guardian).orElseThrow(()->CoreApiException.of(ErrorCode.NOT_FOUND));
         var head=states.find(session,guardian);if(head.isPresent())return new Status(copy.status().name(),copy.confirmed(),head.get().jobStatus());
@@ -36,7 +36,7 @@ public class ResultQueryService {
     }
     public Result result(UUID guardian,UUID session){
         var status=status(guardian,session);var current=results.current(session);
-        if(current.isEmpty())return new Result(status.jobStatus(),null,List.of(),null,List.of(),null,List.of());
+        if(current.isEmpty())return new Result(status.jobStatus(),null,List.of(),null,List.of());
         var stored=current.get();var sentences=transcript(stored.sentencesJson()).stream().map(s->new Sentence(uuid(s.get("goalSelectionId")),text(s,"text"))).toList();
         Practice practice=null;var record=records.find(session,guardian);
         if(record.isPresent()&&record.get().record().activityType().equals("PRACTICE")){
@@ -53,7 +53,7 @@ public class ResultQueryService {
         if(generated!=null&&record.isPresent()&&kr.mujoong.contract.json.JsonCodec.shared().read(stored.pendingCandidatesJson(),Object.class) instanceof Map<?,?>){
             UUID child=record.get().record().childId();publicCandidates=goalConsent!=null&&!goalConsent.check(guardian).ok()?List.of():generated.candidates(child,session).stream().filter(v->generatedSource(v,stored.id())).map(v->{var selected=generated.activeSelection(child,v.candidateId());return new GeneratedCandidate(v.id(),v.content().displayName(),v.content().displayEvidence(),v.content().evidence().stream().map(e->new CandidateRegistry.Evidence(e.utteranceSeq(),"CHILD_RECALL")).toList(),selected.isPresent(),selected.map(s->s.id()).orElse(null));}).toList();
         }
-        return new Result(status.jobStatus(),stored.level(),sentences,practice,transcript(stored.tipsJson()),stored.noTipReason(),publicCandidates);
+        return new Result(status.jobStatus(),stored.level(),sentences,practice,publicCandidates);
     }
     private boolean generatedSource(kr.mujoong.core.practicegoal.GoalCandidateRepository.Version version,UUID result){return generated.fromResult(version.candidateId(),result);}
 }

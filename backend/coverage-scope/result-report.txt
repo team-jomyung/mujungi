@@ -20,7 +20,6 @@ backend/core-api/src/main/java/kr/mujoong/core/config/CoreSessionProperties.java
 backend/core-api/src/main/java/kr/mujoong/core/config/CoreTimingProperties.java
 backend/core-api/src/main/java/kr/mujoong/core/knowledge/BehaviorDefinitionLookup.java
 backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeJdbcRepository.java
-backend/core-api/src/main/java/kr/mujoong/core/knowledge/SupportLibrary.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/CandidateRegistry.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/PracticeGoalRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/ScenarioLookup.java
@@ -74,7 +73,6 @@ backend/core-api/src/main/java/kr/mujoong/core/result/SceneJudgmentRepository.ja
 backend/core-api/src/main/java/kr/mujoong/core/result/SessionResultHandler.java
 backend/core-api/src/main/java/kr/mujoong/core/result/SessionResultStateRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/result/StructuredExperienceRepository.java
-backend/core-api/src/main/java/kr/mujoong/core/result/TipMatcher.java
 backend/core-api/src/main/java/kr/mujoong/core/result/check/ForbiddenDictionary.java
 backend/core-api/src/main/java/kr/mujoong/core/result/check/NumberGuard.java
 backend/core-api/src/main/java/kr/mujoong/core/result/check/OutputChecker.java

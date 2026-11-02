@@ -26,7 +26,7 @@ public class ForbiddenDictionary {
         return List.copyOf(d.entries());
     }
     public boolean allowed(String text){String value=normalize(QuoteMatcher.outsideQuotes(withoutFixedNotice(text)));return entries.stream().noneMatch(e->matches(value,e.pattern()));}
-    /** 승인 팁은 인용도 포함한 모든 문구를 검사한다. */
+    /** 인용도 포함한 모든 문구를 검사한다(목표 후보 · 연습 제안 · 리포트 별칭). */
     public boolean allowedLiteral(String text){String value=normalize(withoutFixedNotice(text==null?"":text));return entries.stream().noneMatch(e->matches(value,e.pattern()));}
     private static String withoutFixedNotice(String text){return text.replace("이 리포트는 진단 결과가 아니에요. 전문가에게 보여 줄 참고 자료예요. 제한사항은 마지막 항목에 있어요.","");}
     private static boolean matches(String value,String pattern){

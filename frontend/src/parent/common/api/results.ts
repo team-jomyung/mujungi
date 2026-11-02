@@ -8,7 +8,7 @@ export interface ResultStatus { jobStatus: JobStatus; sessionStatus: string; con
 export interface Scene { sceneNo: number; exposureType: string; sceneChip: string; chipText: string; notDoneReason?: string | null; timing?: "IMMEDIATE" | "AFTER_REASK" | "AFTER_HELP" | null }
 export interface ResultGoal { goalSelectionId: string; displayName: string; order: number; scenes: Scene[]; help: { count: number; consent: string } }
 export interface Candidate { recommendationId: string; displayName: string; reasonText: string; evidence: { utteranceSeq: number; kind: string }[]; selected: boolean; goalSelectionId: string | null }
-export interface SessionResult { jobStatus: JobStatus; resultLevel: string | null; sentences: { text: string; goalSelectionId: string | null }[]; practice: { goals: ResultGoal[] } | null; tips: { supportItemId: string; title: string | null; condition: string; content: string; limitation: string }[]; candidates: Candidate[] }
+export interface SessionResult { jobStatus: JobStatus; resultLevel: string | null; sentences: { text: string; goalSelectionId: string | null }[]; practice: { goals: ResultGoal[] } | null; candidates: Candidate[] }
 export interface RecordItem { sessionId: string; activityType: string; startedAt: string | null; endedAt: string | null; finalStatus: string; linkable: boolean; goalCount: number; interrupted: boolean; summary: string | null }
 export interface RecordDetail { session: SessionSummary; goals: { displayName: string; order: number }[]; utterances: (Bubble & { uncertain: boolean })[]; gaps: LiveGap[]; recordScope: { from: string; to: string } | null; endConfirmed: boolean }
 export function object(value: unknown): Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new ResponseShapeError("result"); return value as Record<string, unknown>; }
@@ -23,7 +23,6 @@ export function parseResult(value: unknown): SessionResult {
   const r = object(value);
   return { jobStatus: job(r.jobStatus), resultLevel: nullableText(r.resultLevel), sentences: rows(r.sentences).map(s => ({ text: text(s.text), goalSelectionId: nullableText(s.goalSelectionId) })),
     practice: r.practice == null ? null : { goals: rows(object(r.practice).goals).map(g => ({ goalSelectionId: text(g.goalSelectionId), displayName: text(g.displayName), order: count(g.order), scenes: rows(g.scenes).map(s => ({ sceneNo: count(s.sceneNo), exposureType: text(s.exposureType), sceneChip: text(s.sceneChip), chipText: text(s.chipText), notDoneReason: nullableText(s.notDoneReason), ...(s.timing === undefined ? {} : { timing: timing(s.timing) }) })), help: { count: count(object(g.help).count), consent: text(object(g.help).consent) } })) },
-    tips: rows(r.tips).map(t => ({ supportItemId: text(t.supportItemId), title: nullableText(t.title), condition: text(t.condition), content: text(t.content), limitation: text(t.limitation) })),
     candidates: rows(r.candidates).map(c => ({ recommendationId: text(c.recommendationId), displayName: text(c.displayName), reasonText: text(c.displayEvidence ?? c.reasonText), selected: c.selected === true, goalSelectionId: nullableText(c.goalSelectionId), evidence: rows(c.evidence).map(e => ({ utteranceSeq: count(e.utteranceSeq), kind: text(e.kind) })) })) };
 }
 const resultPath = (id: string) => `/api/sessions/${encodeURIComponent(id)}/result`;
