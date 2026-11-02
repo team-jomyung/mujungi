@@ -15,7 +15,7 @@ class KnowledgeJdbcRepositoryIT {
     @BeforeEach void setUp() { db=DbTestSupport.coreApp(); repository=new KnowledgeJdbcRepository(db.jdbc()); }
     @AfterEach void close() { if(db!=null) db.close(); }
 
-    @Test void seededDefinitionsAreCompleteVersionedAndSupportIncludesLimitations() {
+    @Test void seededDefinitionsAreCompleteAndVersioned() {
         assertThat(repository.findVersion("unknown",1)).isEmpty();
         for(String key : new String[]{"ACCEPT_STOP","ASK_TO_JOIN","ASK_FOR_CLARIFICATION"}) {
             var definition=repository.findVersion(key,1).orElseThrow();
@@ -23,13 +23,6 @@ class KnowledgeJdbcRepositoryIT {
             assertThat(definition.status()).isEqualTo("ACTIVE");
             assertThat(definition.version()).isEqualTo(1);
         }
-        assertThat(repository.findApprovedSupport("ACCEPT_STOP")).isNotEmpty()
-                .allSatisfy(item -> {
-                    assertThat(item.conditionText()).isNotBlank();
-                    assertThat(item.contentText()).isNotBlank();
-                    assertThat(item.limitationText()).isNotBlank();
-                });
-        assertThat(repository.findApprovedSupport("unknown")).isEmpty();
     }
     @Test void firstPinTimestampIsWrittenOnceAndUnknownVersionIsNotMarked() {
         db.inRolledBackTx(status -> {

@@ -24,7 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SessionResultHandler implements JobHandler {
     private final ResultRecordReader records;private final ActivityContextRepository contexts;private final ConsentPolicyService consent;
     private final ChildRepository children;private final BehaviorDefinitionLookup definitions;private final ScenarioLookup scenarios;
-    private final ResultTextGateway ai;private final OutputChecker checker;private final CandidateScreen candidateScreen;private final TipMatcher tips;
+    private final ResultTextGateway ai;private final OutputChecker checker;private final CandidateScreen candidateScreen;
     private final NotDoneReasonMapper reasons;private final ActivityResultRepository results;private final StructuredExperienceRepository structured;
     private final SceneJudgmentRepository judgments;private final CandidateRegistry registry;private final JsonCodec json;
     private final TransactionTemplate tx;
@@ -37,10 +37,10 @@ public class SessionResultHandler implements JobHandler {
     void generatedGoals(kr.mujoong.core.practicegoal.GoalCandidateGateway gateway,kr.mujoong.core.practicegoal.CandidateSeedDelivery delivery){goalCandidates=gateway;goalDelivery=delivery;}
     public SessionResultHandler(ResultRecordReader records,ActivityContextRepository contexts,ConsentPolicyService consent,ChildRepository children,
             BehaviorDefinitionLookup definitions,ScenarioLookup scenarios,ResultTextGateway ai,OutputChecker checker,CandidateScreen candidateScreen,
-            TipMatcher tips,NotDoneReasonMapper reasons,ActivityResultRepository results,StructuredExperienceRepository structured,
+            NotDoneReasonMapper reasons,ActivityResultRepository results,StructuredExperienceRepository structured,
             SceneJudgmentRepository judgments,CandidateRegistry registry,JsonCodec json,PlatformTransactionManager transactions){
         this.records=records;this.contexts=contexts;this.consent=consent;this.children=children;this.definitions=definitions;this.scenarios=scenarios;
-        this.ai=ai;this.checker=checker;this.candidateScreen=candidateScreen;this.tips=tips;this.reasons=reasons;this.results=results;this.structured=structured;
+        this.ai=ai;this.checker=checker;this.candidateScreen=candidateScreen;this.reasons=reasons;this.results=results;this.structured=structured;
         this.judgments=judgments;this.registry=registry;this.json=json;tx=new TransactionTemplate(transactions);
     }
     public String jobType(){return "SESSION_RESULT";}
@@ -106,8 +106,7 @@ public class SessionResultHandler implements JobHandler {
         // 두 문장이 모두 걸려 같은 고정 문장으로 바뀌면 한 번만 남긴다(목표별)
         Set<String> seenSentences=new HashSet<>();sentences.removeIf(s->!seenSentences.add(s.get("goalSelectionId")+"|"+s.get("text")));
         List<CandidateRegistry.Candidate> candidates=new ArrayList<>();for(int i=0;i<candidateDrafts.size();i++)if(checked.get("c"+i)!=null)candidates.add(candidateDrafts.get(i));
-        Set<String> keys=new LinkedHashSet<>();for(var goal:goals(practice))if(!text(goal,"behaviorKey").isBlank())keys.add(text(goal,"behaviorKey"));candidates.forEach(c->keys.add(c.behaviorKey()));
-        var match=tips.match(keys);var help=goals(practice).stream().map(g->Map.of("goalSelectionId",text(g,"goalSelectionId"),"help",HelpSummarizer.summarize(g))).toList();
+        var help=goals(practice).stream().map(g->Map.of("goalSelectionId",text(g,"goalSelectionId"),"help",HelpSummarizer.summarize(g))).toList();
         Map<String,Object> finalExperience=experience;List<SceneJudgmentRepository.Scene> finalScenes=scenes;String finalLevel=level;
         var stored=new AtomicReference<ActivityResultRepository.Result>();
         var generatedPending=kr.mujoong.core.practicegoal.CandidateSeedDelivery.Pending.of(generatedDrafts);
@@ -115,7 +114,7 @@ public class SessionResultHandler implements JobHandler {
             // BR5.5의 AI 없는 INSUFFICIENT는 유지하며, AI 처리 뒤 동의 상실은 확정 전에 막는다.
             if(!insufficient)requireAiAccess(job);
             var previous=results.current(r.sessionId());
-            var result=results.insert(r.sessionId(),job.jobId(),finalLevel,json.write(sentences),json.write(help),json.write(match.tips()),match.noTipReason(),json.write(Map.of("hiddenTips",match.hidden(),"promptVersion",ai.promptVersion())),json.write(generatedGoals?generatedPending:candidates),job.clock().now());
+            var result=results.insert(r.sessionId(),job.jobId(),finalLevel,json.write(sentences),json.write(help),json.write(Map.of("promptVersion",ai.promptVersion())),json.write(generatedGoals?generatedPending:candidates),job.clock().now());
             stored.set(result);if(!finalExperience.isEmpty())structured.insert(result.id(),r.sessionId(),json.write(finalExperience),job.clock().now());
             for(var scene:finalScenes)judgments.insert(result.id(),r.sessionId(),scene,job.clock().now());
             previous.ifPresent(p->results.invalidate(p.id(),job.clock().now()));

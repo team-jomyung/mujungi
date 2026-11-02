@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mujoong.invalid/contracts/schemas/session-result-response.schema.json",
-  "title": "27 결과 · 생활 팁 · 목표 후보",
-  "description": "GET /api/sessions/{sessionId}/result 200. U14 새 연습 결과는 실제 timing과 가변 양수 sceneNo를 보존하고, 27 칩만 기존5종으로 접는다. value/rationale/live/differs/4요소/skillRef/배경/매칭로그/pending은 공개하지 않는다. 새 후보는 displayEvidence를 공개하고 내부 reasonText는 공개하지 않는다. 레거시 후보의 기존 reasonText 계약은 유지한다. strict 이전 소비자와 같은 릴리스에서 갱신한다(U14-b).",
+  "title": "27 결과 · 목표 후보",
+  "description": "GET /api/sessions/{sessionId}/result 200. U14 새 연습 결과는 실제 timing과 가변 양수 sceneNo를 보존하고, 27 칩만 기존5종으로 접는다. value/rationale/live/differs/4요소/skillRef/배경/매칭로그/pending은 공개하지 않는다. 새 후보는 displayEvidence를 공개하고 내부 reasonText는 공개하지 않는다. 레거시 후보의 기존 reasonText 계약은 유지한다. strict 이전 소비자와 같은 릴리스에서 갱신한다(U14-b). 생활 팁(tips · noTipReason)은 쓰지 않아 응답에서 뺐다 [편차 FT-1102-h].",
   "type": "object",
   "additionalProperties": false,
-  "required": ["jobStatus", "sentences", "tips", "candidates"],
+  "required": ["jobStatus", "sentences", "candidates"],
   "properties": {
     "jobStatus": { "$ref": "#/$defs/JobStatus" },
     "resultLevel": {
@@ -39,27 +39,6 @@
             }
           }
         },
-        { "type": "null" }
-      ]
-    },
-    "tips": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["supportItemId", "condition", "content", "limitation"],
-        "properties": {
-          "supportItemId": { "$ref": "common.schema.json#/$defs/Uuid" },
-          "title": { "type": "string", "minLength": 1 },
-          "condition": { "type": "string" },
-          "content": { "type": "string", "minLength": 1 },
-          "limitation": { "type": "string" }
-        }
-      }
-    },
-    "noTipReason": {
-      "anyOf": [
-        { "type": "string", "enum": ["NEED_MORE_OBSERVATION"] },
         { "type": "null" }
       ]
     },

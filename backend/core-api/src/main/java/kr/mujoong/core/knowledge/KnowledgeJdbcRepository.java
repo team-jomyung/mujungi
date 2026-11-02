@@ -43,16 +43,6 @@ public class KnowledgeJdbcRepository {
                 .stream().findFirst();
     }
 
-    public List<SupportItem> findApprovedSupport(String key) {
-        return jdbc.query("""
-                select id, behavior_key, condition_text, content_text, limitation_text
-                from core.core_support_item where behavior_key = :key and status = 'APPROVED'
-                order by created_at, id
-                """, new MapSqlParameterSource("key", key), (rs, row) -> new SupportItem(
-                ClockParams.uuid(rs, "id"), rs.getString("behavior_key"), rs.getString("condition_text"),
-                rs.getString("content_text"), rs.getString("limitation_text")));
-    }
-
     /** 처음 고정할 때 한 번만 used_at을 찍는다. 이미 찍혔거나 고정할 수 없는 상태면 0건이다(같은 행을 다시 갱신하지 않는다, U5a 리뷰 1). */
     public int markPinned(String key, int version, Instant now) {
         return jdbc.update("""

@@ -5,7 +5,6 @@ backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeGraphLookup.ja
 backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeJdbcRepository.java
 backend/core-api/src/main/java/kr/mujoong/core/knowledge/KnowledgeProperties.java
 backend/core-api/src/main/java/kr/mujoong/core/knowledge/PragmaticsKnowledge.java
-backend/core-api/src/main/java/kr/mujoong/core/knowledge/SupportItem.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/CandidateEvidencePort.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/CandidateRegistry.java
 backend/core-api/src/main/java/kr/mujoong/core/practice/GoalMetadataPort.java

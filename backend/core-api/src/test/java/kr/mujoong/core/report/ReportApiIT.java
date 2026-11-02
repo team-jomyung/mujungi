@@ -62,7 +62,7 @@ import org.junit.jupiter.api.*;
         for(UUID s:List.of(done,withdrawn)){
             states.insert(s,f.guardianId(),f.childId(),"FREE_TALK",true,now);
             var job=jobs.submit("SESSION_RESULT",s,f.guardianId(),"SR:"+s,"ACTIVITY_RECORDED",now.plusSeconds(60),now);states.attach(s,job.id(),1,now);
-            var result=results.insert(s,job.id(),"FULL","[{\"goalSelectionId\":null,\"text\":\"블록을 같이 쌓자고 먼저 말했어요.\",\"citations\":[]},{\"goalSelectionId\":null,\"text\":\" 차례도 지켰어요. \",\"citations\":[]}]","[]","[]",null,"[]","[]",now);
+            var result=results.insert(s,job.id(),"FULL","[{\"goalSelectionId\":null,\"text\":\"블록을 같이 쌓자고 먼저 말했어요.\",\"citations\":[]},{\"goalSelectionId\":null,\"text\":\" 차례도 지켰어요. \",\"citations\":[]}]","[]","[]","[]",now);
             db.jdbc().update("update core.core_session_result_state set job_status='DONE',current_result_id=:r where session_id=:s",Map.of("r",result.id(),"s",s));
         }
         states.insert(pending,f.guardianId(),f.childId(),"FREE_TALK",true,now);

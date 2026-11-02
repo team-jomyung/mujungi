@@ -43,7 +43,7 @@ class SessionResultHandlerIT {
         var definition=new BehaviorDefinition(UUID.randomUUID(),"request",1,"부탁하기","필요한 것 부탁","기회","상황","기준","ACTIVE",clock.now(),null);when(definitions.get("request",1)).thenReturn(definition);when(definitions.active()).thenReturn(List.of(definition));
         var ai=new ResultTextGateway(provider,ResultTextGatewayTest.properties(Duration.ofSeconds(2)),clock,executor,JsonCodec.shared());var dictionary=new ForbiddenDictionary();var tm=new DataSourceTransactionManager(db.dataSource());
         contexts=mock(ActivityContextRepository.class);childProfiles=mock(ChildRepository.class);
-        var handler=new SessionResultHandler(reader,contexts,consent,childProfiles,definitions,new ScenarioLookup(scenarioRepository),ai,new OutputChecker(dictionary,ai),new CandidateScreen(dictionary,events),new TipMatcher(mock(SupportLibrary.class),dictionary),new NotDoneReasonMapper(events),results,experiences,scenes,registry,JsonCodec.shared(),tm);
+        var handler=new SessionResultHandler(reader,contexts,consent,childProfiles,definitions,new ScenarioLookup(scenarioRepository),ai,new OutputChecker(dictionary,ai),new CandidateScreen(dictionary,events),new NotDoneReasonMapper(events),results,experiences,scenes,registry,JsonCodec.shared(),tm);
         runner=new JobRunner(jobs,new ReportJobStateAdapter(new ReportRepository(db.jdbc())),new GuardianWriteLock(db.jdbc()),clock,JobRunnerTest.properties(),tm,List.of(handler),events);
         states.insert(session,guardian,child,type,true,clock.now());var j=jobs.submit("SESSION_RESULT",session,guardian,session.toString(),"RECONCILE",null,clock.now());states.attach(session,j.id(),1,clock.now());return jobs.claim("SESSION_RESULT",1,clock.now(),Duration.ofSeconds(30)).getFirst();
     }

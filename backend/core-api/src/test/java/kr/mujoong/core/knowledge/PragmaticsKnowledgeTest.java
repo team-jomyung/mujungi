@@ -37,12 +37,6 @@ class PragmaticsKnowledgeTest {
         when(repository.findVersion("test",1)).thenReturn(Optional.of(definition));
         assertThat(service().requireVersion("test",1)).isEqualTo(definition);
     }
-    @Test void supportRetainsConditionAndLimitation() {
-        var item = new SupportItem(UUID.randomUUID(),"test","적용 조건","도움말","한계");
-        when(repository.findApprovedSupport("test")).thenReturn(List.of(item));
-        assertThat(service().supportItems("test")).containsExactly(item);
-        assertThat(service().supportItems("test").getFirst().limitationText()).isEqualTo("한계");
-    }
     @Test void disabledGraphNeverCallsAdapterAndEnabledGraphNeedsOne() {
         KnowledgeGraphLookup graph = mock(KnowledgeGraphLookup.class);
         var disabled = new PragmaticsKnowledge(repository,clock,new KnowledgeProperties(false),Optional.of(graph));
