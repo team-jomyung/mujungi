@@ -1,25 +1,24 @@
 # contracts — 무중 계약 정본
 
-승인된 계약 요약(`aidlc/spaces/default/intents/261008-mujoong-service/inception/contract-design/contract-summary.md`, 2.8)을
-코드와 시험이 읽는 형식으로 옮긴 정본이다(J20 · G8). U1(3.5 Step 7)이 만들었고 U1이 쓰는 경로 · 메시지 · 이벤트만 담는다.
-미룬 경로(U2 ~ U7)는 소유 유닛이 더하기만 한다. 승인 계약 본문은 고치지 않고, 구현이 넓어지거나 구체화되는 곳은
-`deviations.md`에 한 행씩 적고 각 파일에 표시한다(사람 결정 5 · J112 · J130).
+현재 앱 사이·클라이언트 계약의 진입점이다. 초기 U1 스켈레톤 이후 기능이 추가되었으므로 현재 파일 전체를 읽는다. 승인 원본 계약과의 차이는 [deviations.md](deviations.md), 세부 AI 입출력은 [ai-io.md](ai-io.md)에 기록한다. 아래 U1 수치와 미구현 범위는 과거 기록이며 현재 기능 범위가 아니다.
 
-## 파일
+## 현재 계약 파일
 
-| 파일 | 내용 | 계약 절 |
-|---|---|---|
-| `parent-api.yaml` | 보호자 REST(OpenAPI 3.0.3): 시험 로그인 · CSRF 토큰 · 공개 헬스 · 04 홈 · 05 기기 보기 · 05a 등록 · 08 시작 · 12 진행 조회 · P1 끝내기 | 3절 · 편차 (d)(e)(m)(n)(o)(r)(t)(u)(w) |
-| `device-api.yaml` | 아이 기기 REST(OpenAPI 3.0.3): bootstrap · status · claim · me | 4.1절 · 편차 (a)(b)(c)(k)(n)(o)(r) |
-| `device-ws.asyncapi.yaml` | 기기 WSS(AsyncAPI 2.6.0): 제어 메시지 17종 · 바이너리 음성 · 닫기 코드 | 4.2절 · 편차 (h)(j)(l)(n)(s) |
-| `internal-api.yaml` | 앱 사이 내부 HTTP(OpenAPI 3.0.3): C8 시작 · 끝내기 · 진행 조회, C9 토큰 확인 · 상태 보고, 이벤트 수신 | 5절 · 편차 (f)(i)(j)(n)(o)(p)(v)(w) |
-| `events.asyncapi.yaml` | 영속 이벤트 6종(AsyncAPI 2.6.0) | 6절 · 편차 (g)(p)(q) |
-| `schemas/*.schema.json` | 위 문서가 `$ref`로 가리키는 본문 스키마(JSON Schema 2020-12). **본문 형식의 정본** | 2 ~ 6절 |
-| `errors.md` | 오류 code · HTTP · 고정 message | 2절 · BR8.6 · 편차 (y) |
-| `timing.md` | 시간 계약 키(7절)와 7절 밖 U1 시간 · 메시징 · 정리 · 내부 HTTP 키 | 7절 · BR8.11 |
-| `ports.md` | 포트 · 내부 호출 이름 · 기본 주소 키 | 8절 · J109 |
-| `ai-io.md` | AI 입출력 뼈대(9절), 공급자 연결 · 선 형식(J110), 시드 사전 형식, 승인 음성 | 9절 |
-| `deviations.md` | 편차 (a) ~ (y): 출처 · 제공 · 소비자 · 호환 분류 · 표시 위치 | 10절 |
+| 파일 | 내용 |
+| --- | --- |
+| [parent-api.yaml](parent-api.yaml) | 보호자·활동·목표·결과·리포트 등 REST 경로 |
+| [device-api.yaml](device-api.yaml) | 기기 등록·인증·상태 REST |
+| [device-ws.asyncapi.yaml](device-ws.asyncapi.yaml) | 기기 WSS 제어·음성 메시지와 종료 코드 |
+| [internal-api.yaml](internal-api.yaml) | Core–Realtime 내부 HTTP |
+| [events.asyncapi.yaml](events.asyncapi.yaml) | 영속 이벤트와 본문 참조 |
+| [schemas/](schemas/) | 본문 형식의 JSON Schema 정본 |
+| [errors.md](errors.md), [timing.md](timing.md), [ports.md](ports.md) | 오류·시간·포트 계약 |
+| [ai-io.md](ai-io.md) | 생성·판정·출력 검사·음성 입출력 |
+| [practice-goal-list.md](practice-goal-list.md) | 즐겨찾기 상한·목표 목록 페이지 |
+| [goal-result-compatibility.md](goal-result-compatibility.md) | 목표·결과 호환 규칙 |
+| [deviations.md](deviations.md) | 승인 설계 이후 변경 근거 |
+
+현재 DB 구조는 [마이그레이션 안내](../docs/erd/README.md)를 확인한다. API 목록·메시지 수·오류 수는 오래된 합계표 대신 해당 정본 파일과 구현 시험을 기준으로 확인한다.
 
 ## 소유 · 변경 규칙 (계약 10절 · J25)
 
@@ -58,7 +57,9 @@
 - 계약 대역 서버 `ContractStubServer`(Step 28)가 `contracts/schemas`로 앱 사이 요청을 검사하고, `ContractConformanceIT`(Step 34)가 Core 응답이
   스키마에 맞는지 본다. `ConfigKeyContractTest`(Step 36)가 `timing.md`의 키 · 기본값을 `application.yml` · 설정 레코드와 대조한다.
 
-## 구현 대조 (U1 3.5 Step 52)
+## 과거 구현 대조 (U1 3.5 Step 52 · 보존)
+
+아래 표는 U1 완료 당시 결과다. 현재 전체 API·오류·메시지 개수나 이번 최신화에서 재실행한 시험 결과가 아니다.
 
 U1 코드 생성을 마친 뒤 계약 파일과 구현을 다시 맞춰 보았다(계약 12절 · V-5 · BR8.11). 아래 항목은 시험이 계속 강제하므로, 다음 유닛이
 계약이나 구현 한쪽만 고치면 그 시험이 실패한다.
@@ -76,7 +77,7 @@ U1 코드 생성을 마친 뒤 계약 파일과 구현을 다시 맞춰 보았�
 ### U1 구현 범위 메모 (편차 아님)
 
 아래는 계약을 넓히지 않고 U1이 아직 다루지 않는 값을 거절하거나, 계약이 비워 둔 세부를 정한 것이다. 받는 쪽 동작이 계약 안이므로
-`deviations.md`에 기호를 더하지 않았다. 뒤 유닛이 해당 기능을 더할 때 여기 줄을 지운다(사람 확인 후보는 U1 `code-summary.md`의 J 표).
+`deviations.md`에 기호를 더하지 않았다. 현재는 이후 구현과 구분하기 위해 당시 행을 보존한다(당시 사람 확인 후보는 U1 `code-summary.md`의 J 표).
 
 | 경로 · 메시지 | U1 동작 | 이유 · 넘김 |
 |---|---|---|
