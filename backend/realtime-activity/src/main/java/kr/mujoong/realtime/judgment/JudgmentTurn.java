@@ -285,10 +285,6 @@ public final class JudgmentTurn {
         return heldTranscript.toString();
     }
 
-    public boolean instructionAcked() {
-        return instructionAcked;
-    }
-
     /** 닫힌 뒤 참여 창 tick이 필요한가(W1). */
     public boolean joinTickDeferred() {
         return joinTickDeferred;

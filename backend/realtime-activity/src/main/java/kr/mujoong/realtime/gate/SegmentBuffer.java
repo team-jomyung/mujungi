@@ -107,10 +107,6 @@ public final class SegmentBuffer {
         return open ? lastOutAt : null;
     }
 
-    /** 열린 구간이 다른 세대의 것이라 이 세대의 조각을 넣기 전에 봉인해야 하는가. */
-    public boolean holdsOtherThan(long gen) {
-        return open && outputGen != gen;
-    }
 
     /**
      * 출력 음성 조각.

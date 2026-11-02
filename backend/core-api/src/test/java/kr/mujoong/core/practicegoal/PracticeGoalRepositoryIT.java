@@ -10,14 +10,14 @@ import org.junit.jupiter.api.*;
 class PracticeGoalRepositoryIT {
     DbTestSupport db;GoalCandidateRepository goals;UUID guardian,child,session;Instant now=DbTestSupport.EPOCH;
     @BeforeEach void setup(){db=DbTestSupport.coreApp();goals=new GoalCandidateRepository(db.jdbc());guardian=db.insertGuardian("ACTIVE");child=db.insertChild(guardian);session=UUID.randomUUID();}
-    @AfterEach void close(){if(db!=null){goals.deleteGuardian(guardian);db.close();}}
+    @AfterEach void close(){if(db!=null){GoalCandidateTestCleanup.deleteGuardian(db.jdbc(),guardian);db.close();}}
     GoalCandidateRepository.Draft draft(){return new GoalCandidateRepository.Draft("물어보기","합성 놀이 장면","함께 물어보기",new FourElements("친구와 놀 때","친구","참여하고 싶다","함께 해도 돼?"),"NONE","합성 근거",List.of(new GoalCandidateRepository.Evidence(1,"함께 해도 돼?")),null);}
     GoalCandidateRepository.Version register(){return db.inTx(t->goals.register(child,session,"source:0",draft(),now));}
     @Test void storesFullCandidateContext(){var v=register();assertThat(v.content()).isEqualTo(draft());assertThat(v.version()).isEqualTo(1);}
     @Test void rejudgmentRejectsAnotherChildsGeneratedGoalBeforeAi(){
         UUID otherGuardian=db.insertGuardian("ACTIVE"),otherChild=db.insertChild(otherGuardian);
         var version=db.inTx(t->goals.register(otherChild,UUID.randomUUID(),"other",draft(),now));UUID selection=db.inTx(t->goals.select(otherGuardian,version,now));
-        rejectsForeignSelection(selection);goals.deleteGuardian(otherGuardian);
+        rejectsForeignSelection(selection);GoalCandidateTestCleanup.deleteGuardian(db.jdbc(),otherGuardian);
     }
     @Test void rejudgmentRejectsAnotherChildsLegacyGoalBeforeAi(){
         UUID otherGuardian=db.insertGuardian("ACTIVE"),otherChild=db.insertChild(otherGuardian);var legacy=new kr.mujoong.core.practice.PracticeGoalRepository(db.jdbc());

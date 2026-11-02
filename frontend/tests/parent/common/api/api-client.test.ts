@@ -88,7 +88,7 @@ describe("apiClient — 요청 형식", () => {
 
 describe("apiClient — 403 CSRF_TOKEN_INVALID 1회 재취득(SD-6 · 표 2.9-C)", () => {
   it("첫 403이면 토큰을 다시 받아 같은 본문 · 새 토큰으로 한 번 더 보낸다", async () => {
-    const { api, calls, tokens } = client((path, _init, index) =>
+    const { api, calls, tokens } = client((_path, _init, index) =>
       index === 1 ? errorResponse(403, "CSRF_TOKEN_INVALID") : jsonResponse(202, { status: "CLOSING" }),
     );
     expect(await endSession(api, SESSION_ID, "req-1")).toEqual({ status: "CLOSING" });

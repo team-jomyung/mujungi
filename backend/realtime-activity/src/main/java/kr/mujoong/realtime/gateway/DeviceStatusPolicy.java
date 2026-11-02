@@ -27,18 +27,6 @@ import kr.mujoong.contract.ws.CloseCode;
  */
 public final class DeviceStatusPolicy {
 
-    /** UNRESPONSIVE를 쓰는 명령 시한(J55). */
-    public enum CommandTimeout {
-        /** START_SESSION 뒤 ACK 또는 DEVICE_READY가 빠짐(20초, 전송 실패 포함). */
-        START_NO_ACK,
-        /** ACK · DEVICE_READY는 왔는데 공급자 session.started가 없음. */
-        START_PROVIDER,
-        /** DEVICE_READY가 mic · player 사용 불가를 알림. */
-        START_DEVICE_UNAVAILABLE,
-        /** CLOSING 뒤 VOICE_SESSION_CLOSED가 없음(30초). */
-        CLOSING_NO_CONFIRM
-    }
-
     private static final Set<ConnectionState> RECOVERABLE =
             EnumSet.of(ConnectionState.UNRESPONSIVE, ConnectionState.DISCONNECTED);
 
@@ -86,8 +74,4 @@ public final class DeviceStatusPolicy {
         return recentDisconnects >= unstableDisconnectCount ? ConnectionState.UNSTABLE : ConnectionState.CONNECTED;
     }
 
-    /** 이 명령 시한이 기기 판정을 UNRESPONSIVE로 쓰는가(J55). */
-    public static boolean marksUnresponsive(CommandTimeout timeout) {
-        return timeout == CommandTimeout.START_NO_ACK || timeout == CommandTimeout.CLOSING_NO_CONFIRM;
-    }
 }

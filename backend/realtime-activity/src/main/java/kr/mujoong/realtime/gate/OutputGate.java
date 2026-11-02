@@ -92,13 +92,6 @@ public final class OutputGate {
                         && Character.getType(cp) != Character.FORMAT);
     }
 
-    /**
-     * 전사 먼저 방출 경로의 단계 3 · 4: 음성은 아직 오는 중이라 전사만 본다. 전사가 사전의 금지 표현이 아닌지, 정규화 뒤 남는 글자가 있는지만
-     * 확인한다(구두점뿐인 단위는 통과 — FT-1023-e). 음성이 전사 끝까지 대응하는지는 단위를 만들 때 이미 시간선으로 맞춘다.
-     */
-    public GateDecision inspectText(SegmentBuffer.Sealed segment) {
-        return inspectTextDetailed(segment).decision();
-    }
 
     /**
      * Same aligned text-unit safety predicates, with a closed diagnostic reason. 구두점뿐인 단위(말끝 "?" 등)는 버리지 않고 통과시킨다 —

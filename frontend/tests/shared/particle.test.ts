@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { liveTalkingLine } from "@/shared/copy/ko";
-import { attachParticle, finalConsonantIndex, hasFinalConsonant } from "@/shared/copy/particle";
+import { attachParticle, finalConsonantIndex } from "@/shared/copy/particle";
 
 // 받침 조사 시험 (U1 3.5 Step 41 · 문구표 '{아이}가 / 민준이' 꼴 · C.S-12.12.2)
 
@@ -17,12 +17,6 @@ describe("particle — 받침 판정", () => {
     expect(finalConsonantIndex("Mia")).toBeNull();
     expect(finalConsonantIndex("민준3")).toBeNull();
     expect(finalConsonantIndex("ㄱ")).toBeNull();
-    expect(hasFinalConsonant("Mia")).toBeNull();
-  });
-
-  it("받침 유무를 참 · 거짓으로 알려 준다", () => {
-    expect(hasFinalConsonant("민준")).toBe(true);
-    expect(hasFinalConsonant("서아")).toBe(false);
   });
 });
 

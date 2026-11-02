@@ -99,10 +99,6 @@ public record PracticeStartPackage(List<GoalSpec> goals, PracticeScript firstSce
         return PracticeScript.SCRIPT_VERSION_V1.equals(scriptVersion);
     }
 
-    /** 첫 목표. */
-    public GoalSpec firstGoal() {
-        return goals.getFirst();
-    }
 
     private static boolean blank(String value) {
         return value == null || value.isBlank();

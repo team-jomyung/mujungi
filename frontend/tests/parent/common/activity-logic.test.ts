@@ -1,18 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { presentDone } from "@/parent/features/done/presentation";
 import { freeFailedRoute, startFailureReason } from "@/parent/common/activity/failure";
 import { activeTabTarget, liveActivityCard } from "@/parent/features/home/presentation";
 import { buildTimeline, gapText } from "@/parent/common/components/transcriptTimeline";
 import { isStartFailure, liveOutcome, showsPauseLine, silentMinutes } from "@/parent/common/activity/livePresentation";
 import {
-  fetchCurrentSession,
   isInProgressStatus,
-  parseCurrentSession,
   parseLiveExtras,
   parseSessionSummary,
   type SessionSummary,
 } from "@/parent/common/api/activity";
-import type { ApiClient } from "@/parent/common/api/apiClient";
 import { parseHome, parseLiveView, type Bubble, type LiveView } from "@/parent/common/api/types";
 import { childStopDetail, childStopTitle, homeActivityLine, homeClosingLine, lastCheckedText, offlineLine } from "@/shared/copy/activity";
 import { SESSION_ID, homeBody, liveViewBody } from "../../support/fixtures";
@@ -208,13 +205,13 @@ describe("08 시작 실패 사유(AC3.1.9 · AC3.2.4 · AC3.2.5 · U4a-J16)", ()
 });
 
 describe("응답 읽기(계약 3절 · 편차 (U4a-a))", () => {
-  it("홈의 currentSession과 /sessions/current의 {session}을 읽고 모르는 값은 UNKNOWN · null로", () => {
+  it("홈의 currentSession과 세션 요약을 읽고 모르는 값은 UNKNOWN · null로", () => {
     const home = parseHome({ ...homeBody("STABLE"), currentSession: { sessionId: SESSION_ID, activityType: "FREE_TALK", status: "ACTIVE", confirmed: false, requestedAt: "t" } });
     expect(home.currentSession).toMatchObject({ sessionId: SESSION_ID, status: "ACTIVE", activityType: "FREE_TALK", endReason: null });
     expect(parseHome(homeBody("STABLE")).currentSession).toBeNull();
-    expect(parseCurrentSession({ session: null })).toBeNull();
-    expect(parseCurrentSession("x")).toBeNull();
-    expect(parseCurrentSession({ session: { sessionId: SESSION_ID, status: "WHAT", activityType: "X", endReason: "NEW_REASON", confirmed: true } })).toMatchObject({
+    expect(parseSessionSummary(null)).toBeNull();
+    expect(parseSessionSummary("x")).toBeNull();
+    expect(parseSessionSummary({ sessionId: SESSION_ID, status: "WHAT", activityType: "X", endReason: "NEW_REASON", confirmed: true })).toMatchObject({
       status: "UNKNOWN",
       activityType: "UNKNOWN",
       endReason: "UNKNOWN",
@@ -248,11 +245,6 @@ describe("응답 읽기(계약 3절 · 편차 (U4a-a))", () => {
     });
   });
 
-  it("fetchCurrentSession은 CSRF 없이 GET /api/sessions/current를 부른다", async () => {
-    const request = vi.fn().mockResolvedValue(null);
-    await fetchCurrentSession({ request } as unknown as ApiClient);
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: "GET", path: "/api/sessions/current", csrf: false }));
-  });
 });
 
 describe("연습 종료 사유 분리", () => {

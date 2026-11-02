@@ -220,17 +220,6 @@ public final class JdbcPracticeRepository implements PracticeRepository {
             return null;
         });
     }
-    @Override public void delete(UUID guardian) {
-        atomic(() -> {
-            jdbc.query("select id from " + G + " where guardian_id=? order by session_id,goal_order for update", (rs,n) -> rs.getObject(1), guardian);
-            String attempts = "select a.id from " + A + " a join " + G + " g on g.id=a.session_goal_id where g.guardian_id=?";
-            jdbc.update("delete from " + E + " where response_id in(select id from " + R + " where attempt_id in(" + attempts + "))", guardian);
-            jdbc.update("delete from " + R + " where attempt_id in(" + attempts + ")", guardian);
-            jdbc.update("delete from " + C + " where attempt_id in(" + attempts + ")", guardian);
-            jdbc.update("delete from " + A + " where session_goal_id in(select id from " + G + " where guardian_id=?)", guardian);
-            jdbc.update("delete from " + G + " where guardian_id=?", guardian); return null;
-        });
-    }
     @Override public Snapshot snapshot(UUID session) {
         return atomic(() -> {
             lock(session);

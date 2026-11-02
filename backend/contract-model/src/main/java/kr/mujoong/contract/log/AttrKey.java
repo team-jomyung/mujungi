@@ -1,7 +1,5 @@
 package kr.mujoong.contract.log;
 
-import java.util.Arrays;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -222,10 +220,6 @@ public enum AttrKey {
         return enumValues;
     }
 
-    /** JSON 키 이름으로 찾는다. */
-    public static Optional<AttrKey> fromKey(String key) {
-        return Arrays.stream(values()).filter(value -> value.key.equals(key)).findFirst();
-    }
 
     /** 키 사이에 공유하는 열거 집합. */
     static final class Sets {

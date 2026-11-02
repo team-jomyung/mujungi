@@ -1,4 +1,3 @@
-import type { ApiClient } from "./apiClient";
 import type { EndReason, SessionStatus } from "./types";
 
 // U4a 활동 세션 응답 읽기 (docs/units/u4a/design.md 4절 · 계약 3절 SessionSummary · LiveView · 편차)
@@ -152,15 +151,7 @@ export function parseSessionSummary(value: unknown): SessionSummary | null {
   };
 }
 
-/** GET /api/sessions/current 본문 {session}(편차). */
-export function parseCurrentSession(value: unknown): SessionSummary | null {
-  return isObject(value) ? parseSessionSummary(value.session) : null;
-}
 
-/** GET /api/sessions/current — 04 「다시 확인」 · 알림 진입 재조회(AC1.4.8 · AC1.7.4). */
-export function fetchCurrentSession(api: ApiClient, signal?: AbortSignal): Promise<SessionSummary | null> {
-  return api.request({ method: "GET", path: "/api/sessions/current", parse: parseCurrentSession, csrf: false, signal });
-}
 
 /** 진행 중(REQUESTED ~ CLOSING)인지. */
 export function isInProgressStatus(status: SessionStatus): boolean {

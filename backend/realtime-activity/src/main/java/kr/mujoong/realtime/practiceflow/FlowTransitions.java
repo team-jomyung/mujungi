@@ -90,8 +90,6 @@ public final class FlowTransitions {
         private Guard guard = Guard.NONE;
         private FlowRole role;
         private boolean incrementRetry;
-        private boolean incrementReexplain;
-        private boolean startVariant;
         private boolean helpConsented;
         private boolean endRequest;
 
@@ -120,7 +118,7 @@ public final class FlowTransitions {
         }
 
         static Step reexplain(Phase phase) {
-            return new Step(Action.REEXPLAIN, phase, Sub.REEXPLAIN).incrementReexplain().fact(FactKind.SITUATION_EXPLAINED);
+            return new Step(Action.REEXPLAIN, phase, Sub.REEXPLAIN).fact(FactKind.SITUATION_EXPLAINED);
         }
 
         Step fact(FactKind kind) {
@@ -157,16 +155,6 @@ public final class FlowTransitions {
 
         Step incrementRetry() {
             this.incrementRetry = true;
-            return this;
-        }
-
-        Step incrementReexplain() {
-            this.incrementReexplain = true;
-            return this;
-        }
-
-        Step startVariant() {
-            this.startVariant = true;
             return this;
         }
 
@@ -232,14 +220,6 @@ public final class FlowTransitions {
             return incrementRetry;
         }
 
-        public boolean incrementsReexplain() {
-            return incrementReexplain;
-        }
-
-        /** 변형 장면 시작인가(D9). */
-        public boolean startsVariant() {
-            return startVariant;
-        }
 
         /** 아이가 도움에 동의했거나 요청했다. */
         public boolean consentsToHelp() {
@@ -366,7 +346,7 @@ public final class FlowTransitions {
 
     private Step variantOffer(FlowState s, String code) {
         return switch (code) {
-            case "ACCEPT" -> Step.enter(Phase.SCENE_INTRO, Sub.NONE).startVariant();
+            case "ACCEPT" -> Step.enter(Phase.SCENE_INTRO, Sub.NONE);
             case "REFUSE" -> declineVariant(s, VariantSkipReason.DECLINED);
             case "UNCLEAR" -> s.unreadableGuided() ? declineVariant(s, VariantSkipReason.DECLINED) : Step.reguide(Guard.UNREADABLE);
             default -> unavailable(s);

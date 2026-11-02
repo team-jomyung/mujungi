@@ -118,10 +118,6 @@ public final class TransitionTable {
             return endDetail;
         }
 
-        /** 출발 상태가 둘 이상인가(FOR UPDATE로 읽은 상태를 조건으로 쓸 수 있다, BR6.8). */
-        public boolean multiOrigin() {
-            return origins.size() > 1;
-        }
 
         /** 이 상태에서 성립하는가(BR1.1). */
         public boolean accepts(SessionStatus from) {

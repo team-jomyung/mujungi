@@ -74,7 +74,7 @@ class TranscriptWriterResumeTest {
         passUnit("좋아.");
         writer.pauseStream(t0.plusSeconds(1));
 
-        writer.approvedLine("오늘 이야기 즐거웠어.", t0.plusSeconds(2));
+        writer.awaitApprovedPlayback(java.util.UUID.randomUUID(), "오늘 이야기 즐거웠어.", t0.plusSeconds(2));
 
         assertThat(row(ai).assemblyStatus()).isEqualTo(TranscriptEntry.AssemblyStatus.FINAL);
         assertThat(row(ai).text()).isEqualTo("좋아.");

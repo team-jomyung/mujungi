@@ -103,8 +103,6 @@ class StructuredLogFormatTest {
                 "displayName", "stack", "exception");
         assertThat(Arrays.stream(AttrKey.values()).filter(key -> key.valueType() == AttrKey.ValueType.UUID))
                 .containsExactly(AttrKey.EVENT_ID);
-        assertThat(AttrKey.fromKey("statusVersion")).contains(AttrKey.STATUS_VERSION);
-        assertThat(AttrKey.fromKey("message")).isEmpty();
     }
 
     @Test

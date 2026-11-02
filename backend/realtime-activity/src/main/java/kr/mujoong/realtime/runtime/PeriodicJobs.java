@@ -69,15 +69,7 @@ public final class PeriodicJobs {
         executor.scheduleWithFixedDelay(() -> runSafely(task), millis, millis, TimeUnit.MILLISECONDS);
     }
 
-    /** 지금 있는 스레드 이름(시작한 순서). */
-    public synchronized List<String> threadNames() {
-        return List.copyOf(schedulers.keySet());
-    }
 
-    /** 멈췄는가. */
-    public synchronized boolean isStopped() {
-        return stopped;
-    }
 
     /**
      * 새 주기를 막고 진행 중 실행이 끝나기를 모든 스레드 합쳐 {@code grace}까지 기다린다 — 스레드마다 따로 기다리면 합이 정상 종료 유예를

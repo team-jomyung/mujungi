@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import kr.mujoong.realtime.session.*;
-import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.testsupport.db.MujoongPostgres;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -36,6 +35,12 @@ final class PracticeDb {
                 session, guardian, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID().toString(),
                 java.sql.Timestamp.from(t), java.sql.Timestamp.from(t), java.sql.Timestamp.from(t));
         repository.initialize(List.of(goal)); if (withAttempt) repository.saveAttempt(attempt);
+    }
+    /** 보호자 삭제를 운영 경로(RealtimePracticeDeletionParticipant)로 실행한다. */
+    void deleteGuardian() {
+        new RealtimePracticeDeletionParticipant(new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(JDBC),
+                new kr.mujoong.realtime.common.db.DbRetry(0, new java.util.Random(1), ignored -> {}), TX.getTransactionManager())
+                .deleteByGuardian(guardian, UUID.randomUUID());
     }
     PracticeResponse pending() { return repository.accept(PracticeModelTest.pending(attempt, ResponseType.FIRST)); }
     Evaluation evaluation(PracticeResponse p) {

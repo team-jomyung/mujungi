@@ -8,7 +8,6 @@ backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/Evalu
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/JdbcPracticeRepository.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticeAttempt.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticeChecks.java
-backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticeDeletionService.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticePorts.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticeProperties.java
 backend/realtime-activity/src/main/java/kr/mujoong/realtime/practicelegacy/PracticeProtocol.java

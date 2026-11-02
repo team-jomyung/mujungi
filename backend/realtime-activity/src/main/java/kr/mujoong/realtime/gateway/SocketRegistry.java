@@ -91,10 +91,6 @@ public class SocketRegistry {
         return closed;
     }
 
-    /** 열린 연결 수. */
-    public int openCount() {
-        return open.size();
-    }
 
     /** 열린 연결들의 제어 레인 깊이 합({@code mujoong_queue_depth{queue=output_control}}, J298). */
     public long queuedControl() {

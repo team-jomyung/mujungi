@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startDeviceRuntime } from "@/device/runtime/deviceRuntime";
 import { holdScreenWakeLock } from "@/device/power/wakeLock";
-import { encodeOutputFrame, pcm16ToLittleEndianBytes } from "@/shared/protocol/frameCodec";
+import { pcm16ToLittleEndianBytes } from "@/shared/protocol/frameCodec";
+import { encodeOutputFrame } from "../../support/frameCodecSupport";
 import type { SessionView } from "@/shared/protocol/messages";
 import { CONTENT_VERSION_ID, OP_ID, PLAYBACK_ID, SESSION_ID, testTiming } from "../../support/fixtures";
 import { FakeAudioContext, FakeWorkletNode } from "../../support/fakeAudio";

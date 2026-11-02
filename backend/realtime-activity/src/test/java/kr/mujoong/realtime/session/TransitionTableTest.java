@@ -107,12 +107,7 @@ class TransitionTableTest {
     }
 
     @Test
-    void multiOriginTriggersAreTheFailedOnesAndStartPhaseIsPreparingOrDeviceAck() {
-        assertThat(Trigger.SERVER_RESTART.multiOrigin()).isTrue();
-        assertThat(Trigger.CORE_ABANDONED.multiOrigin()).isTrue();
-        assertThat(Trigger.START_TIMEOUT.multiOrigin()).isTrue();
-        // U4b(FR1.3 · AC3.3.8): 보호자 끝내기는 WAITING_CHILD에서도 받는다
-        assertThat(Trigger.GUARDIAN_STOP.multiOrigin()).isTrue();
+    void startPhaseIsPreparingOrDeviceAck() {
         assertThat(TransitionTable.isStartPhase(SessionStatus.PREPARING)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.DEVICE_ACK)).isTrue();
         assertThat(TransitionTable.isStartPhase(SessionStatus.ACTIVE)).isFalse();

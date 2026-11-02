@@ -33,7 +33,6 @@ export const ACCOUNT_COPY = {
   child: {
     firstTitle: "아이 정보를 알려 주세요", // C.S-03.40.1
     nameLabel: "이름 또는 별명", // C.S-03.40.2
-    ageLabel: "나이", // C.S-03.40.3
     interestsLabel: "관심사 (예: 공룡, 블록 놀이)", // C.S-03.40.4
     confirm: "확인", // C.S-03.40.5 · C.S-03.36.6
     viewTitle: "아이 정보", // C.S-03.2.1 '← 아이 정보'
@@ -104,7 +103,6 @@ export const ACCOUNT_COPY = {
 export const ACCOUNT_PROPOSED_COPY = {
   loginFailed: "로그인하지 못했어요. 다시 시도해 주세요.", // 9-1
   deletionInProgress: "계정을 삭제하고 있어요. 끝나면 새로 시작할 수 있어요.", // 9-7
-  ageError: "나이는 6~12 사이로 넣어 주세요", // 9-2
   childSaveFailed: "저장하지 못했어요. 이전 값이 그대로예요.", // 9-2
   consentSaveFailed: "저장하지 못했어요", // interaction-spec 4절 02
   deviceLine: {
@@ -135,9 +133,6 @@ export const ACCOUNT_TEMP_COPY = {
   logoutFailed: "로그아웃하지 못했어요. 다시 시도해 주세요.", // SET0 · P5 실패 토스트
   interestsHint: "쉼표로 나눠 5개까지, 하나에 10자까지 넣어요.", // 03 관심사 칸 도움말(초과 입력 막음 안내)
   networkUnknown: "기기 상태를 확인할 수 없어요", // 05 판정 카드 '확인 불가' 사유(mockups 9-16과 같은 문장)
-  ageUnit: "세",
-  stopSummaryPrefix: "추가 표현 ", // C.S-05.7.10 '추가 표현 2개 · "이제 그만" · "끝낼래"'의 앞
-  stopSummaryCountSuffix: "개",
   quoteOpen: "“",
   quoteClose: "”",
   separator: " · ",
@@ -204,11 +199,6 @@ export function quoted(text: string): string {
   return `${ACCOUNT_TEMP_COPY.quoteOpen}${text}${ACCOUNT_TEMP_COPY.quoteClose}`;
 }
 
-/** '추가 표현 2개 · "이제 그만" · "끝낼래"'(C.S-05.7.10). */
-export function stopSummary(texts: readonly string[]): string {
-  const head = `${ACCOUNT_TEMP_COPY.stopSummaryPrefix}${texts.length}${ACCOUNT_TEMP_COPY.stopSummaryCountSuffix}`;
-  return [head, ...texts.map(quoted)].join(ACCOUNT_TEMP_COPY.separator);
-}
 
 export const BIRTHDATE_COPY = {
   label: "생년월일", year: "년도", month: "월", day: "일",

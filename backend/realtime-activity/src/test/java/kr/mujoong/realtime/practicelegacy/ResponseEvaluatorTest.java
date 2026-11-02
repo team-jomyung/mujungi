@@ -48,7 +48,7 @@ class ResponseEvaluatorTest {
     @Test void terminationAndDeletionSuppressLateResult() {
         var f = new EvaluationFixture(); f.start(f.evaluator()); f.db.repository.terminate(f.db.session);
         f.answers.getFirst().complete(f.good()); assertThat(f.saved().evaluationState()).isEqualTo(EvaluationState.TERMINATED_PENDING);
-        var deleted = new EvaluationFixture(); deleted.start(deleted.evaluator()); deleted.db.repository.delete(deleted.db.guardian);
+        var deleted = new EvaluationFixture(); deleted.start(deleted.evaluator()); deleted.db.deleteGuardian();
         deleted.answers.getFirst().complete(deleted.good()); deleted.timers.advance(Duration.ofSeconds(12));
         assertThat(deleted.completed).isEmpty(); assertThat(deleted.failures).isEmpty();
     }

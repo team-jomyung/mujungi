@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectWsClient, deviceSocketUrl, type WsClientHandlers } from "@/device/ws/wsClient";
-import { encodeInputFrame, encodeOutputFrame, INPUT_FRAME_SAMPLES } from "@/shared/protocol/frameCodec";
+import { encodeInputFrame, INPUT_FRAME_SAMPLES } from "@/shared/protocol/frameCodec";
+import { encodeOutputFrame } from "../../support/frameCodecSupport";
 import { CONTENT_VERSION_ID, OP_ID, PLAYBACK_ID, SESSION_ID } from "../../support/fixtures";
 import { FakeSocket, helloOkPayload } from "../../support/fakeSocket";
 

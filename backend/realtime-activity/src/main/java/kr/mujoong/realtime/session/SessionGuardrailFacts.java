@@ -27,9 +27,4 @@ public record SessionGuardrailFacts(int schemaVersion, UUID sessionId, long revi
         }
     }
 
-    /** 다음 상태 전이/같은 상태의 예상 버전에 귀속시킨다. */
-    public SessionGuardrailFacts atVersion(int version) {
-        return new SessionGuardrailFacts(schemaVersion, sessionId, revision, version, notice, participation, goodbye,
-                confirmedStopBubbleSeq, recordedAt);
-    }
 }

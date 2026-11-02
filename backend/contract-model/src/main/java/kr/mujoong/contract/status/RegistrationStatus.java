@@ -14,14 +14,6 @@ public enum RegistrationStatus {
     /** 모르는 값('알 수 없음'). 저장하지 않는다. */
     UNRECOGNIZED;
 
-    /** 이 상태에서 {@code target}으로 가는 전이가 허용되는가(SM1). */
-    public boolean canTransitionTo(RegistrationStatus target) {
-        return switch (this) {
-            case UNREGISTERED -> target == REGISTERED || target == EXPIRED;
-            case REGISTERED -> target == RELEASED;
-            case RELEASED, EXPIRED, UNRECOGNIZED -> false;
-        };
-    }
 
     /** 선 형식 문자열을 읽는다. 모르는 값 · null은 {@link #UNRECOGNIZED}. */
     public static RegistrationStatus fromWire(String value) {

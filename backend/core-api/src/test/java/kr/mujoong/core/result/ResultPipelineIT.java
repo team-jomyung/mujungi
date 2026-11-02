@@ -20,7 +20,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 class ResultPipelineIT {
     SessionResultHandlerIT fixture;CoreLunaClient luna;SessionResultHandler handler;
     @BeforeEach void setup(){fixture=new SessionResultHandlerIT();fixture.setup();luna=mock(CoreLunaClient.class);}
-    @AfterEach void close(){if(fixture.guardian!=null)new GoalCandidateRepository(fixture.db.jdbc()).deleteGuardian(fixture.guardian);fixture.close();}
+    @AfterEach void close(){if(fixture.guardian!=null)kr.mujoong.core.practicegoal.GoalCandidateTestCleanup.deleteGuardian(fixture.db.jdbc(),fixture.guardian);fixture.close();}
     ResultJob prepare(int count,String live){
         List<Map<String,Object>> scenes=new ArrayList<>();for(int i=0;i<count;i++){var scene=new LinkedHashMap<String,Object>();scene.put("sceneRunId",UUID.randomUUID().toString());scene.put("goalRef",fixture.goal.toString());scene.put("sceneKind",i==0?"BASE":"VARIANT");scene.put("startedAt",fixture.clock.now().toString());scene.put("facts",List.of("REASK_RESOLVED"));if(live!=null)scene.put("liveOutcome",Map.of("timing",live));scenes.add(scene);}
         var job=fixture.prepare("PRACTICE",3,Map.of("flowVersion",PracticeRecordV2.VERSION,"scenes",scenes));

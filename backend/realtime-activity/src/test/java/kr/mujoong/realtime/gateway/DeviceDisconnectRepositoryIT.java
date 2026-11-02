@@ -118,7 +118,7 @@ class DeviceDisconnectRepositoryIT {
     }
 
     @Test
-    void deleteByDeviceAndDeleteOlderThanRemoveOnlyTheMatchingRows() {
+    void deleteOlderThanRemovesOnlyTheMatchingRows() {
         UUID deviceA = UUID.randomUUID();
         UUID deviceB = UUID.randomUUID();
         record(deviceA, T0);
@@ -130,10 +130,6 @@ class DeviceDisconnectRepositoryIT {
         assertThat(disconnects.findByDevice(deviceA)).singleElement().extracting(DisconnectEvent::occurredAt)
                 .isEqualTo(T0.plusSeconds(600));
         assertThat(disconnects.findByDevice(deviceB)).isEmpty();
-
-        assertThat(disconnects.deleteByDevice(deviceA)).isEqualTo(1);
-        assertThat(disconnects.deleteByDevice(deviceA)).isZero();
-        assertThat(disconnects.findByDevice(deviceA)).isEmpty();
     }
 
     private void record(UUID device, Instant occurredAt) {

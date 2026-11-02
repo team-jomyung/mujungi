@@ -8,12 +8,12 @@ import {
   MAX_FRAME_SEQ,
   decodeFrame,
   encodeInputFrame,
-  encodeOutputFrame,
   isValidFrameSeq,
   littleEndianPcm16ToFloat32,
   nextFrameSeq,
   pcm16ToLittleEndianBytes,
 } from "@/shared/protocol/frameCodec";
+import { encodeOutputFrame } from "../support/frameCodecSupport";
 
 // 바이너리 음성 프레임 시험 (U1 3.5 Step 41 · J27 · 계약 4.2 · BR7.1 · BR7.6 · 편차 (s))
 // 0x01 입력 = 1 + 4 + 960 = 965바이트, 순번 uint32 빅엔디언, 본문 PCM16LE 24kHz 모노.

@@ -233,8 +233,6 @@ public final class TimedOutputBuffer {
         return out;
     }
 
-    /** 아직 꺼내지 않은 전사 조각이 있는가(음성 시작을 기다리는 전사도 센다). */
-    public boolean hasUnpolledText() { return !texts.isEmpty(); }
 
     public void reset() {
         texts.clear();

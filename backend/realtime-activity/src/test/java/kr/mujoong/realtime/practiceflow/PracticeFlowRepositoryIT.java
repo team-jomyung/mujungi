@@ -153,8 +153,6 @@ class PracticeFlowRepositoryIT {
         assertThat(runs.get(0).facts()).extracting(Fact::kind).containsExactly(FactKind.TIMEOUT);
         assertThat(runs.get(0).goalIndex()).isEqualTo(1);
         assertThat(runs.get(1).facts()).extracting(Fact::kind).containsExactly(FactKind.VARIANT_PLAYED);
-        assertThat(repository.hasSceneRuns(session)).isTrue();
-        assertThat(repository.hasSceneRuns(UUID.randomUUID())).isFalse();
         assertThat(repository.findSceneRuns(UUID.randomUUID())).isEmpty();
     }
 

@@ -30,7 +30,7 @@ class CandidateSeedReplayIT {
         seeds=mock(SeedGenerationService.class);when(seeds.generateSeed(any())).thenReturn(new SeedGenerationService.Result("NONE","DISABLED"));goals=new GoalCandidateRepository(db.jdbc());delivery=new CandidateSeedDelivery(goals,accounts,consent,seeds,db.jdbc(),clock,mock(EventLogger.class),new DataSourceTransactionManager(db.dataSource()));
     }
     UUID publish(){UUID id=results.insert(session,job,"PARTIAL","[]","[]","[]",null,"{}","[]",clock.now()).id();db.jdbc().update("update core.core_session_result_state set job_status='DONE' where session_id=:s",Map.of("s",session));return id;}
-    @AfterEach void close(){if(db!=null){goals.deleteGuardian(guardian);db.close();}}
+    @AfterEach void close(){if(db!=null){GoalCandidateTestCleanup.deleteGuardian(db.jdbc(),guardian);db.close();}}
     CandidateSeedDelivery.Pending pending(){return CandidateSeedDelivery.Pending.of(List.of(new GoalCandidateRepository.Draft("물어보기","합성놀이","전달",new FourElements("놀이","친구","참여","말하기"),"NONE","합성근거",List.of(new GoalCandidateRepository.Evidence(1,"같이 할래")),new StructureSignature("PRODUCE","참여 의도를 상대가 이해하도록 표현한다","상대의 의도 1층","YES","YES"))));}
     void deliver(UUID id){delivery.deliver(guardian,child,session,id,pending());}
     @Test void durableReplayDoesNotDuplicateCandidate(){deliver(result);UUID handle=goals.candidates(child,session).getFirst().id();deliver(result);assertThat(goals.candidates(child,session)).hasSize(1);assertThat(goals.candidates(child,session).getFirst().id()).isEqualTo(handle);}

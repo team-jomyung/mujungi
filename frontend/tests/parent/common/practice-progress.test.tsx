@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { PracticeHeader } from "@/parent/common/components/PracticeHeader";
-import { parsePracticeProgress, PracticeProgressTracker } from "@/parent/common/api/practiceProgress";
+import { parsePracticeProgress } from "@/parent/common/api/practiceProgress";
 import { U5B_COPY } from "@/parent/common/copy/practice";
 
 afterEach(cleanup);
@@ -24,28 +24,14 @@ it("여섯 현재 단계 모두 정해진 문구로 표시한다", () => {
     expect(screen.getByText(label)).toBeVisible(); view.unmount();
   }
 });
-it("자유대화에는 머리를 만들지 않고 연습 누락은 확인 불가다", () => {
-  const tracker = new PracticeProgressTracker("session"); tracker.apply("session", 1, 1, "FREE_TALK", null);
-  const view = render(<PracticeHeader progress={tracker.value} issue={tracker.issue} />); expect(view.container).toBeEmptyDOMElement();
-  tracker.apply("session", 2, 2, "PRACTICE", null); view.rerender(<PracticeHeader progress={tracker.value} issue={tracker.issue} />);
+it("진행 정보가 없으면 머리를 만들지 않고, 연습 정보가 틀리면 확인 불가다", () => {
+  const view = render(<PracticeHeader progress={null} issue={null} />); expect(view.container).toBeEmptyDOMElement();
+  view.rerender(<PracticeHeader progress={null} issue="invalid" />);
   expect(screen.getByRole("status")).toHaveTextContent("현재 연습 단계를 확인할 수 없어요");
 });
-it("다른 세션·오래된 조회·낮은 상태 버전을 폐기한다", () => {
-  const tracker = new PracticeProgressTracker("session"); expect(tracker.apply("session", 3, 4, "PRACTICE", valid)).toBe(true);
-  expect(tracker.apply("other", 4, 5, "PRACTICE", { ...valid, goalIndex: 2 })).toBe(false);
-  expect(tracker.apply("session", 2, 5, "PRACTICE", { ...valid, goalIndex: 2 })).toBe(false);
-  expect(tracker.apply("session", 4, 3, "PRACTICE", { ...valid, goalIndex: 2 })).toBe(false);
-  expect(tracker.value).toEqual(valid);
-});
-it("조회 실패는 마지막 확인값을 유지하고 최신 유효 조회로 해제된다", () => {
-  const tracker = new PracticeProgressTracker("session"); tracker.apply("session", 1, 1, "PRACTICE", valid); tracker.failed("session", 2);
-  render(<PracticeHeader progress={tracker.value} issue={tracker.issue} />);
+it("조회 실패는 마지막 확인값을 보이며 알린다", () => {
+  render(<PracticeHeader progress={parsePracticeProgress(valid)} issue="fetch" />);
   expect(screen.getByRole("status")).toHaveTextContent("마지막 확인"); expect(screen.getByRole("heading")).toHaveTextContent("차례");
-  tracker.apply("session", 3, 1, "PRACTICE", { ...valid, stage: "CUE" }); expect(tracker.issue).toBeNull(); expect(tracker.value?.stage).toBe("CUE");
-});
-it("오래된 실패는 최신 진행 정보를 덮어쓰지 않는다", () => {
-  const tracker = new PracticeProgressTracker("session"); tracker.apply("session", 3, 3, "PRACTICE", valid);
-  tracker.failed("other", 4); tracker.failed("session", 2); tracker.failed("session", NaN); expect(tracker.issue).toBeNull();
 });
 it("표시는 조용한 상태 알림만 제공하고 단계 조작은 없다", () => {
   render(<PracticeHeader progress={parsePracticeProgress(valid)} />);

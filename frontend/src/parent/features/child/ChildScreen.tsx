@@ -23,8 +23,6 @@ import { COPY, PROPOSED_COPY, TEMP_COPY } from "@/shared/copy/ko";
 // 요청 · 오류 분기 · 이동은 useChildScreen 훅이 맡고, 이 화면은 입력 칸 값 · 검증 · 그리기를 맡는다.
 
 export const NAME_MAX_LENGTH = 10;
-export const AGE_MIN = 6;
-export const AGE_MAX = 12;
 export const INTERESTS_MAX = 5;
 export const INTEREST_MAX_LENGTH = 10;
 
