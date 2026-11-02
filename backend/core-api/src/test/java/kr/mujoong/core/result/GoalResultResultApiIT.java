@@ -10,7 +10,7 @@ import org.junit.jupiter.api.*;
 @Tag("goal-result") @Tag("db")
 class GoalResultResultApiIT extends WebTestSupport {
     List<UUID> generatedGuardians=new ArrayList<>();
-    @AfterEach void removeGeneratedGoals(){for(UUID guardian:generatedGuardians)app.bean(GoalCandidateRepository.class).deleteGuardian(guardian);generatedGuardians.clear();}
+    @AfterEach void removeGeneratedGoals(){for(UUID guardian:generatedGuardians)kr.mujoong.core.practicegoal.GoalCandidateTestCleanup.deleteGuardian(db.jdbc(),guardian);generatedGuardians.clear();}
     record Fixture(kr.mujoong.core.support.BusinessFixtures.Family family,UUID session,UUID result,GoalCandidateRepository.Version version){}
     Fixture prepare(){
         var f=family();generatedGuardians.add(f.guardianId());UUID session=copy(f,"ENDED",null);record(f,session,"ENDED",3);var clock=app.clock();

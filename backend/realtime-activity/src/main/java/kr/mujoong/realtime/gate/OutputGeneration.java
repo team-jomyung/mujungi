@@ -211,10 +211,6 @@ public final class OutputGeneration {
         return lastDeltaAt;
     }
 
-    /** 세대를 올린 시각(올린 적이 없으면 null). */
-    public Instant bumpedAt() {
-        return bumpedAt;
-    }
 
     /** 지시를 보내며 올린 세대가 새 말을 기다리는 중인가(확인 사건 또는 새 말 전사 전, 시한 만료로 닫기 전). */
     public boolean awaitingNewSpeech() {

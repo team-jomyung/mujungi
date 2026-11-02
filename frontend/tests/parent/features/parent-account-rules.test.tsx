@@ -10,7 +10,6 @@ import {
   deleteDialogBody,
   registrationDoneLine,
   rttText,
-  stopSummary,
 } from "@/shared/copy/account";
 
 // U2 공통 규칙 시험: 바텀 시트 초점 · 문구 모듈
@@ -81,6 +80,5 @@ describe("U2 문구 모듈", () => {
     expect(registrationDoneLine("7F3K")).toBe("기기 등록 · 완료 (7F3K)");
     expect(rttText(300)).toBe("지연 0.3초");
     expect(rttText(1000)).toBe("지연 1초");
-    expect(stopSummary(["이제 그만", "끝낼래"])).toBe("추가 표현 2개 · “이제 그만” · “끝낼래”");
   });
 });

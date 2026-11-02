@@ -13,8 +13,4 @@ public enum JudgmentPoint {
     J5,
     J6;
 
-    /** 실행부가 직접 여는 지점인가(BR7.2): 자유대화는 J1 · J6뿐이다. */
-    public boolean openedByExecutor() {
-        return this == J1 || this == J6;
-    }
 }

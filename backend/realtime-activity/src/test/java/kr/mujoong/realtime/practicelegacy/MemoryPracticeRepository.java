@@ -84,14 +84,6 @@ final class MemoryPracticeRepository implements PracticeRepository {
             saveGoal(goal.progress(exposed ? GoalStatus.SKIPPED : GoalStatus.NOT_REACHED, goal.currentStage(), exposed ? "ACTIVITY_ENDED" : null));
         }
     }
-    @Override public synchronized void delete(UUID guardian) {
-        for (var goal : List.copyOf(goals.values())) if (goal.guardianId().equals(guardian)) {
-            var saved = snapshot(goal.sessionId());
-            saved.evaluations().forEach(v -> evaluations.remove(v.id())); saved.responses().forEach(v -> responses.remove(v.id()));
-            saved.cues().forEach(v -> cues.remove(v.id())); saved.attempts().forEach(v -> attempts.remove(v.id()));
-            saved.goals().forEach(v -> goals.remove(v.id()));
-        }
-    }
     @Override public synchronized Snapshot snapshot(UUID session) {
         var gs = goals.values().stream().filter(g -> g.sessionId().equals(session)).sorted(Comparator.comparingInt(SessionGoal::order)).toList();
         var as = attempts.values().stream().filter(a -> gs.stream().anyMatch(g -> g.id().equals(a.sessionGoalId()))).toList();

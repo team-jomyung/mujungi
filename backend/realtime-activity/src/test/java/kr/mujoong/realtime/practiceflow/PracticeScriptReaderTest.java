@@ -144,7 +144,7 @@ class PracticeScriptReaderTest {
         assertThat(pack.goals()).extracting(GoalSpec::goalSelectionId).containsExactly(first, second);
         assertThat(pack.goals()).extracting(GoalSpec::goalIndex).containsExactly(0, 1);
         assertThat(pack.goals()).extracting(GoalSpec::goalName).containsExactly("부탁하기", "사과하기");
-        assertThat(pack.firstGoal().judgmentCriteria()).isEqualTo("원하는 것을 말로 요청한다");
+        assertThat(pack.goals().getFirst().judgmentCriteria()).isEqualTo("원하는 것을 말로 요청한다");
         assertThat(pack.usesNewFlow()).isTrue();
         assertThat(pack.scriptVersion()).isEqualTo("scenario-script.v1");
         assertThat(pack.firstScenario().scenarioId()).isEqualTo(SCENARIO);
@@ -192,7 +192,7 @@ class PracticeScriptReaderTest {
 
         PracticeStartPackage pack = PracticeStartPackage.parse(packageJson(goal, BASE_SCENE.isEmpty() ? null : minimalScript(SCENARIO)));
         assertThat(pack.toString()).doesNotContain("원하는 것을").doesNotContain("부탁하기");
-        assertThat(pack.firstGoal().toString()).doesNotContain("원하는 것을").doesNotContain("부탁하기");
+        assertThat(pack.goals().getFirst().toString()).doesNotContain("원하는 것을").doesNotContain("부탁하기");
     }
 
     private static void assertReason(String json, Reason reason) {

@@ -198,15 +198,6 @@ public final class InputRelay {
         }
     }
 
-    /** 모아 둔 아이 소리를 지금 풀어 보낸다(모으기는 계속한다). */
-    public void releaseHeldNow() {
-        lock.lock();
-        try {
-            releaseHeld();
-        } finally {
-            lock.unlock();
-        }
-    }
 
     /** 모아 둔 프레임 수(시험 · 진단). */
     public int heldFrameCount() {

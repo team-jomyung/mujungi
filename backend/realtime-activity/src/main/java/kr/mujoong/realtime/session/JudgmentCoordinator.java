@@ -138,14 +138,6 @@ final class JudgmentCoordinator implements JudgmentTurn.Host {
         return current != null && current.state() == JudgmentTurn.State.AWAITING_RESULT;
     }
 
-    JudgmentPoint openPoint() {
-        return current == null ? null : current.point();
-    }
-
-    JudgmentOwner openOwner() {
-        return current == null ? null : current.owner();
-    }
-
     // ---- 최근 전사 (W4) ----
 
     void remember(int seq, String text, Instant at) {

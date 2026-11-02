@@ -83,7 +83,7 @@ class ScenarioContinuityTest {
                 var context=f.legacy.repository.continuity(f.legacy.guardian,f.legacy.child,selection,f.legacy.clock.now().plusSeconds(1),Duration.ofMillis(500));
                 assertThat(context.childEvidence()).containsExactly("블록을 했어");
                 assertThat(f.legacy.repository.continuity(UUID.randomUUID(),f.legacy.child,selection,f.legacy.clock.now().plusSeconds(1),Duration.ofMillis(500)).childEvidence()).isEmpty();
-            } finally {goals.deleteGuardian(f.legacy.guardian);}
+            } finally {kr.mujoong.core.practicegoal.GoalCandidateTestCleanup.deleteGuardian(f.legacy.db.jdbc(),f.legacy.guardian);}
         }
     }
 }

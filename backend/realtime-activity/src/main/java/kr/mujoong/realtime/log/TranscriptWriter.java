@@ -146,10 +146,6 @@ public final class TranscriptWriter {
         return currentStream.row.seq;
     }
 
-    /** 모으는 중인 응답 묶음 행이 있는가. */
-    public boolean hasStream() {
-        return currentStream != null;
-    }
 
     /**
      * 지금 모으는 응답이 끝났다(응답 끝 · 아이 입력 시작 · 응답을 버림). 그 응답의 검사 중인 단위가 없으면 모은 전사를 한 번에 FINAL로 닫고
@@ -375,21 +371,6 @@ public final class TranscriptWriter {
         }
     }
 
-    /**
-     * U4b BR3.1 · U4b-R14: 기기에 보낸 승인 문구를 보낸 순간 AI 말풍선 한 행으로 남긴다(FINAL · 승인 true · 문구 원문). 대기 문구 · DECLINED 인사는
-     * 부르는 쪽이 부르지 않는다.
-     *
-     * @return 정한 번호(기록기가 칸을 받지 못했으면 빈 값)
-     */
-    public OptionalInt approvedLine(String text, Instant at) {
-        Objects.requireNonNull(text, "text");
-        Objects.requireNonNull(at, "at");
-        closeResumable();
-        int seq = ++lastSeq;
-        boolean accepted = recorder.putTranscript(TranscriptEntry.finalized(sessionId, seq, Speaker.AI, text, true, at,
-                at));
-        return accepted ? OptionalInt.of(seq) : OptionalInt.empty();
-    }
 
     /**
      * U4b BR1.7: 동의 철회 — 열린(확정 전) 아이 행을 철회 전에 받은 조각 그대로 FINAL로 닫고 이후 같은 항목의 조각 · 확정은 받지 않는다. 철회 뒤

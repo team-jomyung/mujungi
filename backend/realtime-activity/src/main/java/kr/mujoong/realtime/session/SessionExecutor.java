@@ -20,34 +20,28 @@ import kr.mujoong.contract.log.EventCode;
 import kr.mujoong.contract.log.EventLog;
 import kr.mujoong.contract.status.ActivityType;
 import kr.mujoong.contract.status.EndReason;
-import kr.mujoong.contract.status.EndRequestReason;
 import kr.mujoong.contract.status.FailureCode;
 import kr.mujoong.contract.status.SessionStatus;
 import kr.mujoong.contract.time.MujoongClock;
 import kr.mujoong.contract.ws.message.CloseTransport;
-import kr.mujoong.contract.ws.message.DeviceState;
 import kr.mujoong.contract.ws.message.OutputBegin;
 import kr.mujoong.contract.ws.message.PlayApprovedContent;
 import kr.mujoong.contract.ws.message.PlaybackMark;
 import kr.mujoong.contract.ws.message.SessionState;
 import kr.mujoong.contract.ws.message.StartSession;
 import kr.mujoong.contract.ws.message.View;
-import kr.mujoong.realtime.common.collect.BoundedCollections;
 import kr.mujoong.realtime.common.scaling.SingleInstanceAssumption;
 import kr.mujoong.realtime.config.RealtimeProperties;
 import kr.mujoong.realtime.config.RealtimeTimingProperties;
 import kr.mujoong.realtime.dialog.DialogInstructions;
 import kr.mujoong.realtime.dialog.InstructionTemplates;
-import kr.mujoong.realtime.dialog.JoinTracker;
 import kr.mujoong.realtime.dialog.StopIntentJudge;
 import kr.mujoong.realtime.judgment.JudgeOutcome;
-import kr.mujoong.realtime.judgment.JudgmentOutcomeKind;
 import kr.mujoong.realtime.judgment.JudgmentOwner;
 import kr.mujoong.realtime.judgment.JudgmentPoint;
 import kr.mujoong.realtime.judgment.JudgmentTrigger;
 import kr.mujoong.realtime.judgment.JudgmentTurn;
 import kr.mujoong.realtime.judgment.NextAction;
-import kr.mujoong.realtime.gate.ApprovedPlayback;
 import kr.mujoong.realtime.gate.ClosingSequence;
 import kr.mujoong.realtime.gate.GateDecision;
 import kr.mujoong.realtime.gate.DiscardDetail;
@@ -63,7 +57,6 @@ import kr.mujoong.realtime.guardrail.GuardrailRequest;
 import kr.mujoong.realtime.guardrail.GuardrailSupport;
 import kr.mujoong.realtime.log.AsyncRecorder;
 import kr.mujoong.realtime.log.LatencyRecorder;
-import kr.mujoong.realtime.log.SessionGapRepository;
 import kr.mujoong.realtime.log.TranscriptWriter;
 import kr.mujoong.realtime.observability.EventLogger;
 import kr.mujoong.realtime.observability.RealtimeMetrics;
@@ -75,7 +68,6 @@ import kr.mujoong.realtime.session.SessionMailbox.ConnectionLost;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceAck;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceReadyReceived;
 import kr.mujoong.realtime.session.SessionMailbox.DeviceStateReceived;
-import kr.mujoong.realtime.session.SessionMailbox.EndOutcome;
 import kr.mujoong.realtime.session.SessionMailbox.EndRequested;
 import kr.mujoong.realtime.session.SessionMailbox.LinkReplaced;
 import kr.mujoong.realtime.session.SessionMailbox.Message;
@@ -3426,12 +3418,6 @@ public final class SessionExecutor {
             bumpOutput(OutputGeneration.BumpReason.GATE_CORRECTION);
             discard(null, GateDecision.DiscardReason.GATE_EMPTY, false);
         }
-    }
-
-    private static final java.util.regex.Pattern PROVIDER_ERROR_CODE = java.util.regex.Pattern.compile("^[a-z][a-z0-9_]{1,60}$");
-
-    private static String safeProviderErrorCode(String code) {
-        return code != null && PROVIDER_ERROR_CODE.matcher(code).matches() ? code : "unknown";
     }
 
     /** 공급자 연결 끊김({@code session.closed} · WSS 닫힘 · 전송 오류). */

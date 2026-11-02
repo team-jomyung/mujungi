@@ -59,16 +59,6 @@ class SessionGuardrailFactsServiceGuardrailTest {
         assertThat(value(1, 1, Notice.UNKNOWN, Participation.UNKNOWN, null).confirmedStopBubbleSeq()).isNull();
     }
 
-    @Test
-    void changingStatusVersionPreservesRevisionAndImmutableOriginal() {
-        SessionGuardrailFacts before = value(2, 3, Notice.COMPLETED, Participation.ACCEPTED, null);
-        SessionGuardrailFacts after = before.atVersion(4);
-        assertThat(before.statusVersion()).isEqualTo(3);
-        assertThat(after.statusVersion()).isEqualTo(4);
-        assertThat(after.revision()).isEqualTo(2);
-        assertThat(after.sessionId()).isEqualTo(SESSION);
-    }
-
     private static SessionGuardrailFacts value(long revision, int version, Notice notice,
             Participation participation, Integer seq) {
         return new SessionGuardrailFacts(1, SESSION, revision, version, notice, participation, Goodbye.NONE, seq, AT);

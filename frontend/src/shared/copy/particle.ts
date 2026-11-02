@@ -23,12 +23,6 @@ export function finalConsonantIndex(word: string): number | null {
   return (code - HANGUL_SYLLABLE_FIRST) % FINAL_CONSONANT_COUNT;
 }
 
-/** 받침이 있으면 true, 없으면 false, 한글 음절이 아니면 null. */
-export function hasFinalConsonant(word: string): boolean | null {
-  const index = finalConsonantIndex(word);
-  return index === null ? null : index !== 0;
-}
-
 /** 단어 뒤에 맞는 조사를 붙인다. 예: ('민준', '이/가') → '민준이', ('서아', '이/가') → '서아가'. */
 export function attachParticle(word: string, pair: ParticlePair): string {
   const [withFinal, withoutFinal] = pair.split("/") as [string, string];

@@ -48,7 +48,6 @@ public final class ConversationPolicyState {
     /** 현재 아이의 새로운 입력만 휴식을 해제한다. 시계/재시도는 이 입구를 부르지 않는다. */
     public void resumeOnNewInput() { resting = false; restAckAvailable = false; }
     public boolean resting() { return resting; }
-    public boolean helpUsed() { return helpUsed; }
     public UUID currentRequest() { return currentRequest; }
     public UUID refusedRequest() { return refusedRequest; }
 }

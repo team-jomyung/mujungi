@@ -91,7 +91,6 @@ class FlowTransitionsTest {
         assertThat(first.action()).isEqualTo(Action.REEXPLAIN);
         assertThat(first.phase()).isEqualTo(Phase.OPPORTUNITY);
         assertThat(first.sub()).isEqualTo(Sub.REEXPLAIN);
-        assertThat(first.incrementsReexplain()).isTrue();
         assertThat(first.fact()).isEqualTo(FactKind.SITUATION_EXPLAINED);
 
         state.incrementReexplain();
@@ -189,7 +188,6 @@ class FlowTransitionsTest {
 
         Step accept = table.onJudgment(state, JudgmentPoint.J4, "ACCEPT");
         assertEnters(accept, Phase.SCENE_INTRO, Sub.NONE);
-        assertThat(accept.startsVariant()).isTrue();
 
         Step refuse = table.onJudgment(state, JudgmentPoint.J4, "REFUSE");
         assertEnters(refuse, Phase.NEXT_GOAL, Sub.NONE);

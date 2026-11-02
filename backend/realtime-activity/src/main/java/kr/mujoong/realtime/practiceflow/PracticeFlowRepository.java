@@ -82,9 +82,6 @@ public class PracticeFlowRepository {
             + " join realtime.realtime_practice_scene_run r on r.id = h.scene_run_id where r.session_id = :sessionId"
             + " order by h.occurred_at, h.id";
 
-    private static final String EXISTS_BY_SESSION = "select exists (select 1 from realtime.realtime_practice_scene_run"
-            + " where session_id = :sessionId)";
-
     private static final String DELETE_HELPS = "delete from realtime.realtime_practice_help where guardian_id = :guardianId";
     private static final String DELETE_RUNS = "delete from realtime.realtime_practice_scene_run where guardian_id = :guardianId";
 
@@ -211,13 +208,6 @@ public class PracticeFlowRepository {
         return jdbc.query(SELECT_HELPS, ClockParams.uuid(new MapSqlParameterSource(), "sessionId", sessionId), HELP_MAPPER);
     }
 
-    /** 이 세션에 새 연습 흐름의 장면 실행이 하나라도 있는가(정산 복구가 새 흐름 · 레거시를 가른다). */
-    public boolean hasSceneRuns(UUID sessionId) {
-        Objects.requireNonNull(sessionId, "sessionId");
-        Boolean exists = jdbc.queryForObject(EXISTS_BY_SESSION,
-                ClockParams.uuid(new MapSqlParameterSource(), "sessionId", sessionId), Boolean.class);
-        return Boolean.TRUE.equals(exists);
-    }
 
     /**
      * 한 보호자의 새 연습 흐름 기록을 모두 지운다(보호자 삭제 참여자, 순서 190): 도움 → 장면 실행 순서(외래 키 RESTRICT). 호출자의 트랜잭션 안에서

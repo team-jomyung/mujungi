@@ -21,7 +21,6 @@ public interface PracticeRepository {
             Instant deadline, kr.mujoong.contract.time.MujoongClock clock);
     void terminate(UUID sessionId);
     void settle(UUID sessionId);
-    void delete(UUID guardianId);
     Snapshot snapshot(UUID sessionId);
     record Snapshot(List<SessionGoal> goals, List<PracticeAttempt> attempts, List<PracticeResponse> responses,
                     List<CueDelivery> cues, List<Evaluation> evaluations) {

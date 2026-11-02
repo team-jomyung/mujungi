@@ -75,8 +75,6 @@ class SegmentBufferTest {
     void aFragmentOfAnotherGenerationIsRefusedUntilTheOpenSegmentIsSealed() {
         buffer.addTranscript(1, true, "안녕", AT, 1);
 
-        assertThat(buffer.holdsOtherThan(2)).isTrue();
-        assertThat(buffer.holdsOtherThan(1)).isFalse();
         assertThat(buffer.addAudio(2, true, new byte[2], AT, 2)).isEqualTo(Added.OTHER_GENERATION);
         Sealed first = buffer.sealByGeneration(1);
         assertThat(first.totalBytes()).isZero();

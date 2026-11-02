@@ -3,7 +3,7 @@ export const RESULT_TEMP_COPY = {
   records: "기록", readingRecords: "기록을 읽고 있어요", readingActivities: "활동을 읽고 있어요", recordReadFailed: "기록을 읽지 못했어요.", reportReadFailed: "리포트를 읽지 못했어요.", activitiesReadFailed: "활동을 읽지 못했어요.",
   viewRecord: "오늘 기록 보기", retryInRecord: "기록에서 다시 시도", helpPrefix: "제공한 도움 · ", evidencePrefix: "근거 · ",
   later: "나중에", savePdf: "PDF 저장", openFile: "파일 열기", toRecords: "기록으로", childInfo: "아이 정보 · 이름 · 나이만", cancel: "취소", save: "저장", rangeAgain: "범위 다시", missingSuffix: " · 자료 부족",
-  backArrow: "←", previousArrow: "‹", nextArrow: "›", dot: " ·", declinedSuffix: " · 시작하지 못함",
+  backArrow: "←", previousArrow: "‹", nextArrow: "›", dot: " ·",
   cleaning: "기록을 정리하고 있어요", done: "기록 정리가 끝났어요", failed: "기록을 정리하지 못했어요. 대화 기록은 남아 있어요.", insufficient: "정리할 자료가 부족해요. 대화 기록을 확인해 주세요.",
   emptyRecords: "아직 기록이 없어요. 활동을 마치면 여기에 기록이 남아요.", emptyDay: "활동이 없어요", noCandidates: "아직 담을 연습 목표가 없어요.",
   unconfirmed: "끝나는 시각을 확인하지 못했어요. 확보한 기록까지만 보여 드려요.", notFound: "기록을 찾을 수 없어요", retry: "다시 시도", back: "뒤로", report: "상담용 리포트", reportCreate: "상담용 리포트 만들기",

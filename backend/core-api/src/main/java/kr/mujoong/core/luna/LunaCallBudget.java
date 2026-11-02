@@ -29,5 +29,4 @@ public final class LunaCallBudget {
         return true;
     }
     public synchronized int attempts() { return attempts; }
-    public synchronized boolean correctionUsed() { return correctionUsed; }
 }

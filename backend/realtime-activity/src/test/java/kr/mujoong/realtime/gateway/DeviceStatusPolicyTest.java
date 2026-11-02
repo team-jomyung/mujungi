@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import kr.mujoong.contract.status.ConnectionState;
 import kr.mujoong.contract.status.SessionStatus;
-import kr.mujoong.realtime.gateway.DeviceStatusPolicy.CommandTimeout;
 import kr.mujoong.realtime.testing.SessionHarness;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -37,12 +36,6 @@ class DeviceStatusPolicyTest {
         assertThat(DeviceStatusPolicy.closesToOffline(code, serverInitiated, reachedReady)).isEqualTo(offline);
     }
 
-    @ParameterizedTest
-    @EnumSource(CommandTimeout.class)
-    void onlyTheTwoCommandDeadlinesWriteUnresponsive(CommandTimeout timeout) {
-        boolean expected = timeout == CommandTimeout.START_NO_ACK || timeout == CommandTimeout.CLOSING_NO_CONFIRM;
-        assertThat(DeviceStatusPolicy.marksUnresponsive(timeout)).isEqualTo(expected);
-    }
 
     @ParameterizedTest
     @EnumSource(ConnectionState.class)

@@ -64,7 +64,6 @@ public final class DeviceConnection implements DeviceLink {
     private final AtomicReference<WsEnvelope> deferredHello = new AtomicReference<>();
     private volatile UUID resumeSessionId;
     private volatile DeviceState knownDeviceState;
-    private long lastInboundSeq;
 
     public DeviceConnection(UUID connectionId, String traceId, Instant openedAt) {
         this.connectionId = Objects.requireNonNull(connectionId, "connectionId");
@@ -320,16 +319,6 @@ public final class DeviceConnection implements DeviceLink {
         }
     }
 
-    /**
-     * 받은 봉투 seq가 처음인가(같은 seq는 한 번만 처리, 계약 4.2). 수신 핸들러는 연결마다 차례로 불리므로 동기화하지 않는다.
-     */
-    public synchronized boolean acceptInboundSeq(long seq) {
-        if (seq <= lastInboundSeq) {
-            return false;
-        }
-        lastInboundSeq = seq;
-        return true;
-    }
 
     @Override
     public String toString() {

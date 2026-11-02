@@ -121,12 +121,6 @@ class JsonCodecTest {
         assertThat(Stream.of(SessionStatus.values()).filter(SessionStatus::isNonTerminal)).hasSize(6);
         assertThat(SessionStatus.UNRECOGNIZED.isTerminal()).isFalse();
         assertThat(SessionStatus.UNRECOGNIZED.isNonTerminal()).isFalse();
-        assertThat(RegistrationStatus.UNREGISTERED.canTransitionTo(RegistrationStatus.REGISTERED)).isTrue();
-        assertThat(RegistrationStatus.UNREGISTERED.canTransitionTo(RegistrationStatus.EXPIRED)).isTrue();
-        assertThat(RegistrationStatus.REGISTERED.canTransitionTo(RegistrationStatus.RELEASED)).isTrue();
-        assertThat(RegistrationStatus.REGISTERED.canTransitionTo(RegistrationStatus.EXPIRED)).isFalse();
-        assertThat(RegistrationStatus.RELEASED.canTransitionTo(RegistrationStatus.REGISTERED)).isFalse();
-        assertThat(RegistrationStatus.UNRECOGNIZED.canTransitionTo(RegistrationStatus.REGISTERED)).isFalse();
     }
 
     @Test

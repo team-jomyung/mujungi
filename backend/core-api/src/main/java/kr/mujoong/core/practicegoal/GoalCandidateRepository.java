@@ -6,7 +6,6 @@ import java.util.*;
 import kr.mujoong.contract.json.JsonCodec;
 import kr.mujoong.core.knowledge.StructureSignature;
 import kr.mujoong.core.practice.GoalSelection;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -120,10 +119,5 @@ public class GoalCandidateRepository {
     public void restore(UUID id){jdbc.update("update core.core_saved_goal set status='ACTIVE',deleted_at=null,restore_until=null where id=:id",Map.of("id",id));}
     private GoalSelection selection(java.sql.ResultSet r,int n)throws java.sql.SQLException{
         return new GoalSelection(uuid(r,"id"),uuid(r,"guardian_id"),uuid(r,"child_id"),uuid(r,"candidate_version_id"),uuid(r,"source_session_id"),null,0,r.getString("display_name"),r.getBoolean("is_favorite"),r.getLong("sort_order"),r.getString("status"),instant(r,"selected_at"),instant(r,"deleted_at"),instant(r,"restore_until"));
-    }
-    public int deleteGuardian(UUID guardian){
-        int count=jdbc.update("delete from core.core_saved_goal where guardian_id=:g",Map.of("g",guardian));
-        jdbc.update("delete from core.core_goal_candidate_version where child_id in(select id from core.core_child where guardian_id=:g)",Map.of("g",guardian));
-        jdbc.update("delete from core.core_goal_candidate where child_id in(select id from core.core_child where guardian_id=:g)",Map.of("g",guardian));return count;
     }
 }

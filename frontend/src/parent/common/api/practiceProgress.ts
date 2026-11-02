@@ -22,25 +22,3 @@ export function parsePracticeProgress(value: unknown): PracticeProgress | null {
       || typeof raw.stage !== "string" || !(PRACTICE_STAGE_NAMES as readonly string[]).includes(raw.stage)) return null;
   return Object.freeze({ goalIndex: raw.goalIndex, goalCount: raw.goalCount, goalName: raw.goalName, stage: raw.stage as PracticeStage });
 }
-
-/** 기존 폴링 어댑터가 세션·조회 세대·상태 버전을 제공할 때 사용하는 독립 보관 부품. */
-export class PracticeProgressTracker {
-  private generation = -1;
-  private version = -1;
-  value: PracticeProgress | null = null;
-  issue: ProgressIssue = null;
-  constructor(private readonly sessionId: string) {}
-  apply(sessionId: string, generation: number, version: number, activity: "PRACTICE" | "FREE_TALK", practice: unknown): boolean {
-    if (sessionId !== this.sessionId || generation < this.generation || version < this.version
-        || !Number.isInteger(generation) || !Number.isInteger(version) || generation < 0 || version < 0) return false;
-    this.generation = generation; this.version = version;
-    if (activity === "FREE_TALK") { this.value = null; this.issue = null; return true; }
-    const parsed = parsePracticeProgress(practice);
-    if (!parsed) { this.issue = "invalid"; return true; }
-    this.value = parsed; this.issue = null; return true;
-  }
-  failed(sessionId: string, generation: number): void {
-    if (sessionId !== this.sessionId || generation < this.generation || !Number.isInteger(generation)) return;
-    this.generation = generation; this.issue = "fetch";
-  }
-}
